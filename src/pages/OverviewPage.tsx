@@ -48,6 +48,9 @@ interface OverviewPageProps {
   usdInrLoading?: boolean;
   usdInrError?: string | null;
   onRetryUsdInr?: () => void;
+  crudeLoading?: boolean;
+  crudeError?: string | null;
+  onRetryCrude?: () => void;
 }
 
 export const OverviewPage: React.FC<OverviewPageProps> = ({
@@ -71,6 +74,9 @@ export const OverviewPage: React.FC<OverviewPageProps> = ({
   usdInrLoading = false,
   usdInrError = null,
   onRetryUsdInr,
+  crudeLoading = false,
+  crudeError = null,
+  onRetryCrude,
 }) => {
   const kpiSectionRef = useRef<HTMLDivElement | null>(null);
 
@@ -174,17 +180,17 @@ export const OverviewPage: React.FC<OverviewPageProps> = ({
                 <div>
                   <div className="text-slate-400 text-[11px]">Primary Sources</div>
                   <div className="font-mono-tabular font-semibold mt-0.5">
-                    MoSPI · RBI · FBIL
+                    MoSPI · RBI · FBIL · PPAC
                   </div>
                 </div>
                 <div>
-                  <div className="text-slate-400 text-[11px]">Official Series (5)</div>
+                  <div className="text-slate-400 text-[11px]">Official Series (All 6 KPIs)</div>
                   <div className="font-mono-tabular font-semibold text-emerald-400 mt-0.5">
-                    GDP · CPI · PLFS · Repo · INR
+                    GDP · CPI · PLFS · INR · Crude · Repo
                   </div>
                 </div>
                 <div>
-                  <div className="text-slate-400 text-[11px]">Latest Official Releases</div>
+                  <div className="text-slate-400 text-[11px]">Latest Official Updates</div>
                   <div className="font-mono-tabular font-semibold mt-0.5">
                     22 Oct · 15 Oct · 12 Oct
                   </div>
@@ -227,7 +233,7 @@ export const OverviewPage: React.FC<OverviewPageProps> = ({
             </h2>
           </div>
           <p className="text-xs text-slate-400">
-            Real GDP Growth, CPI Inflation, Unemployment Rate (PLFS), USD/INR Reference Rate (FBIL/RBI), and RBI Repo Rate display official data; Crude Oil shows a labelled illustrative series.
+            All 6 core macroeconomic KPI cards—Real GDP, CPI Inflation, PLFS Unemployment, USD/INR Reference Rate, Indian Basket Crude Oil, and RBI Repo Rate—display verified official data.
           </p>
         </div>
 
@@ -254,6 +260,8 @@ export const OverviewPage: React.FC<OverviewPageProps> = ({
                     ? plfsLoading
                     : ind.id === 'usd-inr'
                     ? usdInrLoading
+                    : ind.id === 'crude-oil'
+                    ? crudeLoading
                     : false
                 }
                 errorMessage={
@@ -267,6 +275,8 @@ export const OverviewPage: React.FC<OverviewPageProps> = ({
                     ? plfsError
                     : ind.id === 'usd-inr'
                     ? usdInrError
+                    : ind.id === 'crude-oil'
+                    ? crudeError
                     : null
                 }
                 onRetryFetch={
@@ -280,6 +290,8 @@ export const OverviewPage: React.FC<OverviewPageProps> = ({
                     ? onRetryPlfs
                     : ind.id === 'usd-inr'
                     ? onRetryUsdInr
+                    : ind.id === 'crude-oil'
+                    ? onRetryCrude
                     : undefined
                 }
               />

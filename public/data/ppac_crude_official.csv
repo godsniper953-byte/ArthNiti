@@ -1,0 +1,43 @@
+# Official Indian Basket Crude Oil Price Dataset (USD per Barrel - $/bbl)
+# Source: Petroleum Planning & Analysis Cell (PPAC), Ministry of Petroleum & Natural Gas, Government of India
+# Official Price Page: https://ppac.gov.in/prices/international-prices-of-crude-oil
+# Official Portal: https://ppac.gov.in/
+# Source Last Updated Date: 22 Oct 2026
+# Latest Daily Price (22 Oct 2026): $119.99 / bbl (Daily Observation)
+# Latest Month-to-Date Average (01-22 Oct 2026): $120.08 / bbl (Month-to-Date Partial Average - NOT a completed month)
+# Latest Completed Monthly Average (Sep 2026): $116.09 / bbl (Completed Monthly Average)
+Period_Code,Period_Label,Crude_Basket_USD_Bbl,Observation_Kind,Is_Completed_Month,Source_Last_Updated,Composition_Note,Status,Note
+2024-01,Jan 2024,78.93,Completed Monthly Average,true,01 Feb 2024,Sour (Oman & Dubai) + Sweet (Dated Brent),Final,Official PPAC Completed Monthly Average
+2024-02,Feb 2024,82.55,Completed Monthly Average,true,01 Mar 2024,Sour (Oman & Dubai) + Sweet (Dated Brent),Final,Official PPAC Completed Monthly Average
+2024-03,Mar 2024,84.28,Completed Monthly Average,true,01 Apr 2024,Sour (Oman & Dubai) + Sweet (Dated Brent),Final,Official PPAC Completed Monthly Average (FY 2023-24 End)
+2024-04,Apr 2024,89.44,Completed Monthly Average,true,01 May 2024,Sour (Oman & Dubai) + Sweet (Dated Brent),Final,Official PPAC Completed Monthly Average
+2024-05,May 2024,83.62,Completed Monthly Average,true,03 Jun 2024,Sour (Oman & Dubai) + Sweet (Dated Brent),Final,Official PPAC Completed Monthly Average
+2024-06,Jun 2024,82.55,Completed Monthly Average,true,01 Jul 2024,Sour (Oman & Dubai) + Sweet (Dated Brent),Final,Official PPAC Completed Monthly Average
+2024-07,Jul 2024,84.15,Completed Monthly Average,true,01 Aug 2024,Sour (Oman & Dubai) + Sweet (Dated Brent),Final,Official PPAC Completed Monthly Average
+2024-08,Aug 2024,78.27,Completed Monthly Average,true,02 Sep 2024,Sour (Oman & Dubai) + Sweet (Dated Brent),Final,Official PPAC Completed Monthly Average
+2024-09,Sep 2024,73.69,Completed Monthly Average,true,01 Oct 2024,Sour (Oman & Dubai) + Sweet (Dated Brent),Final,Official PPAC Completed Monthly Average
+2024-10,Oct 2024,75.12,Completed Monthly Average,true,01 Nov 2024,Sour (Oman & Dubai) + Sweet (Dated Brent),Final,Official PPAC Completed Monthly Average
+2024-11,Nov 2024,73.02,Completed Monthly Average,true,02 Dec 2024,Sour (Oman & Dubai) + Sweet (Dated Brent),Final,Official PPAC Completed Monthly Average
+2024-12,Dec 2024,73.34,Completed Monthly Average,true,01 Jan 2025,Sour (Oman & Dubai) + Sweet (Dated Brent),Final,Official PPAC Completed Monthly Average
+2025-01,Jan 2025,78.11,Completed Monthly Average,true,03 Feb 2025,Sour (Oman & Dubai) + Sweet (Dated Brent),Final,Official PPAC Completed Monthly Average
+2025-02,Feb 2025,74.50,Completed Monthly Average,true,03 Mar 2025,Sour (Oman & Dubai) + Sweet (Dated Brent),Final,Official PPAC Completed Monthly Average
+2025-03,Mar 2025,74.15,Completed Monthly Average,true,01 Apr 2025,Sour (Oman & Dubai) + Sweet (Dated Brent),Final,Official PPAC Completed Monthly Average
+2025-04,Apr 2025,67.72,Completed Monthly Average,true,01 May 2025,Sour (Oman & Dubai) + Sweet (Dated Brent),Final,Official PPAC Completed Monthly Average (FY 2025-26 Table)
+2025-05,May 2025,64.04,Completed Monthly Average,true,02 Jun 2025,Sour (Oman & Dubai) + Sweet (Dated Brent),Final,Official PPAC Completed Monthly Average (FY 2025-26 Table)
+2025-06,Jun 2025,69.77,Completed Monthly Average,true,01 Jul 2025,Sour (Oman & Dubai) + Sweet (Dated Brent),Final,Official PPAC Completed Monthly Average (FY 2025-26 Table)
+2025-07,Jul 2025,70.95,Completed Monthly Average,true,01 Aug 2025,Sour (Oman & Dubai) + Sweet (Dated Brent),Final,Official PPAC Completed Monthly Average (FY 2025-26 Table)
+2025-08,Aug 2025,69.11,Completed Monthly Average,true,01 Sep 2025,Sour (Oman & Dubai) + Sweet (Dated Brent),Final,Official PPAC Completed Monthly Average (FY 2025-26 Table)
+2025-09,Sep 2025,69.61,Completed Monthly Average,true,01 Oct 2025,Sour (Oman & Dubai) + Sweet (Dated Brent),Final,Official PPAC Completed Monthly Average (FY 2025-26 Table)
+2025-10,Oct 2025,65.08,Completed Monthly Average,true,03 Nov 2025,Sour (Oman & Dubai) + Sweet (Dated Brent),Final,Official PPAC Completed Monthly Average (FY 2025-26 Table)
+2025-11,Nov 2025,64.31,Completed Monthly Average,true,01 Dec 2025,Sour (Oman & Dubai) + Sweet (Dated Brent),Final,Official PPAC Completed Monthly Average (FY 2025-26 Table)
+2025-12,Dec 2025,62.20,Completed Monthly Average,true,01 Jan 2026,Sour (Oman & Dubai) + Sweet (Dated Brent),Final,Official PPAC Completed Monthly Average (FY 2025-26 Table)
+2026-01,Jan 2026,63.08,Completed Monthly Average,true,02 Feb 2026,Sour (Oman & Dubai) + Sweet (Dated Brent),Final,Official PPAC Completed Monthly Average (FY 2025-26 Table)
+2026-02,Feb 2026,67.89,Completed Monthly Average,true,02 Mar 2026,Sour (Oman & Dubai) + Sweet (Dated Brent),Final,Official PPAC Completed Monthly Average (FY 2025-26 Table)
+2026-03,Mar 2026,113.49,Completed Monthly Average,true,01 Apr 2026,Sour (Oman & Dubai) + Sweet (Dated Brent),Final,Official PPAC Completed Monthly Average (FY 2025-26 End)
+2026-04,Apr 2026,114.48,Completed Monthly Average,true,01 May 2026,Sour (Oman & Dubai) + Sweet (Dated Brent),Final,Official PPAC Completed Monthly Average (FY 2026-27 Table)
+2026-05,May 2026,106.23,Completed Monthly Average,true,01 Jun 2026,Sour (Oman & Dubai) + Sweet (Dated Brent),Final,Official PPAC Completed Monthly Average (FY 2026-27 Table)
+2026-06,Jun 2026,83.22,Completed Monthly Average,true,01 Jul 2026,Sour (Oman & Dubai) + Sweet (Dated Brent),Final,Official PPAC Completed Monthly Average (FY 2026-27 Table)
+2026-07,Jul 2026,82.04,Completed Monthly Average,true,03 Aug 2026,Sour (Oman & Dubai) + Sweet (Dated Brent),Final,Official PPAC Completed Monthly Average (FY 2026-27 Table)
+2026-08,Aug 2026,90.19,Completed Monthly Average,true,01 Sep 2026,Sour (Oman & Dubai) + Sweet (Dated Brent),Final,Previous Comparable Completed Monthly Average (FY 2026-27 Table)
+2026-09,Sep 2026,116.09,Completed Monthly Average,true,01 Oct 2026,Sour (Oman & Dubai) + Sweet (Dated Brent),Final,Latest Completed Monthly Average (+28.72% MoM vs Aug 2026)
+2026-10-MTD,Oct 2026 (MTD up to 22 Oct),120.08,Month-to-Date (Partial),false,22 Oct 2026,Sour (Oman & Dubai) + Sweet (Dated Brent),Provisional,Partial-Month Average (01-22 Oct 2026); Daily Price on 22 Oct 2026 = $119.99/bbl

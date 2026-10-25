@@ -57,6 +57,11 @@ export interface ObservationPoint {
   benchmarkPublisher?: string; // e.g. "FBIL (Post-Jul 2018)" or "RBI (Pre-Jul 2018)"
   archiveSource?: string; // e.g. "FBIL / RBI DBIE"
   exactRate4Dec?: number; // e.g. 94.6986
+  observationKind?: 'Completed Monthly Average' | 'Month-to-Date (Partial)' | 'Daily Observation';
+  isCompletedMonth?: boolean;
+  momChangeUsd?: number; // Month-over-Month USD/bbl change between comparable completed months
+  momChangePct?: number; // Month-over-Month % change between comparable completed months
+  sourceLastUpdated?: string; // e.g. "22 Oct 2026"
   status: 'Final' | 'Revised' | 'Provisional';
   note?: string;
 }
@@ -155,6 +160,29 @@ export interface OfficialUsdInrMetadata {
   rbiOfficialUrl: string;
 }
 
+export interface OfficialCrudeOilMetadata {
+  isOfficialData: boolean;
+  dataOrigin: 'official_ppac_csv' | 'user_uploaded_csv' | 'demonstration_fallback';
+  latestCompletedMonthLabel: string;
+  latestCompletedMonthPriceUsd: number;
+  previousCompletedMonthLabel: string;
+  previousCompletedMonthPriceUsd: number;
+  completedMonthChangeUsd: number;
+  completedMonthChangePct: number;
+  latestDailyPriceUsd: number;
+  latestDailyDateLabel: string;
+  latestMtdAveragePriceUsd: number;
+  latestMtdLabel: string;
+  sourceLastUpdatedDate: string;
+  retrievalTimestamp: string;
+  isStaleOrLagging: boolean;
+  stalenessMessage: string;
+  basketCompositionNote: string;
+  ppacPricesUrl: string;
+  ppacMainPortalUrl: string;
+  partialMonthRow?: ObservationPoint;
+}
+
 export interface EconomicIndicator {
   id: string;
   name: string;
@@ -179,6 +207,7 @@ export interface EconomicIndicator {
   officialRepoMeta?: OfficialRepoMetadata;
   officialPlfsMeta?: OfficialPlfsMetadata;
   officialUsdInrMeta?: OfficialUsdInrMetadata;
+  officialCrudeMeta?: OfficialCrudeOilMetadata;
   targetBand?: {
     min: number;
     max: number;

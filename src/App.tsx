@@ -37,6 +37,11 @@ import {
   loadOfficialUsdInrData,
   saveUserUploadedUsdInrCsv,
 } from './services/usdInrDataService';
+import {
+  clearUserUploadedCrudeCsv,
+  loadOfficialCrudeOilData,
+  saveUserUploadedCrudeCsv,
+} from './services/crudeOilDataService';
 import { EconomicIndicator, PageId } from './types/economy';
 import { Sidebar } from './components/navigation/Sidebar';
 import { TopBar } from './components/navigation/TopBar';
@@ -105,6 +110,17 @@ export default function App() {
   const [usdInrDataOrigin, setUsdInrDataOrigin] = useState<
     'official_rbi_fbil_csv' | 'user_uploaded_csv' | 'demonstration_fallback'
   >('official_rbi_fbil_csv');
+
+  // Official PPAC Indian Basket Crude Oil State (kept separate from UI components via crudeOilDataService)
+  const [officialCrudeIndicator, setOfficialCrudeIndicator] = useState<EconomicIndicator | null>(
+    null
+  );
+  const [crudeLoading, setCrudeLoading] = useState<boolean>(true);
+  const [crudeError, setCrudeError] = useState<string | null>(null);
+  const [crudeRetrievalTimestamp, setCrudeRetrievalTimestamp] = useState<string>('Verifying...');
+  const [crudeDataOrigin, setCrudeDataOrigin] = useState<
+    'official_ppac_csv' | 'user_uploaded_csv' | 'demonstration_fallback'
+  >('official_ppac_csv');
 
   const baseIndicators = useMemo(() => getIndicatorsSync(), []);
   const sources = useMemo(() => getDataSourcesSync(), []);
@@ -205,18 +221,38 @@ export default function App() {
     []
   );
 
+  const handleFetchOfficialCrude = useCallback(async (simulateError = false) => {
+    setCrudeLoading(true);
+    setCrudeError(null);
+    const result = await loadOfficialCrudeOilData({ simulateError });
+    setCrudeRetrievalTimestamp(result.retrievalTimestamp);
+    setCrudeDataOrigin(result.dataOrigin);
+    if (result.status === 'success' && result.indicator) {
+      setOfficialCrudeIndicator(result.indicator);
+      setCrudeError(null);
+    } else {
+      setCrudeError(
+        result.errorMessage ||
+          'Failed to load official PPAC Indian Basket Crude Oil dataset.'
+      );
+    }
+    setCrudeLoading(false);
+  }, []);
+
   useEffect(() => {
     handleFetchOfficialCpi(false);
     handleFetchOfficialGdp(false);
     handleFetchOfficialRepo(false);
     handleFetchOfficialPlfs(false);
     handleFetchOfficialUsdInr({ simulateError: false, simulateEmpty: false });
+    handleFetchOfficialCrude(false);
   }, [
     handleFetchOfficialCpi,
     handleFetchOfficialGdp,
     handleFetchOfficialRepo,
     handleFetchOfficialPlfs,
     handleFetchOfficialUsdInr,
+    handleFetchOfficialCrude,
   ]);
 
   const handleUploadCustomCsv = useCallback((csvText: string) => {
@@ -459,7 +495,57 @@ export default function App() {
     );
   }, [baseIndicators]);
 
-  // Merge official MoSPI GDP, CPI, PLFS Unemployment, FBIL/RBI USD/INR, and RBI Repo Rate indicators into the global indicator list
+  const handleUploadCustomCrudeCsv = useCallback((csvText: string) => {
+    try {
+      const updated = saveUserUploadedCrudeCsv(csvText);
+      setOfficialCrudeIndicator(updated);
+      setCrudeError(null);
+      setCrudeDataOrigin('user_uploaded_csv');
+      setCrudeRetrievalTimestamp(
+        new Date().toLocaleString('en-IN', {
+          day: '2-digit',
+          month: 'short',
+          year: 'numeric',
+          hour: '2-digit',
+          minute: '2-digit',
+          second: '2-digit',
+        })
+      );
+      return { ok: true };
+    } catch (err: any) {
+      return {
+        ok: false,
+        error: err?.message || 'Invalid PPAC Crude Oil CSV format.',
+      };
+    }
+  }, []);
+
+  const handleResetCustomCrudeCsv = useCallback(() => {
+    clearUserUploadedCrudeCsv();
+    handleFetchOfficialCrude(false);
+  }, [handleFetchOfficialCrude]);
+
+  const handleActivateCrudeDemoFallback = useCallback(() => {
+    const demoFallback =
+      baseIndicators.find((i) => i.id === 'crude-oil') || baseIndicators[4];
+    setOfficialCrudeIndicator({
+      ...demoFallback,
+      name: 'Indian Basket Crude Oil Price (Labelled Demonstration Fallback)',
+      shortName: 'Indian Basket Crude (Demo Fallback)',
+      sourceShortName: 'PPAC (Demo Fallback)',
+      isOfficialData: false,
+    });
+    setCrudeError(null);
+    setCrudeDataOrigin('demonstration_fallback');
+    setCrudeRetrievalTimestamp(
+      `${new Date().toLocaleTimeString('en-IN', {
+        hour: '2-digit',
+        minute: '2-digit',
+      })} (Demo State)`
+    );
+  }, [baseIndicators]);
+
+  // Merge official MoSPI GDP, CPI, PLFS Unemployment, FBIL/RBI USD/INR, PPAC Crude Oil, and RBI Repo Rate indicators
   const indicators = useMemo(() => {
     return baseIndicators.map((ind) => {
       if (ind.id === 'gdp-growth' && officialGdpIndicator) return officialGdpIndicator;
@@ -467,6 +553,7 @@ export default function App() {
       if (ind.id === 'rbi-repo-rate' && officialRepoIndicator) return officialRepoIndicator;
       if (ind.id === 'unemployment-rate' && officialPlfsIndicator) return officialPlfsIndicator;
       if (ind.id === 'usd-inr' && officialUsdInrIndicator) return officialUsdInrIndicator;
+      if (ind.id === 'crude-oil' && officialCrudeIndicator) return officialCrudeIndicator;
       return ind;
     });
   }, [
@@ -476,6 +563,7 @@ export default function App() {
     officialRepoIndicator,
     officialPlfsIndicator,
     officialUsdInrIndicator,
+    officialCrudeIndicator,
   ]);
 
   useEffect(() => {
@@ -558,6 +646,9 @@ export default function App() {
             onRetryUsdInr={() =>
               handleFetchOfficialUsdInr({ simulateError: false, simulateEmpty: false })
             }
+            crudeLoading={crudeLoading}
+            crudeError={crudeError}
+            onRetryCrude={() => handleFetchOfficialCrude(false)}
           />
         );
       case 'gdp-growth':
@@ -621,6 +712,14 @@ export default function App() {
             onUploadCustomUsdInrCsv={handleUploadCustomUsdInrCsv}
             onResetCustomUsdInrCsv={handleResetCustomUsdInrCsv}
             onActivateUsdInrDemoFallback={handleActivateUsdInrDemoFallback}
+            crudeLoading={crudeLoading}
+            crudeError={crudeError}
+            crudeRetrievalTimestamp={crudeRetrievalTimestamp}
+            crudeDataOrigin={crudeDataOrigin}
+            onRefreshOfficialCrude={(simErr) => handleFetchOfficialCrude(Boolean(simErr))}
+            onUploadCustomCrudeCsv={handleUploadCustomCrudeCsv}
+            onResetCustomCrudeCsv={handleResetCustomCrudeCsv}
+            onActivateCrudeDemoFallback={handleActivateCrudeDemoFallback}
             theme={theme}
           />
         );
@@ -696,9 +795,9 @@ export default function App() {
           }`}
         >
           <div>
-            <span className="font-semibold text-emerald-400">Data Provenance: </span>
+            <span className="font-semibold text-emerald-400">Official Data (All 6 KPIs): </span>
             <span>
-              <strong>Real GDP</strong> (<strong className="font-mono-tabular text-emerald-400">7.8%</strong>), <strong>CPI</strong> (<strong className="font-mono-tabular text-emerald-400">5.54%</strong>), <strong>PLFS UR</strong> (<strong className="font-mono-tabular text-emerald-400">5.0%</strong>), <strong>USD/INR Ref</strong> (<strong className="font-mono-tabular text-emerald-400">₹94.6986</strong>), &amp; <strong>RBI Repo</strong> (<strong className="font-mono-tabular text-emerald-400">5.50%</strong>) use official data.
+              <strong>GDP</strong> (<strong className="font-mono-tabular text-emerald-400">7.8%</strong>), <strong>CPI</strong> (<strong className="font-mono-tabular text-emerald-400">5.54%</strong>), <strong>PLFS UR</strong> (<strong className="font-mono-tabular text-emerald-400">5.0%</strong>), <strong>USD/INR</strong> (<strong className="font-mono-tabular text-emerald-400">₹94.6986</strong>), <strong>PPAC Crude</strong> (<strong className="font-mono-tabular text-emerald-400">$116.09</strong>), &amp; <strong>RBI Repo</strong> (<strong className="font-mono-tabular text-emerald-400">5.50%</strong>).
             </span>
           </div>
           <div className="flex flex-wrap items-center gap-3 self-start sm:self-auto shrink-0">
@@ -725,10 +824,10 @@ export default function App() {
             </button>
             <button
               type="button"
-              onClick={() => handleSelectPage('currency-oil', 'usd-inr')}
+              onClick={() => handleSelectPage('currency-oil', 'crude-oil')}
               className="text-amber-300 hover:underline font-medium cursor-pointer whitespace-nowrap"
             >
-              FBIL USD/INR →
+              PPAC Crude &amp; FX →
             </button>
             <button
               type="button"

@@ -225,6 +225,7 @@ export const KpiCard: React.FC<KpiCardProps> = ({
     }
     if (
       indicator.id === 'usd-inr' ||
+      indicator.id === 'crude-oil' ||
       indicator.id === 'cpi-inflation' ||
       indicator.id === 'rbi-repo-rate'
     ) {
@@ -272,6 +273,8 @@ export const KpiCard: React.FC<KpiCardProps> = ({
                 ? 'CWS · Age 15+'
                 : indicator.officialUsdInrMeta
                 ? 'FBIL Ref Rate (Not Live Quote)'
+                : indicator.officialCrudeMeta
+                ? 'Completed Monthly Avg'
                 : `Base ${indicator.officialCpiMeta?.activeBaseYear || '2024=100'}`
               : indicator.frequency}
           </span>
@@ -350,6 +353,8 @@ export const KpiCard: React.FC<KpiCardProps> = ({
             ? ` · R:${indicator.officialPlfsMeta.ruralUrPct.toFixed(1)}% U:${indicator.officialPlfsMeta.urbanUrPct.toFixed(1)}%`
             : indicator.isOfficialData && indicator.officialUsdInrMeta
             ? ` · Prev ₹${indicator.officialUsdInrMeta.previousRateInrPerUsd.toFixed(4)}`
+            : indicator.isOfficialData && indicator.officialCrudeMeta
+            ? ` · Daily (22 Oct): $${indicator.officialCrudeMeta.latestDailyPriceUsd.toFixed(2)}`
             : ''}
         </span>
         <span className={semantic.colorClass}>{semantic.label}</span>

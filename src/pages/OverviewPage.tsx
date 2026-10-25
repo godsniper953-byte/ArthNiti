@@ -51,6 +51,9 @@ interface OverviewPageProps {
   crudeLoading?: boolean;
   crudeError?: string | null;
   onRetryCrude?: () => void;
+  tradeLoading?: boolean;
+  tradeError?: string | null;
+  onRetryTrade?: () => void;
 }
 
 export const OverviewPage: React.FC<OverviewPageProps> = ({
@@ -77,10 +80,13 @@ export const OverviewPage: React.FC<OverviewPageProps> = ({
   crudeLoading = false,
   crudeError = null,
   onRetryCrude,
+  tradeLoading = false,
+  tradeError = null,
+  onRetryTrade,
 }) => {
   const kpiSectionRef = useRef<HTMLDivElement | null>(null);
 
-  // Core 6 KPI indicators requested in master prompt
+  // Core 7 Official Macroeconomic KPI indicators
   const kpiIndicators = indicators.filter((ind) =>
     [
       'gdp-growth',
@@ -88,132 +94,113 @@ export const OverviewPage: React.FC<OverviewPageProps> = ({
       'unemployment-rate',
       'usd-inr',
       'crude-oil',
+      'merchandise-trade',
       'rbi-repo-rate',
     ].includes(ind.id)
   );
 
   const gdpIndicator = indicators.find((i) => i.id === 'gdp-growth') || indicators[0];
   const cpiIndicator = indicators.find((i) => i.id === 'cpi-inflation') || indicators[1];
+  const tradeIndicator = indicators.find((i) => i.id === 'merchandise-trade');
+
+  const globeSectionRef = useRef<HTMLDivElement | null>(null);
 
   const handleScrollToKpis = () => {
     kpiSectionRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
   };
 
+  const handleScrollToGlobe = () => {
+    globeSectionRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  };
+
   return (
     <div className="space-y-8">
-      {/* 1. Immersive Hero Section */}
+      {/* 1. Immersive Hero Header & Full-Width Interactive 3D Global Trade Network */}
       <section
-        className={`rounded-2xl border p-6 sm:p-8 lg:p-10 relative overflow-hidden ${
+        className={`rounded-2xl border p-6 sm:p-8 lg:p-10 relative overflow-hidden space-y-8 ${
           theme === 'dark'
             ? 'bg-gradient-to-br from-[#0B1325] via-[#080F1E] to-[#060B16] border-slate-800/90'
             : 'bg-gradient-to-br from-white via-slate-50 to-emerald-50/30 border-slate-200 shadow-xs'
         }`}
       >
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-stretch">
-          {/* Left Column: Editorial Narrative & Primary Actions */}
-          <div className="lg:col-span-6 flex flex-col justify-between space-y-6">
-            <div className="space-y-4">
-              {/* Compact Data Freshness & Illustrative Disclosure */}
-              <div className="flex flex-wrap items-center gap-2 text-xs text-slate-400 font-mono-tabular">
-                <span className="text-emerald-400 font-semibold tracking-wide">
-                  ARTHNITI — INDIAN ECONOMIC INTELLIGENCE
-                </span>
-                <span aria-hidden="true">·</span>
-                <span>Official MoSPI GDP, CPI &amp; PLFS + Official RBI Repo Rate</span>
-              </div>
-
-              {/* Large ARTHNITI Wordmark & Tagline */}
-              <div>
-                <div className="text-xs font-mono-tabular text-amber-400 mb-1">
-                  Understand the Economy. Discover the Data.
-                </div>
-                <h1
-                  className={`font-display text-3xl sm:text-4xl lg:text-[42px] font-semibold tracking-tight leading-[1.12] text-balance ${
-                    theme === 'dark' ? 'text-white' : 'text-slate-950'
-                  }`}
-                >
-                  See the Forces Shaping India&apos;s Economy.
-                </h1>
-              </div>
-
-              <p
-                className={`text-sm sm:text-base leading-relaxed max-w-xl ${
-                  theme === 'dark' ? 'text-slate-300' : 'text-slate-600'
-                }`}
-              >
-                Explore 10 years of Indian macroeconomic architecture—featuring official MoSPI All-India Combined CPI inflation alongside National Accounts GDP, PLFS labour participation, Rupee exchange corridors, and RBI monetary policy transmission.
-              </p>
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-end">
+          {/* Left 8 Columns: Editorial Narrative */}
+          <div className="lg:col-span-8 space-y-3">
+            <div className="flex flex-wrap items-center gap-2 text-xs text-slate-400 font-mono-tabular">
+              <span className="text-emerald-400 font-semibold tracking-wide">
+                ARTHNITI — INDIAN ECONOMIC INTELLIGENCE
+              </span>
+              <span aria-hidden="true">·</span>
+              <span>7 Official Indicators: MoSPI · RBI · FBIL · PPAC · MoCI</span>
             </div>
 
-            {/* Hero Action Buttons + Key Telemetry Strip */}
-            <div className="space-y-6 pt-2">
-              <div className="flex flex-wrap items-center gap-3">
-                <button
-                  type="button"
-                  onClick={handleScrollToKpis}
-                  className="px-5 py-2.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-xs sm:text-sm font-semibold transition-colors flex items-center gap-2 cursor-pointer whitespace-nowrap shrink-0"
-                >
-                  <span>Explore the Economy</span>
-                  <ArrowDown className="w-4 h-4" />
-                </button>
-
-                <button
-                  type="button"
-                  onClick={() => onSelectPage('data-sources')}
-                  className={`px-5 py-2.5 rounded-lg border text-xs sm:text-sm font-medium transition-colors flex items-center gap-2 cursor-pointer whitespace-nowrap shrink-0 ${
-                    theme === 'dark'
-                      ? 'bg-[#060B16]/80 border-slate-700 text-slate-200 hover:border-emerald-500/50 hover:text-white'
-                      : 'bg-white border-slate-300 text-slate-800 hover:bg-slate-100'
-                  }`}
-                >
-                  <BookOpen className="w-4 h-4 text-amber-400" />
-                  <span>View Methodology</span>
-                </button>
+            <div>
+              <div className="text-xs font-mono-tabular text-amber-400 mb-1">
+                Understand the Economy. Discover the Data.
               </div>
-
-              {/* Data Freshness & Coverage Summary */}
-              <div
-                className={`pt-4 border-t grid grid-cols-3 gap-4 text-xs ${
-                  theme === 'dark' ? 'border-slate-800/80' : 'border-slate-200'
+              <h1
+                className={`font-display text-3xl sm:text-4xl lg:text-[42px] font-semibold tracking-tight leading-[1.12] text-balance ${
+                  theme === 'dark' ? 'text-white' : 'text-slate-950'
                 }`}
               >
-                <div>
-                  <div className="text-slate-400 text-[11px]">Primary Sources</div>
-                  <div className="font-mono-tabular font-semibold mt-0.5">
-                    MoSPI · RBI · FBIL · PPAC
-                  </div>
-                </div>
-                <div>
-                  <div className="text-slate-400 text-[11px]">Official Series (All 6 KPIs)</div>
-                  <div className="font-mono-tabular font-semibold text-emerald-400 mt-0.5">
-                    GDP · CPI · PLFS · INR · Crude · Repo
-                  </div>
-                </div>
-                <div>
-                  <div className="text-slate-400 text-[11px]">Latest Official Updates</div>
-                  <div className="font-mono-tabular font-semibold mt-0.5">
-                    22 Oct · 15 Oct · 12 Oct
-                  </div>
-                </div>
-              </div>
+                See the Forces Shaping India&apos;s Economy &amp; Global Trade.
+              </h1>
             </div>
-          </div>
 
-          {/* Right Column: Interactive 3D India Orbital Network Visualization */}
-          <div className="lg:col-span-6">
-            <Suspense
-              fallback={
-                <div className="w-full h-[430px] sm:h-[460px] rounded-xl border border-slate-800 bg-[#070E1E] flex flex-col items-center justify-center p-6 text-center">
-                  <Compass className="w-8 h-8 text-emerald-400 animate-spin mb-2" />
-                  <p className="text-xs text-slate-300 font-mono-tabular">
-                    Initializing 3D India Economic Network Model...
-                  </p>
-                </div>
-              }
+            <p
+              className={`text-sm sm:text-base leading-relaxed max-w-3xl ${
+                theme === 'dark' ? 'text-slate-300' : 'text-slate-600'
+              }`}
             >
-              <LazyIndiaEconomicGlobe theme={theme} />
-            </Suspense>
+              Explore 10 years of Indian macroeconomic architecture—featuring an interactive 3D Global Trade Network (Department of Commerce · TRADESTAT), official MoSPI GDP &amp; CPI inflation, PLFS labour participation, MoCI Merchandise Trade Balance, PPAC Crude Oil Basket, FBIL USD/INR exchange corridors, and RBI monetary policy transmission.
+            </p>
           </div>
+
+          {/* Right 4 Columns: Primary Actions */}
+          <div className="lg:col-span-4 flex flex-wrap lg:justify-end items-center gap-3">
+            <button
+              type="button"
+              onClick={handleScrollToKpis}
+              className="px-4 py-2.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-xs sm:text-sm font-semibold transition-colors flex items-center gap-2 cursor-pointer whitespace-nowrap shrink-0"
+            >
+              <span>Explore 7 Official KPIs</span>
+              <ArrowDown className="w-4 h-4" />
+            </button>
+
+            <button
+              type="button"
+              onClick={() => onSelectPage('data-sources')}
+              className={`px-4 py-2.5 rounded-lg border text-xs sm:text-sm font-medium transition-colors flex items-center gap-2 cursor-pointer whitespace-nowrap shrink-0 ${
+                theme === 'dark'
+                  ? 'bg-[#060B16]/80 border-slate-700 text-slate-200 hover:border-emerald-500/50 hover:text-white'
+                  : 'bg-white border-slate-300 text-slate-800 hover:bg-slate-100'
+              }`}
+            >
+              <BookOpen className="w-4 h-4 text-amber-400" />
+              <span>View Methodology</span>
+            </button>
+          </div>
+        </div>
+
+        {/* Full-Width 3D Global Trade Network Visualization */}
+        <div ref={globeSectionRef} className="scroll-mt-20">
+          <Suspense
+            fallback={
+              <div className="w-full h-[560px] rounded-xl border border-slate-800 bg-[#070E1E] flex flex-col items-center justify-center p-6 text-center">
+                <Compass className="w-8 h-8 text-emerald-400 animate-spin mb-2" />
+                <p className="text-xs text-slate-300 font-mono-tabular">
+                  Initializing Interactive 3D Global Trade Network...
+                </p>
+              </div>
+            }
+          >
+            <LazyIndiaEconomicGlobe
+              theme={theme}
+              onOpenMerchandiseTradePage={() =>
+                onSelectPage('currency-oil', 'merchandise-trade')
+              }
+            />
+          </Suspense>
         </div>
       </section>
 
@@ -233,7 +220,7 @@ export const OverviewPage: React.FC<OverviewPageProps> = ({
             </h2>
           </div>
           <p className="text-xs text-slate-400">
-            All 6 core macroeconomic KPI cards—Real GDP, CPI Inflation, PLFS Unemployment, USD/INR Reference Rate, Indian Basket Crude Oil, and RBI Repo Rate—display verified official data.
+            All 7 core macroeconomic KPI cards—Real GDP, CPI Inflation, PLFS Unemployment, USD/INR Reference Rate, Indian Basket Crude Oil, Merchandise Trade Balance, and RBI Repo Rate—display verified official data.
           </p>
         </div>
 
@@ -262,6 +249,8 @@ export const OverviewPage: React.FC<OverviewPageProps> = ({
                     ? usdInrLoading
                     : ind.id === 'crude-oil'
                     ? crudeLoading
+                    : ind.id === 'merchandise-trade'
+                    ? tradeLoading
                     : false
                 }
                 errorMessage={
@@ -277,6 +266,8 @@ export const OverviewPage: React.FC<OverviewPageProps> = ({
                     ? usdInrError
                     : ind.id === 'crude-oil'
                     ? crudeError
+                    : ind.id === 'merchandise-trade'
+                    ? tradeError
                     : null
                 }
                 onRetryFetch={
@@ -292,12 +283,75 @@ export const OverviewPage: React.FC<OverviewPageProps> = ({
                     ? onRetryUsdInr
                     : ind.id === 'crude-oil'
                     ? onRetryCrude
+                    : ind.id === 'merchandise-trade'
+                    ? onRetryTrade
                     : undefined
                 }
               />
             </motion.div>
           ))}
         </div>
+
+        {/* Dedicated Merchandise Trade Balance Executive Summary Strip */}
+        {tradeIndicator && !tradeError && (
+          <div
+            className={`rounded-xl border p-4 sm:p-5 flex flex-col lg:flex-row lg:items-center justify-between gap-4 ${
+              theme === 'dark'
+                ? 'bg-[#091326] border-cyan-500/35 text-slate-100'
+                : 'bg-cyan-50/40 border-cyan-200 text-slate-900'
+            }`}
+          >
+            <div className="space-y-1">
+              <div className="flex flex-wrap items-center gap-2 text-xs font-mono-tabular">
+                <span className="text-cyan-400 font-semibold">
+                  OFFICIAL MERCHANDISE TRADE BALANCE ({tradeIndicator.officialTradeMeta?.referenceMonthLabel || 'Sep 2026'} · {tradeIndicator.officialTradeMeta?.estimateStatus || 'Provisional'})
+                </span>
+                <span aria-hidden="true">·</span>
+                <span className="text-slate-400">
+                  Released {tradeIndicator.officialTradeMeta?.releaseDate || '15 Oct 2026'} (MoCI · TRADESTAT &amp; RBI DBIE)
+                </span>
+              </div>
+              <p className="text-xs text-slate-400">
+                Formula: <strong className="text-slate-200">Trade Balance = Merchandise Exports ($44.40B) − Merchandise Imports ($74.61B) = -$30.21B</strong> (Trade Deficit Magnitude: <strong className="text-amber-400">$30.21B</strong>). Goods only; excludes services.
+              </p>
+            </div>
+
+            <div className="flex flex-wrap items-center gap-3 shrink-0 font-mono-tabular text-xs">
+              <div className="px-3 py-1.5 rounded-lg bg-[#060B16]/80 border border-slate-800">
+                <span className="text-slate-400">Exports: </span>
+                <span className="font-semibold text-emerald-400">
+                  ${(tradeIndicator.officialTradeMeta?.merchandiseExportsUsdBn ?? 44.4).toFixed(2)}B
+                </span>
+                <span className="text-[11px] text-emerald-300 ml-1">
+                  (+{(tradeIndicator.officialTradeMeta?.exportsYoYPct ?? 23.04).toFixed(2)}% YoY)
+                </span>
+              </div>
+              <div className="px-3 py-1.5 rounded-lg bg-[#060B16]/80 border border-slate-800">
+                <span className="text-slate-400">Imports: </span>
+                <span className="font-semibold text-amber-400">
+                  ${(tradeIndicator.officialTradeMeta?.merchandiseImportsUsdBn ?? 74.61).toFixed(2)}B
+                </span>
+                <span className="text-[11px] text-slate-300 ml-1">
+                  (+{(tradeIndicator.officialTradeMeta?.importsYoYPct ?? 8.0).toFixed(2)}% YoY)
+                </span>
+              </div>
+              <div className="px-3 py-1.5 rounded-lg bg-[#060B16]/80 border border-slate-800">
+                <span className="text-slate-400">Deficit Mag: </span>
+                <span className="font-semibold text-amber-300">
+                  ${(tradeIndicator.officialTradeMeta?.tradeDeficitMagnitudeUsdBn ?? 30.21).toFixed(2)}B
+                </span>
+              </div>
+              <button
+                type="button"
+                onClick={() => onSelectPage('currency-oil', 'merchandise-trade')}
+                className="px-3.5 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white font-sans font-semibold flex items-center gap-1 cursor-pointer"
+              >
+                <span>Open Trade Intelligence</span>
+                <ArrowUpRight className="w-3.5 h-3.5" />
+              </button>
+            </div>
+          </div>
+        )}
       </section>
 
       {/* 3. Economic Pulse — Data Storytelling Section */}

@@ -223,6 +223,10 @@ export const KpiCard: React.FC<KpiCardProps> = ({
     if (indicator.id === 'usd-inr' && indicator.isOfficialData) {
       return displayedValue.toFixed(4);
     }
+    if (indicator.id === 'merchandise-trade') {
+      const absVal = Math.abs(displayedValue).toFixed(2);
+      return displayedValue < 0 ? `-$${absVal}B` : `+$${absVal}B`;
+    }
     if (
       indicator.id === 'usd-inr' ||
       indicator.id === 'crude-oil' ||
@@ -275,6 +279,8 @@ export const KpiCard: React.FC<KpiCardProps> = ({
                 ? 'FBIL Ref Rate (Not Live Quote)'
                 : indicator.officialCrudeMeta
                 ? 'Completed Monthly Avg'
+                : indicator.officialTradeMeta
+                ? 'Goods Only (Excl. Services)'
                 : `Base ${indicator.officialCpiMeta?.activeBaseYear || '2024=100'}`
               : indicator.frequency}
           </span>
@@ -306,7 +312,9 @@ export const KpiCard: React.FC<KpiCardProps> = ({
                 ? `$${formattedNumber}`
                 : formattedNumber}
             </span>
-            <span className="text-xs font-mono-tabular text-slate-400">{indicator.unit}</span>
+            <span className="text-xs font-mono-tabular text-slate-400">
+              {indicator.id === 'merchandise-trade' ? 'Signed Balance' : indicator.unit}
+            </span>
           </div>
 
           {/* Movement Comparison */}
@@ -355,9 +363,15 @@ export const KpiCard: React.FC<KpiCardProps> = ({
             ? ` · Prev ₹${indicator.officialUsdInrMeta.previousRateInrPerUsd.toFixed(4)}`
             : indicator.isOfficialData && indicator.officialCrudeMeta
             ? ` · Daily (22 Oct): $${indicator.officialCrudeMeta.latestDailyPriceUsd.toFixed(2)}`
+            : indicator.isOfficialData && indicator.officialTradeMeta
+            ? ` · Exp $${indicator.officialTradeMeta.merchandiseExportsUsdBn.toFixed(2)}B · Imp $${indicator.officialTradeMeta.merchandiseImportsUsdBn.toFixed(2)}B`
             : ''}
         </span>
-        <span className={semantic.colorClass}>{semantic.label}</span>
+        <span className={semantic.colorClass}>
+          {indicator.id === 'merchandise-trade' && indicator.changeValue > 0
+            ? 'Deficit Narrowed YoY'
+            : semantic.label}
+        </span>
       </div>
     </button>
   );

@@ -51,8 +51,8 @@ export const ARTHNITI_NAV_ITEMS: NavItemConfig[] = [
   },
   {
     id: 'currency-oil',
-    label: 'Currency & Oil',
-    shortDesc: 'USD/INR & Crude Basket',
+    label: 'Currency, Oil & Trade',
+    shortDesc: 'Trade Balance, Crude & INR',
     icon: Droplets,
   },
   {

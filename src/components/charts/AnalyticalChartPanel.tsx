@@ -46,7 +46,13 @@ interface SeriesConfig {
     | 'ruralUrPct'
     | 'urbanUrPct'
     | 'lfprCwsPct'
-    | 'wprCwsPct';
+    | 'wprCwsPct'
+    | 'merchandiseExportsUsdBn'
+    | 'merchandiseImportsUsdBn'
+    | 'tradeBalanceUsdBn'
+    | 'tradeDeficitMagnitudeUsdBn'
+    | 'exportsYoYPct'
+    | 'importsYoYPct';
   name: string;
   color: string;
   unit?: string;

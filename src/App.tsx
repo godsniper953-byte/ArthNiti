@@ -42,6 +42,11 @@ import {
   loadOfficialCrudeOilData,
   saveUserUploadedCrudeCsv,
 } from './services/crudeOilDataService';
+import {
+  clearUserUploadedTradeCsv,
+  loadOfficialMerchandiseTradeData,
+  saveUserUploadedTradeCsv,
+} from './services/tradeBalanceDataService';
 import { EconomicIndicator, PageId } from './types/economy';
 import { Sidebar } from './components/navigation/Sidebar';
 import { TopBar } from './components/navigation/TopBar';
@@ -121,6 +126,17 @@ export default function App() {
   const [crudeDataOrigin, setCrudeDataOrigin] = useState<
     'official_ppac_csv' | 'user_uploaded_csv' | 'demonstration_fallback'
   >('official_ppac_csv');
+
+  // Official Ministry of Commerce & Industry Merchandise Trade Balance State (via tradeBalanceDataService)
+  const [officialTradeIndicator, setOfficialTradeIndicator] = useState<EconomicIndicator | null>(
+    null
+  );
+  const [tradeLoading, setTradeLoading] = useState<boolean>(true);
+  const [tradeError, setTradeError] = useState<string | null>(null);
+  const [tradeRetrievalTimestamp, setTradeRetrievalTimestamp] = useState<string>('Verifying...');
+  const [tradeDataOrigin, setTradeDataOrigin] = useState<
+    'official_moci_csv' | 'user_uploaded_csv' | 'demonstration_fallback'
+  >('official_moci_csv');
 
   const baseIndicators = useMemo(() => getIndicatorsSync(), []);
   const sources = useMemo(() => getDataSourcesSync(), []);
@@ -239,6 +255,24 @@ export default function App() {
     setCrudeLoading(false);
   }, []);
 
+  const handleFetchOfficialTrade = useCallback(async (simulateError = false) => {
+    setTradeLoading(true);
+    setTradeError(null);
+    const result = await loadOfficialMerchandiseTradeData({ simulateError });
+    setTradeRetrievalTimestamp(result.retrievalTimestamp);
+    setTradeDataOrigin(result.dataOrigin);
+    if (result.status === 'success' && result.indicator) {
+      setOfficialTradeIndicator(result.indicator);
+      setTradeError(null);
+    } else {
+      setTradeError(
+        result.errorMessage ||
+          'Failed to load official Ministry of Commerce Merchandise Trade dataset.'
+      );
+    }
+    setTradeLoading(false);
+  }, []);
+
   useEffect(() => {
     handleFetchOfficialCpi(false);
     handleFetchOfficialGdp(false);
@@ -246,6 +280,7 @@ export default function App() {
     handleFetchOfficialPlfs(false);
     handleFetchOfficialUsdInr({ simulateError: false, simulateEmpty: false });
     handleFetchOfficialCrude(false);
+    handleFetchOfficialTrade(false);
   }, [
     handleFetchOfficialCpi,
     handleFetchOfficialGdp,
@@ -253,6 +288,7 @@ export default function App() {
     handleFetchOfficialPlfs,
     handleFetchOfficialUsdInr,
     handleFetchOfficialCrude,
+    handleFetchOfficialTrade,
   ]);
 
   const handleUploadCustomCsv = useCallback((csvText: string) => {
@@ -545,7 +581,58 @@ export default function App() {
     );
   }, [baseIndicators]);
 
-  // Merge official MoSPI GDP, CPI, PLFS Unemployment, FBIL/RBI USD/INR, PPAC Crude Oil, and RBI Repo Rate indicators
+  const handleUploadCustomTradeCsv = useCallback((csvText: string) => {
+    try {
+      const updated = saveUserUploadedTradeCsv(csvText);
+      setOfficialTradeIndicator(updated);
+      setTradeError(null);
+      setTradeDataOrigin('user_uploaded_csv');
+      setTradeRetrievalTimestamp(
+        new Date().toLocaleString('en-IN', {
+          day: '2-digit',
+          month: 'short',
+          year: 'numeric',
+          hour: '2-digit',
+          minute: '2-digit',
+          second: '2-digit',
+        })
+      );
+      return { ok: true };
+    } catch (err: any) {
+      return {
+        ok: false,
+        error: err?.message || 'Invalid MoCI Merchandise Trade CSV format.',
+      };
+    }
+  }, []);
+
+  const handleResetCustomTradeCsv = useCallback(() => {
+    clearUserUploadedTradeCsv();
+    handleFetchOfficialTrade(false);
+  }, [handleFetchOfficialTrade]);
+
+  const handleActivateTradeDemoFallback = useCallback(() => {
+    const demoFallback =
+      baseIndicators.find((i) => i.id === 'merchandise-trade') ||
+      baseIndicators[baseIndicators.length - 1];
+    setOfficialTradeIndicator({
+      ...demoFallback,
+      name: 'India Merchandise Trade Balance (Labelled Demonstration Fallback)',
+      shortName: 'Merchandise Trade (Demo Fallback)',
+      sourceShortName: 'MoCI / DGCI&S (Demo Fallback)',
+      isOfficialData: false,
+    });
+    setTradeError(null);
+    setTradeDataOrigin('demonstration_fallback');
+    setTradeRetrievalTimestamp(
+      `${new Date().toLocaleTimeString('en-IN', {
+        hour: '2-digit',
+        minute: '2-digit',
+      })} (Demo State)`
+    );
+  }, [baseIndicators]);
+
+  // Merge official MoSPI GDP, CPI, PLFS Unemployment, FBIL/RBI USD/INR, PPAC Crude Oil, MoCI Merchandise Trade, and RBI Repo Rate indicators
   const indicators = useMemo(() => {
     return baseIndicators.map((ind) => {
       if (ind.id === 'gdp-growth' && officialGdpIndicator) return officialGdpIndicator;
@@ -554,6 +641,7 @@ export default function App() {
       if (ind.id === 'unemployment-rate' && officialPlfsIndicator) return officialPlfsIndicator;
       if (ind.id === 'usd-inr' && officialUsdInrIndicator) return officialUsdInrIndicator;
       if (ind.id === 'crude-oil' && officialCrudeIndicator) return officialCrudeIndicator;
+      if (ind.id === 'merchandise-trade' && officialTradeIndicator) return officialTradeIndicator;
       return ind;
     });
   }, [
@@ -564,6 +652,7 @@ export default function App() {
     officialPlfsIndicator,
     officialUsdInrIndicator,
     officialCrudeIndicator,
+    officialTradeIndicator,
   ]);
 
   useEffect(() => {
@@ -618,6 +707,12 @@ export default function App() {
     () => indicators.find((i) => i.id === 'nifty-50') || indicators[6],
     [indicators]
   );
+  const tradeIndicator = useMemo(
+    () =>
+      indicators.find((i) => i.id === 'merchandise-trade') ||
+      indicators[indicators.length - 1],
+    [indicators]
+  );
 
   const renderActivePage = () => {
     switch (activePage) {
@@ -649,6 +744,9 @@ export default function App() {
             crudeLoading={crudeLoading}
             crudeError={crudeError}
             onRetryCrude={() => handleFetchOfficialCrude(false)}
+            tradeLoading={tradeLoading}
+            tradeError={tradeError}
+            onRetryTrade={() => handleFetchOfficialTrade(false)}
           />
         );
       case 'gdp-growth':
@@ -702,6 +800,7 @@ export default function App() {
           <CurrencyOilPage
             inrIndicator={inrIndicator}
             crudeIndicator={crudeIndicator}
+            tradeIndicator={tradeIndicator}
             allIndicators={indicators}
             usdInrLoading={usdInrLoading}
             usdInrError={usdInrError}
@@ -720,6 +819,14 @@ export default function App() {
             onUploadCustomCrudeCsv={handleUploadCustomCrudeCsv}
             onResetCustomCrudeCsv={handleResetCustomCrudeCsv}
             onActivateCrudeDemoFallback={handleActivateCrudeDemoFallback}
+            tradeLoading={tradeLoading}
+            tradeError={tradeError}
+            tradeRetrievalTimestamp={tradeRetrievalTimestamp}
+            tradeDataOrigin={tradeDataOrigin}
+            onRefreshOfficialTrade={(simErr) => handleFetchOfficialTrade(Boolean(simErr))}
+            onUploadCustomTradeCsv={handleUploadCustomTradeCsv}
+            onResetCustomTradeCsv={handleResetCustomTradeCsv}
+            onActivateTradeDemoFallback={handleActivateTradeDemoFallback}
             theme={theme}
           />
         );
@@ -795,9 +902,9 @@ export default function App() {
           }`}
         >
           <div>
-            <span className="font-semibold text-emerald-400">Official Data (All 6 KPIs): </span>
+            <span className="font-semibold text-emerald-400">Official Data (All 7 Macro Series): </span>
             <span>
-              <strong>GDP</strong> (<strong className="font-mono-tabular text-emerald-400">7.8%</strong>), <strong>CPI</strong> (<strong className="font-mono-tabular text-emerald-400">5.54%</strong>), <strong>PLFS UR</strong> (<strong className="font-mono-tabular text-emerald-400">5.0%</strong>), <strong>USD/INR</strong> (<strong className="font-mono-tabular text-emerald-400">₹94.6986</strong>), <strong>PPAC Crude</strong> (<strong className="font-mono-tabular text-emerald-400">$116.09</strong>), &amp; <strong>RBI Repo</strong> (<strong className="font-mono-tabular text-emerald-400">5.50%</strong>).
+              <strong>GDP</strong> (<strong className="font-mono-tabular text-emerald-400">7.8%</strong>), <strong>CPI</strong> (<strong className="font-mono-tabular text-emerald-400">5.54%</strong>), <strong>PLFS UR</strong> (<strong className="font-mono-tabular text-emerald-400">5.0%</strong>), <strong>USD/INR</strong> (<strong className="font-mono-tabular text-emerald-400">₹94.6986</strong>), <strong>PPAC Crude</strong> (<strong className="font-mono-tabular text-emerald-400">$116.09</strong>), <strong>Trade Bal</strong> (<strong className="font-mono-tabular text-emerald-400">-$30.21B</strong>), &amp; <strong>RBI Repo</strong> (<strong className="font-mono-tabular text-emerald-400">5.50%</strong>).
             </span>
           </div>
           <div className="flex flex-wrap items-center gap-3 self-start sm:self-auto shrink-0">
@@ -824,10 +931,10 @@ export default function App() {
             </button>
             <button
               type="button"
-              onClick={() => handleSelectPage('currency-oil', 'crude-oil')}
+              onClick={() => handleSelectPage('currency-oil', 'merchandise-trade')}
               className="text-amber-300 hover:underline font-medium cursor-pointer whitespace-nowrap"
             >
-              PPAC Crude &amp; FX →
+              MoCI Trade, Crude &amp; FX →
             </button>
             <button
               type="button"
@@ -865,6 +972,8 @@ export default function App() {
                         ? `₹${focusedIndicator.currentValue}`
                         : focusedIndicator.id === 'crude-oil'
                         ? `$${focusedIndicator.currentValue}`
+                        : focusedIndicator.id === 'merchandise-trade'
+                        ? `${focusedIndicator.currentValue < 0 ? '-$' : '+$'}${Math.abs(focusedIndicator.currentValue).toFixed(2)}B`
                         : focusedIndicator.currentValue}{' '}
                       {focusedIndicator.unit} ({focusedIndicator.changeLabel})
                     </span>

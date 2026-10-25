@@ -1,16 +1,75 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import * as THREE from 'three';
 import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
-import { ChevronDown, ChevronUp, Compass, Eye, Globe, Layers, Pause, Play } from 'lucide-react';
-import { INDIA_ECONOMIC_HUBS } from '../../data/mockEconomicData';
-import { IndiaEconomicHubNode } from '../../types/economy';
+import {
+  AlertTriangle,
+  ArrowUpRight,
+  ChevronDown,
+  ChevronUp,
+  Compass,
+  ExternalLink,
+  Globe,
+  Info,
+  Layers,
+  Pause,
+  Play,
+  RefreshCw,
+  RotateCcw,
+  Search,
+  X,
+  ZoomIn,
+  ZoomOut,
+} from 'lucide-react';
+import {
+  GlobalTradeNetworkDataset,
+  GlobalTradePartnerNode,
+  TradeRegionFilter,
+  TradeRouteDisplayMode,
+} from '../../types/economy';
+import {
+  INDIA_FY24_TOTAL_EXPORTS_USD_BN,
+  INDIA_FY24_TOTAL_IMPORTS_USD_BN,
+  INDIA_FY24_TOTAL_TRADE_USD_BN,
+  INDIA_FY24_TRADE_BALANCE_USD_BN,
+  loadGlobalTradeNetworkData,
+  matchesTradeRegionFilter,
+} from '../../services/globalTradeNetworkService';
 
 interface IndiaEconomicGlobeProps {
   theme: 'dark' | 'light';
+  onOpenMerchandiseTradePage?: () => void;
 }
 
-// Convert lat/lon in degrees to 3D sphere cartesian coordinates
-function latLonToVec3(lat: number, lon: number, radius: number, target = new THREE.Vector3()): THREE.Vector3 {
+const INDIA_HUB_LAT = 20.59;
+const INDIA_HUB_LON = 78.96;
+
+const REGION_FILTERS: TradeRegionFilter[] = [
+  'All',
+  'BRICS',
+  'European Union',
+  'ASEAN',
+  'North America',
+  'Middle East',
+  'Asia-Pacific',
+  'Africa',
+  'Latin America',
+];
+
+const DISPLAY_MODES: { id: TradeRouteDisplayMode; label: string }[] = [
+  { id: 'all', label: 'All Trade Routes' },
+  { id: 'exports', label: 'Export Connections' },
+  { id: 'imports', label: 'Import Connections' },
+  { id: 'balance', label: 'Trade Balance' },
+];
+
+// Convert geographic (lat, lon) in degrees to 3D sphere cartesian coordinates
+// Note: Three.js SphereGeometry UV mapping places lon = -180 at u=0 and lon = +180 at u=1
+function latLonToVec3(
+  lat: number,
+  lon: number,
+  radius: number,
+  target = new THREE.Vector3()
+): THREE.Vector3 {
   const phi = (90 - lat) * (Math.PI / 180);
   const theta = (lon + 180) * (Math.PI / 180);
   const x = -(radius * Math.sin(phi) * Math.cos(theta));
@@ -19,72 +78,805 @@ function latLonToVec3(lat: number, lon: number, radius: number, target = new THR
   return target.set(x, y, z);
 }
 
-// Stylized India outline lat/lon loop for the 3D globe surface
-const INDIA_OUTLINE_COORDS: [number, number][] = [
-  [8.08, 77.55],   // Kanyakumari
-  [10.8, 79.8],    // Tamil Nadu coast
-  [13.08, 80.27],  // Chennai
-  [16.5, 82.2],    // Andhra coast
-  [19.8, 85.8],    // Odisha coast
-  [22.57, 88.36],  // Kolkata / Bengal
-  [26.1, 89.9],    // Assam / NE entry
-  [27.8, 95.2],    // Arunachal East
-  [24.8, 93.9],    // Manipur
-  [23.8, 91.3],    // Tripura
-  [26.7, 88.4],    // Siliguri corridor
-  [28.6, 80.1],    // Uttarakhand / UP border
-  [32.7, 78.9],    // Ladakh East
-  [34.5, 76.5],    // Northern Frontier
-  [32.7, 74.8],    // Jammu
-  [30.9, 74.6],    // Punjab border
-  [27.0, 70.9],    // Rajasthan Thar West
-  [23.7, 68.6],    // Kutch Gujarat
-  [21.6, 69.6],    // Saurashtra
-  [21.1, 72.8],    // Surat
-  [19.07, 72.87],  // Mumbai
-  [15.4, 73.8],    // Goa
-  [12.9, 74.8],    // Mangaluru
-  [9.93, 76.26],   // Kochi
-  [8.08, 77.55],   // Close loop at Kanyakumari
+// Compute globe rotation (rotX, rotY) that brings a given (lat, lon) to face the camera (+Z axis)
+function computeTargetRotationForLatLon(lat: number, lon: number): { rotX: number; rotY: number } {
+  const theta = (lon + 180) * (Math.PI / 180);
+  // At rotY = theta - Math.PI / 2, the point lies on the +Z half of the YZ plane
+  const rotY = theta - Math.PI / 2;
+  const rotX = THREE.MathUtils.clamp((lat * Math.PI) / 180 * 0.72, -0.68, 0.78);
+  return { rotX, rotY };
+}
+
+// Normalize angle difference so rotation always takes the shortest spherical path
+function shortestAngleTarget(currentAngle: number, desiredAngle: number): number {
+  const twoPi = Math.PI * 2;
+  const diff = ((((desiredAngle - currentAngle) % twoPi) + twoPi + Math.PI) % twoPi) - Math.PI;
+  return currentAngle + diff;
+}
+
+// Create a spherical great-circle elevated CubicBezierCurve3 between two surface points
+// so long routes (e.g. India -> USA or India -> Brazil) arc high above the Earth and never clip inside
+function createSphericalTradeArc(
+  startLat: number,
+  startLon: number,
+  endLat: number,
+  endLon: number,
+  globeRadius: number
+): THREE.CubicBezierCurve3 {
+  const vStart = latLonToVec3(startLat, startLon, globeRadius * 1.008);
+  const vEnd = latLonToVec3(endLat, endLon, globeRadius * 1.008);
+
+  const uStart = vStart.clone().normalize();
+  const uEnd = vEnd.clone().normalize();
+
+  const dot = THREE.MathUtils.clamp(uStart.dot(uEnd), -0.999, 0.999);
+  const omega = Math.acos(dot); // angular distance in radians (0 to PI)
+
+  // Spherical linear interpolation helper along great circle
+  const slerpVec = (t: number): THREE.Vector3 => {
+    if (omega < 0.001) return uStart.clone();
+    const sinOmega = Math.sin(omega);
+    const s0 = Math.sin((1 - t) * omega) / sinOmega;
+    const s1 = Math.sin(t * omega) / sinOmega;
+    return uStart
+      .clone()
+      .multiplyScalar(s0)
+      .add(uEnd.clone().multiplyScalar(s1))
+      .normalize();
+  };
+
+  // Altitude scales smoothly with angular distance so antipodal arcs clear the sphere comfortably
+  const peakFactor = 1.06 + (omega / Math.PI) * 0.42;
+  const ctrl1 = slerpVec(0.32).multiplyScalar(globeRadius * peakFactor);
+  const ctrl2 = slerpVec(0.68).multiplyScalar(globeRadius * peakFactor);
+
+  return new THREE.CubicBezierCurve3(vStart, ctrl1, ctrl2, vEnd);
+}
+
+// Detailed continental [lat, lon] polygons for our zero-dependency procedural 2048x1024 World Map texture
+const WORLD_LANDMASS_POLYGONS: {
+  name: string;
+  isIndia?: boolean;
+  coords: [number, number][];
+}[] = [
+  // 1. INDIA (Highlighted in Emerald & Gold)
+  {
+    name: 'India',
+    isIndia: true,
+    coords: [
+      [8.08, 77.55],
+      [10.3, 79.8],
+      [13.08, 80.27],
+      [15.9, 80.9],
+      [17.7, 83.3],
+      [20.3, 86.7],
+      [21.9, 88.1],
+      [22.5, 88.9],
+      [25.2, 89.8],
+      [26.2, 90.0],
+      [27.9, 96.1],
+      [26.1, 95.1],
+      [24.2, 94.1],
+      [23.1, 91.5],
+      [25.1, 88.8],
+      [26.7, 88.2],
+      [27.5, 84.0],
+      [28.9, 80.1],
+      [31.1, 79.0],
+      [33.0, 79.4],
+      [35.1, 77.8],
+      [35.5, 74.6],
+      [34.1, 73.9],
+      [31.5, 74.5],
+      [29.9, 73.2],
+      [27.8, 70.1],
+      [24.3, 68.7],
+      [22.8, 69.1],
+      [20.9, 70.4],
+      [21.6, 72.2],
+      [20.4, 72.8],
+      [18.9, 72.8],
+      [15.4, 73.8],
+      [12.8, 74.8],
+      [9.9, 76.2],
+      [8.08, 77.55],
+    ],
+  },
+  // 2. North America
+  {
+    name: 'North America',
+    coords: [
+      [70, -162],
+      [71, -135],
+      [69, -115],
+      [66, -90],
+      [60, -78],
+      [62, -65],
+      [52, -55],
+      [45, -61],
+      [41, -70],
+      [35, -75],
+      [25, -80],
+      [29, -85],
+      [29, -95],
+      [22, -97],
+      [19, -96],
+      [21, -87],
+      [15, -83],
+      [9, -79],
+      [8, -83],
+      [14, -92],
+      [17, -101],
+      [23, -106],
+      [31, -114],
+      [23, -110],
+      [32, -117],
+      [38, -123],
+      [48, -124],
+      [58, -136],
+      [61, -149],
+      [55, -162],
+      [64, -166],
+      [70, -162],
+    ],
+  },
+  // 3. Greenland
+  {
+    name: 'Greenland',
+    coords: [
+      [60, -44],
+      [66, -36],
+      [72, -22],
+      [81, -18],
+      [82, -45],
+      [76, -68],
+      [68, -53],
+      [60, -44],
+    ],
+  },
+  // 4. South America
+  {
+    name: 'South America',
+    coords: [
+      [11, -75],
+      [10, -62],
+      [6, -52],
+      [0, -49],
+      [-5, -35],
+      [-13, -38],
+      [-23, -42],
+      [-34, -53],
+      [-42, -64],
+      [-54, -68],
+      [-53, -74],
+      [-41, -74],
+      [-28, -71],
+      [-18, -71],
+      [-12, -77],
+      [-5, -81],
+      [2, -79],
+      [8, -77],
+      [11, -75],
+    ],
+  },
+  // 5. Africa
+  {
+    name: 'Africa',
+    coords: [
+      [36, -6],
+      [37, 10],
+      [32, 15],
+      [31, 32],
+      [22, 37],
+      [12, 44],
+      [12, 51],
+      [2, 45],
+      [-10, 40],
+      [-25, 33],
+      [-34, 25],
+      [-34, 18],
+      [-22, 14],
+      [-12, 13],
+      [-4, 11],
+      [4, 9],
+      [6, 2],
+      [5, -8],
+      [11, -16],
+      [15, -17],
+      [23, -16],
+      [31, -10],
+      [36, -6],
+    ],
+  },
+  // 6. Madagascar
+  {
+    name: 'Madagascar',
+    coords: [
+      [-12, 49],
+      [-18, 49.5],
+      [-25, 47],
+      [-25, 44],
+      [-16, 44.5],
+      [-12, 49],
+    ],
+  },
+  // 7. Europe (Continental)
+  {
+    name: 'Europe',
+    coords: [
+      [36, -9],
+      [43, -9],
+      [44, -1],
+      [48, -4],
+      [51, 2],
+      [54, 8],
+      [58, 8],
+      [62, 5],
+      [70, 20],
+      [70, 30],
+      [65, 40],
+      [60, 30],
+      [55, 21],
+      [54, 14],
+      [46, 14],
+      [40, 18],
+      [38, 15],
+      [43, 12],
+      [44, 8],
+      [42, 3],
+      [36, -5],
+      [36, -9],
+    ],
+  },
+  // 8. United Kingdom & Ireland
+  {
+    name: 'UK & Ireland',
+    coords: [
+      [50, -5],
+      [51, 1.5],
+      [55, -1.5],
+      [58.5, -3],
+      [57, -6],
+      [54, -5],
+      [52, -10],
+      [50, -5],
+    ],
+  },
+  // 9. Eurasia & East/Southeast Asia (Outside India)
+  {
+    name: 'Eurasia',
+    coords: [
+      [41, 28],
+      [36, 36],
+      [30, 33],
+      [28, 35],
+      [13, 44],
+      [16, 53],
+      [22, 59],
+      [26, 56],
+      [30, 49],
+      [25, 62],
+      [25, 67],
+      [35, 74],
+      [36, 78],
+      [28, 84],
+      [27, 96],
+      [21, 93],
+      [16, 97],
+      [7, 99],
+      [1.3, 104],
+      [7, 102],
+      [11, 109],
+      [17, 107],
+      [21, 108],
+      [23, 117],
+      [31, 122],
+      [39, 121],
+      [39, 126],
+      [35, 129],
+      [42, 131],
+      [52, 141],
+      [60, 150],
+      [66, 178],
+      [71, 160],
+      [73, 120],
+      [73, 80],
+      [68, 45],
+      [60, 30],
+      [46, 31],
+      [42, 41],
+      [41, 28],
+    ],
+  },
+  // 10. Japan Archipelago
+  {
+    name: 'Japan',
+    coords: [
+      [31, 130],
+      [34, 135],
+      [36, 140.5],
+      [41, 141],
+      [44, 145],
+      [43, 140],
+      [37, 137],
+      [34, 131],
+      [31, 130],
+    ],
+  },
+  // 11. Maritime ASEAN (Indonesia — Sumatra, Java, Borneo, Sulawesi, Philippines)
+  {
+    name: 'Sumatra & Java',
+    coords: [
+      [5.5, 95.3],
+      [1, 102],
+      [-5.8, 105.8],
+      [-7.8, 114],
+      [-8.5, 115],
+      [-7.5, 106],
+      [-3, 100],
+      [5.5, 95.3],
+    ],
+  },
+  {
+    name: 'Borneo',
+    coords: [
+      [7, 117],
+      [1, 118],
+      [-3.5, 116],
+      [-3, 110],
+      [2, 109],
+      [7, 117],
+    ],
+  },
+  {
+    name: 'Philippines',
+    coords: [
+      [18.5, 121],
+      [14, 124],
+      [7, 126],
+      [6, 122],
+      [13, 120],
+      [18.5, 121],
+    ],
+  },
+  // 12. Sri Lanka
+  {
+    name: 'Sri Lanka',
+    coords: [
+      [9.8, 80.0],
+      [8.5, 81.8],
+      [6.0, 81.2],
+      [6.0, 79.9],
+      [8.2, 79.8],
+      [9.8, 80.0],
+    ],
+  },
+  // 13. Australia
+  {
+    name: 'Australia',
+    coords: [
+      [-12, 131],
+      [-12, 142],
+      [-19, 147],
+      [-28, 153],
+      [-38, 149],
+      [-38, 141],
+      [-34, 135],
+      [-32, 126],
+      [-34, 115],
+      [-22, 114],
+      [-15, 124],
+      [-12, 131],
+    ],
+  },
+  // 14. New Zealand
+  {
+    name: 'New Zealand',
+    coords: [
+      [-35, 173],
+      [-39, 178],
+      [-46, 168],
+      [-45, 166],
+      [-38, 174],
+      [-35, 173],
+    ],
+  },
 ];
 
-export const IndiaEconomicGlobe: React.FC<IndiaEconomicGlobeProps> = ({ theme }) => {
+// Generate procedural 2048x1024 World Map Albedo + Roughness textures
+function createProceduralWorldMapTextures(
+  maxAnisotropy: number,
+  partners: GlobalTradePartnerNode[]
+): {
+  albedoTexture: THREE.CanvasTexture;
+  roughnessTexture: THREE.CanvasTexture;
+} {
+  const width = 2048;
+  const height = 1024;
+
+  const albedoCanvas = document.createElement('canvas');
+  albedoCanvas.width = width;
+  albedoCanvas.height = height;
+  const ctx = albedoCanvas.getContext('2d');
+
+  const roughCanvas = document.createElement('canvas');
+  roughCanvas.width = width;
+  roughCanvas.height = height;
+  const rCtx = roughCanvas.getContext('2d');
+
+  const lonToX = (lon: number) => ((lon + 180) / 360) * width;
+  const latToY = (lat: number) => ((90 - lat) / 180) * height;
+
+  if (ctx && rCtx) {
+    // 1. Deep Navy Ocean Bathymetry Gradient
+    const oceanGrad = ctx.createLinearGradient(0, 0, 0, height);
+    oceanGrad.addColorStop(0, '#040a17');
+    oceanGrad.addColorStop(0.22, '#071429');
+    oceanGrad.addColorStop(0.5, '#091b36');
+    oceanGrad.addColorStop(0.78, '#071429');
+    oceanGrad.addColorStop(1, '#040a17');
+    ctx.fillStyle = oceanGrad;
+    ctx.fillRect(0, 0, width, height);
+
+    // Roughness base for oceans (smooth specular sheen: ~75/255)
+    rCtx.fillStyle = 'rgb(75, 75, 75)';
+    rCtx.fillRect(0, 0, width, height);
+
+    // 2. Subtle Global Latitude / Longitude Graticule Grid (every 15 degrees)
+    ctx.strokeStyle = 'rgba(56, 189, 248, 0.08)';
+    ctx.lineWidth = 1;
+    for (let lon = -180; lon <= 180; lon += 15) {
+      const x = lonToX(lon);
+      ctx.beginPath();
+      ctx.moveTo(x, 0);
+      ctx.lineTo(x, height);
+      ctx.stroke();
+    }
+    for (let lat = -75; lat <= 75; lat += 15) {
+      const y = latToY(lat);
+      ctx.beginPath();
+      ctx.moveTo(0, y);
+      ctx.lineTo(width, y);
+      ctx.stroke();
+    }
+
+    // Highlight Equator and Tropic of Cancer (passing directly through India at 23.5°N)
+    ctx.strokeStyle = 'rgba(16, 185, 129, 0.16)';
+    ctx.lineWidth = 1.4;
+    ctx.beginPath();
+    ctx.moveTo(0, latToY(0));
+    ctx.lineTo(width, latToY(0));
+    ctx.stroke();
+
+    ctx.setLineDash([6, 6]);
+    ctx.strokeStyle = 'rgba(245, 158, 11, 0.22)';
+    ctx.beginPath();
+    ctx.moveTo(0, latToY(23.43));
+    ctx.lineTo(width, latToY(23.43));
+    ctx.stroke();
+    ctx.setLineDash([]);
+
+    // 3. Draw Continental Polygons
+    WORLD_LANDMASS_POLYGONS.forEach((poly) => {
+      if (poly.coords.length < 3) return;
+
+      ctx.beginPath();
+      rCtx.beginPath();
+
+      poly.coords.forEach(([lat, lon], idx) => {
+        const x = lonToX(lon);
+        const y = latToY(lat);
+        if (idx === 0) {
+          ctx.moveTo(x, y);
+          rCtx.moveTo(x, y);
+        } else {
+          ctx.lineTo(x, y);
+          rCtx.lineTo(x, y);
+        }
+      });
+
+      ctx.closePath();
+      rCtx.closePath();
+
+      if (poly.isIndia) {
+        // Glowing Emerald & Gold highlight for India
+        const indX = lonToX(78.96);
+        const indY = latToY(22.0);
+        const indiaGrad = ctx.createRadialGradient(indX, indY, 6, indX, indY, 95);
+        indiaGrad.addColorStop(0, 'rgba(245, 158, 11, 0.92)');
+        indiaGrad.addColorStop(0.45, 'rgba(16, 185, 129, 0.88)');
+        indiaGrad.addColorStop(1, 'rgba(5, 150, 105, 0.72)');
+
+        ctx.save();
+        ctx.shadowColor = 'rgba(16, 185, 129, 0.85)';
+        ctx.shadowBlur = 18;
+        ctx.fillStyle = indiaGrad;
+        ctx.fill();
+        ctx.lineWidth = 3.2;
+        ctx.strokeStyle = '#fbbf24';
+        ctx.stroke();
+        ctx.restore();
+
+        // India roughness (lustrous metallic-emerald finish)
+        rCtx.fillStyle = 'rgb(65, 65, 65)';
+        rCtx.fill();
+      } else {
+        // Refined dark slate-teal continents with crisp coastal borders
+        ctx.fillStyle = '#0e223b';
+        ctx.fill();
+        ctx.lineWidth = 1.8;
+        ctx.strokeStyle = '#1e4e79';
+        ctx.stroke();
+
+        // Matte continent roughness (~195/255)
+        rCtx.fillStyle = 'rgb(195, 195, 195)';
+        rCtx.fill();
+      }
+    });
+
+    // 4. Subtle Continental Interior Grid Dots & Partner City Glows
+    partners.forEach((p) => {
+      const x = lonToX(p.lon);
+      const y = latToY(p.lat);
+      const glow = ctx.createRadialGradient(x, y, 1, x, y, 14);
+      if (p.entityType === 'regional_aggregate') {
+        glow.addColorStop(0, 'rgba(167, 139, 250, 0.95)');
+        glow.addColorStop(1, 'rgba(167, 139, 250, 0)');
+      } else if (p.isBricsMember) {
+        glow.addColorStop(0, 'rgba(245, 158, 11, 0.95)');
+        glow.addColorStop(1, 'rgba(245, 158, 11, 0)');
+      } else {
+        glow.addColorStop(0, 'rgba(56, 189, 248, 0.9)');
+        glow.addColorStop(1, 'rgba(56, 189, 248, 0)');
+      }
+      ctx.fillStyle = glow;
+      ctx.beginPath();
+      ctx.arc(x, y, 14, 0, Math.PI * 2);
+      ctx.fill();
+    });
+  }
+
+  const albedoTexture = new THREE.CanvasTexture(albedoCanvas);
+  albedoTexture.colorSpace = THREE.SRGBColorSpace;
+  albedoTexture.anisotropy = maxAnisotropy;
+  albedoTexture.wrapS = THREE.RepeatWrapping;
+  albedoTexture.wrapT = THREE.ClampToEdgeWrapping;
+  albedoTexture.needsUpdate = true;
+
+  const roughnessTexture = new THREE.CanvasTexture(roughCanvas);
+  roughnessTexture.colorSpace = THREE.NoColorSpace;
+  roughnessTexture.anisotropy = maxAnisotropy;
+  roughnessTexture.wrapS = THREE.RepeatWrapping;
+  roughnessTexture.wrapT = THREE.ClampToEdgeWrapping;
+  roughnessTexture.needsUpdate = true;
+
+  return { albedoTexture, roughnessTexture };
+}
+
+// Determine route & marker color hex for a given partner and active display mode
+function getRouteHexColor(
+  partner: GlobalTradePartnerNode,
+  mode: TradeRouteDisplayMode
+): number {
+  if (partner.dataStatus === 'illustrative_corridor') {
+    return 0x64748b; // Slate-blue for illustrative geographic corridors
+  }
+  if (mode === 'exports') {
+    return 0x10b981; // Emerald for Indian export connections
+  }
+  if (mode === 'imports') {
+    return 0xf59e0b; // Amber-Gold for Indian import connections
+  }
+  if (mode === 'balance') {
+    const bal = partner.tradeBalanceUsdBn ?? 0;
+    return bal >= 0 ? 0x10b981 : 0xf43f5e; // Emerald for bilateral surplus, Rose for deficit
+  }
+  // 'all' mode: color by economic grouping
+  if (partner.entityType === 'regional_aggregate') return 0xa78bfa; // Violet for EU-27 & ASEAN-10 blocs
+  if (partner.isBricsMember) return 0xf59e0b; // Gold for BRICS members
+  if (partner.primaryRegion === 'ASEAN') return 0x06b6d4; // Cyan for ASEAN members
+  if (partner.primaryRegion === 'Middle East') return 0xfbbf24; // Warm Amber for Middle East energy partners
+  return 0x10b981; // Emerald for North America, Europe, Asia-Pacific
+}
+
+export const IndiaEconomicGlobe: React.FC<IndiaEconomicGlobeProps> = ({
+  theme,
+  onOpenMerchandiseTradePage,
+}) => {
   const mountRef = useRef<HTMLDivElement | null>(null);
-  const [selectedHub, setSelectedHub] = useState<IndiaEconomicHubNode>(INDIA_ECONOMIC_HUBS[0]);
+
+  // Dataset state
+  const [dataset, setDataset] = useState<GlobalTradeNetworkDataset | null>(null);
+  const [isLoading, setIsLoading] = useState<boolean>(true);
+  const [errorMsg, setErrorMsg] = useState<string | null>(null);
+
+  // Interactive Filters & Selection State
+  const [regionFilter, setRegionFilter] = useState<TradeRegionFilter>('All');
+  const [displayMode, setDisplayMode] = useState<TradeRouteDisplayMode>('all');
+  const [searchQuery, setSearchQuery] = useState<string>('');
+  const [selectedPartnerId, setSelectedPartnerId] = useState<string | null>('usa');
+  const [hoveredPartnerId, setHoveredPartnerId] = useState<string | null>(null);
+  const [hoverScreenPos, setHoverScreenPos] = useState<{ x: number; y: number } | null>(null);
+
+  // Camera & Animation Controls State
   const [isRotating, setIsRotating] = useState<boolean>(true);
+  const [zoomDistance, setZoomDistance] = useState<number>(4.85);
   const [useStaticFallback, setUseStaticFallback] = useState<boolean>(false);
   const [webglSupported, setWebglSupported] = useState<boolean>(true);
-  const [hudCollapsed, setHudCollapsed] = useState<boolean>(false);
+  const [mobileSheetOpen, setMobileSheetOpen] = useState<boolean>(true);
 
-  const selectedHubRef = useRef<IndiaEconomicHubNode>(selectedHub);
+  // Refs synced with React state for zero-teardown 3D animation loop
+  const partnersRef = useRef<GlobalTradePartnerNode[]>([]);
+  const visibleIdsRef = useRef<Set<string>>(new Set());
+  const selectedIdRef = useRef<string | null>(selectedPartnerId);
+  const hoveredIdRef = useRef<string | null>(hoveredPartnerId);
+  const displayModeRef = useRef<TradeRouteDisplayMode>(displayMode);
   const isRotatingRef = useRef<boolean>(isRotating);
+  const zoomDistanceRef = useRef<number>(zoomDistance);
+
+  // Imperative camera rotation target ref (allowing click-to-focus on any country or Reset to India)
+  const INITIAL_INDIA_ROT = useMemo(
+    () => computeTargetRotationForLatLon(INDIA_HUB_LAT, INDIA_HUB_LON),
+    []
+  );
+  const cameraTargetRotRef = useRef<{ rotX: number; rotY: number }>({
+    rotX: INITIAL_INDIA_ROT.rotX,
+    rotY: INITIAL_INDIA_ROT.rotY,
+  });
+
+  // Load verified bilateral trade data from globalTradeNetworkService
+  const fetchTradeNetwork = useCallback(async (simulateError = false) => {
+    setIsLoading(true);
+    setErrorMsg(null);
+    const res = await loadGlobalTradeNetworkData({ simulateError });
+    setDataset(res);
+    partnersRef.current = res.partners;
+    if (res.status === 'error') {
+      setErrorMsg(res.errorMessage || 'Failed to load bilateral trade network.');
+    }
+    setIsLoading(false);
+  }, []);
 
   useEffect(() => {
-    selectedHubRef.current = selectedHub;
-  }, [selectedHub]);
+    fetchTradeNetwork(false);
+  }, [fetchTradeNetwork]);
+
+  // Respect prefers-reduced-motion
+  useEffect(() => {
+    const prefersReduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    if (prefersReduced) {
+      setIsRotating(false);
+      isRotatingRef.current = false;
+    }
+  }, []);
+
+  const allPartners = useMemo(() => dataset?.partners || [], [dataset]);
+
+  // Filtered partners based on active region filter and search query
+  const filteredPartners = useMemo(() => {
+    const q = searchQuery.trim().toLowerCase();
+    return allPartners.filter((partner) => {
+      const regionMatch = matchesTradeRegionFilter(partner, regionFilter);
+      if (!regionMatch) return false;
+      if (!q) return true;
+      return (
+        partner.name.toLowerCase().includes(q) ||
+        partner.shortName.toLowerCase().includes(q) ||
+        partner.isoCode.toLowerCase().includes(q) ||
+        partner.primaryRegion.toLowerCase().includes(q) ||
+        partner.keyExportsFromIndia.toLowerCase().includes(q) ||
+        partner.keyImportsToIndia.toLowerCase().includes(q) ||
+        (partner.isBricsMember && 'brics'.includes(q)) ||
+        (partner.isAseanMember && 'asean'.includes(q)) ||
+        (partner.isEuAggregate && 'eu european union'.includes(q))
+      );
+    });
+  }, [allPartners, regionFilter, searchQuery]);
+
+  // Keep visibleIdsRef synced for the WebGL loop
+  useEffect(() => {
+    visibleIdsRef.current = new Set(filteredPartners.map((p) => p.id));
+  }, [filteredPartners]);
+
+  useEffect(() => {
+    selectedIdRef.current = selectedPartnerId;
+  }, [selectedPartnerId]);
+
+  useEffect(() => {
+    hoveredIdRef.current = hoveredPartnerId;
+  }, [hoveredPartnerId]);
+
+  useEffect(() => {
+    displayModeRef.current = displayMode;
+  }, [displayMode]);
 
   useEffect(() => {
     isRotatingRef.current = isRotating;
   }, [isRotating]);
 
   useEffect(() => {
-    const prefersReducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-    if (prefersReducedMotion) {
+    zoomDistanceRef.current = zoomDistance;
+  }, [zoomDistance]);
+
+  const selectedPartner = useMemo(
+    () =>
+      allPartners.find((p) => p.id === selectedPartnerId) ||
+      filteredPartners[0] ||
+      allPartners[0] ||
+      null,
+    [allPartners, filteredPartners, selectedPartnerId]
+  );
+
+  const hoveredPartner = useMemo(
+    () => (hoveredPartnerId ? allPartners.find((p) => p.id === hoveredPartnerId) || null : null),
+    [allPartners, hoveredPartnerId]
+  );
+
+  // Smoothly focus camera on a selected partner (orienting between India and the partner)
+  const handleSelectPartner = useCallback(
+    (partner: GlobalTradePartnerNode) => {
+      setSelectedPartnerId(partner.id);
       setIsRotating(false);
       isRotatingRef.current = false;
-    }
-  }, []);
 
+      // Focus camera slightly weighted toward the destination partner while keeping the arc from India visible
+      const focusLat = partner.lat * 0.65 + INDIA_HUB_LAT * 0.35;
+      // Handle dateline wrap when averaging longitude with India (78.96E)
+      let deltaLon = partner.lon - INDIA_HUB_LON;
+      if (deltaLon > 180) deltaLon -= 360;
+      if (deltaLon < -180) deltaLon += 360;
+      const focusLon = INDIA_HUB_LON + deltaLon * 0.58;
+
+      const desired = computeTargetRotationForLatLon(focusLat, focusLon);
+      cameraTargetRotRef.current = {
+        rotX: desired.rotX,
+        rotY: shortestAngleTarget(cameraTargetRotRef.current.rotY, desired.rotY),
+      };
+    },
+    []
+  );
+
+  // Reset camera to India-centered overview
+  const handleResetToIndia = useCallback(() => {
+    setSelectedPartnerId(null);
+    setHoveredPartnerId(null);
+    cameraTargetRotRef.current = {
+      rotX: INITIAL_INDIA_ROT.rotX,
+      rotY: shortestAngleTarget(cameraTargetRotRef.current.rotY, INITIAL_INDIA_ROT.rotY),
+    };
+    setZoomDistance(4.85);
+    setIsRotating(true);
+    isRotatingRef.current = true;
+  }, [INITIAL_INDIA_ROT]);
+
+  //When region filter changes, if current selected partner is not in filtered list, focus first matching partner
+  const handleSelectRegionFilter = (nextFilter: TradeRegionFilter) => {
+    setRegionFilter(nextFilter);
+    if (nextFilter === 'All') {
+      cameraTargetRotRef.current = {
+        rotX: INITIAL_INDIA_ROT.rotX,
+        rotY: shortestAngleTarget(cameraTargetRotRef.current.rotY, INITIAL_INDIA_ROT.rotY),
+      };
+      return;
+    }
+    const matching = allPartners.filter((p) => matchesTradeRegionFilter(p, nextFilter));
+    if (matching.length > 0) {
+      handleSelectPartner(matching[0]);
+    }
+  };
+
+  // Build and manage the Three.js 3D Global Trade Network scene
   useEffect(() => {
     if (useStaticFallback) return;
     const container = mountRef.current;
     if (!container) return;
 
-    // Probe WebGL2 / WebGL support & detect Software WebGL
+    // 1. Probe WebGL & software renderer
     let isSoftwareGl = false;
     try {
       const probeCanvas = document.createElement('canvas');
-      const gl = (probeCanvas.getContext('webgl2') || probeCanvas.getContext('webgl')) as WebGLRenderingContext | null;
+      const gl = (probeCanvas.getContext('webgl2') ||
+        probeCanvas.getContext('webgl')) as WebGLRenderingContext | null;
       if (!gl) {
         setWebglSupported(false);
         return;
@@ -111,12 +903,12 @@ export const IndiaEconomicGlobe: React.FC<IndiaEconomicGlobeProps> = ({ theme })
       return;
     }
 
-    const width = container.clientWidth || 520;
-    const height = container.clientHeight || 420;
+    const width = container.clientWidth || 760;
+    const height = container.clientHeight || 560;
 
     renderer.outputColorSpace = THREE.SRGBColorSpace;
     renderer.toneMapping = THREE.ACESFilmicToneMapping;
-    renderer.toneMappingExposure = 1.12;
+    renderer.toneMappingExposure = 1.15;
     renderer.setPixelRatio(isSoftwareGl ? 1 : Math.min(window.devicePixelRatio, 2));
     renderer.setSize(width, height);
 
@@ -128,241 +920,258 @@ export const IndiaEconomicGlobe: React.FC<IndiaEconomicGlobeProps> = ({ theme })
     scene.environment = pmremGenerator.fromScene(new RoomEnvironment(), 0.04).texture;
     pmremGenerator.dispose();
 
-    const camera = new THREE.PerspectiveCamera(40, width / height, 0.1, 100);
-    camera.position.set(0, 0.4, 5.3);
+    const camera = new THREE.PerspectiveCamera(38, width / height, 0.1, 120);
+    camera.position.set(0, 0.15, zoomDistanceRef.current);
     camera.lookAt(0, 0, 0);
 
-    // Balanced studio lighting rig (Warm key light + Cool hemisphere fill + Rim light)
-    const hemiLight = new THREE.HemisphereLight(
-      theme === 'dark' ? 0x38bdf8 : 0xe0f2fe,
-      theme === 'dark' ? 0x060b16 : 0x94a3b8,
-      0.9
-    );
+    // 2. Studio Lighting Rig (Warm key light + Cool hemisphere fill + Emerald/Cyan rim lights)
+    const hemiLight = new THREE.HemisphereLight(0xbae6fd, 0x050b16, 1.05);
     scene.add(hemiLight);
 
-    const keyLight = new THREE.DirectionalLight(0xfef3c7, 1.8);
-    keyLight.position.set(4, 5, 4);
-    scene.add(keyLight);
+    const sunKeyLight = new THREE.DirectionalLight(0xfef3c7, 2.1);
+    sunKeyLight.position.set(5, 4, 5);
+    scene.add(sunKeyLight);
 
-    const rimLight = new THREE.DirectionalLight(0x10b981, 1.4);
-    rimLight.position.set(-5, -2, -3);
+    const rimLight = new THREE.DirectionalLight(0x10b981, 1.35);
+    rimLight.position.set(-5, -2, -4);
     scene.add(rimLight);
 
-    // Root multi-part procedural assembly (THREE.Group with 8 distinct sub-assemblies)
+    const topRimLight = new THREE.DirectionalLight(0x38bdf8, 0.9);
+    topRimLight.position.set(0, 6, -4);
+    scene.add(topRimLight);
+
+    // 3. Subtle Deep Space Starfield
+    const starCount = 240;
+    const starPositions = new Float32Array(starCount * 3);
+    for (let i = 0; i < starCount; i++) {
+      const r = 14 + (i % 9) * 1.8;
+      const theta = i * 2.3999632;
+      const phi = Math.acos(1 - ((i + 0.5) / starCount) * 2);
+      starPositions[i * 3] = r * Math.sin(phi) * Math.cos(theta);
+      starPositions[i * 3 + 1] = r * Math.cos(phi);
+      starPositions[i * 3 + 2] = r * Math.sin(phi) * Math.sin(theta) - 4;
+    }
+    const starGeo = new THREE.BufferGeometry();
+    starGeo.setAttribute('position', new THREE.BufferAttribute(starPositions, 3));
+    const starMat = new THREE.PointsMaterial({
+      color: 0x94a3b8,
+      size: 0.06,
+      transparent: true,
+      opacity: 0.55,
+      sizeAttenuation: true,
+    });
+    const starField = new THREE.Points(starGeo, starMat);
+    scene.add(starField);
+
+    // 4. Root Globe Group
     const globeGroup = new THREE.Group();
     scene.add(globeGroup);
 
-    const GLOBE_RADIUS = 1.62;
+    const GLOBE_RADIUS = 1.66;
+    const maxAnisotropy = renderer.capabilities.getMaxAnisotropy();
+    const { albedoTexture, roughnessTexture } = createProceduralWorldMapTextures(
+      maxAnisotropy,
+      allPartners
+    );
 
-    // Part 1: Core metallic planetary sphere
-    const coreGeo = new THREE.SphereGeometry(GLOBE_RADIUS, 48, 48);
-    const coreMat = new THREE.MeshStandardMaterial({
-      color: theme === 'dark' ? 0x091326 : 0x1e293b,
-      roughness: 0.55,
-      metalness: 0.45,
+    // Part A: Textured 3D World Sphere
+    const earthGeo = new THREE.SphereGeometry(GLOBE_RADIUS, 64, 64);
+    const earthMat = new THREE.MeshStandardMaterial({
+      map: albedoTexture,
+      roughnessMap: roughnessTexture,
+      roughness: 0.85,
+      metalness: 0.25,
     });
-    const coreMesh = new THREE.Mesh(coreGeo, coreMat);
-    globeGroup.add(coreMesh);
+    const earthMesh = new THREE.Mesh(earthGeo, earthMat);
+    globeGroup.add(earthMesh);
 
-    // Part 2: Outer subtle wireframe geodesic shell
-    const wireGeo = new THREE.SphereGeometry(GLOBE_RADIUS * 1.004, 24, 18);
-    const wireMat = new THREE.MeshStandardMaterial({
-      color: theme === 'dark' ? 0x1e3a5f : 0x475569,
-      wireframe: true,
+    // Part B: Subtle Atmospheric Rim Halo
+    const atmoGeo = new THREE.SphereGeometry(GLOBE_RADIUS * 1.045, 48, 48);
+    const atmoMat = new THREE.MeshBasicMaterial({
+      color: 0x0ea5e9,
+      side: THREE.BackSide,
       transparent: true,
-      opacity: 0.22,
-      roughness: 0.3,
+      opacity: 0.14,
+      depthWrite: false,
+    });
+    const atmoMesh = new THREE.Mesh(atmoGeo, atmoMat);
+    globeGroup.add(atmoMesh);
+
+    // Part C: Raised 3D Luminous India Border Contour Ribbon
+    const indiaOutlineCoords = WORLD_LANDMASS_POLYGONS[0].coords;
+    const indiaCurvePts = indiaOutlineCoords.map(([lat, lon]) =>
+      latLonToVec3(lat, lon, GLOBE_RADIUS * 1.007)
+    );
+    const indiaCurve = new THREE.CatmullRomCurve3(indiaCurvePts, true);
+    const indiaTubeGeo = new THREE.TubeGeometry(indiaCurve, 96, 0.0085, 6, true);
+    const indiaTubeMat = new THREE.MeshStandardMaterial({
+      color: 0x10b981,
+      emissive: 0x10b981,
+      emissiveIntensity: 0.85,
+      roughness: 0.2,
       metalness: 0.8,
     });
-    const wireMesh = new THREE.Mesh(wireGeo, wireMat);
-    globeGroup.add(wireMesh);
+    const indiaTubeMesh = new THREE.Mesh(indiaTubeGeo, indiaTubeMat);
+    globeGroup.add(indiaTubeMesh);
 
-    // Part 3: Equatorial & Tropical orbital telemetry rings
-    const ringMat = new THREE.MeshStandardMaterial({
-      color: 0x10b981,
-      roughness: 0.25,
-      metalness: 0.85,
-      transparent: true,
-      opacity: 0.38,
-    });
-    const outerRingGeo = new THREE.TorusGeometry(GLOBE_RADIUS * 1.24, 0.008, 12, 96);
-    const outerRing = new THREE.Mesh(outerRingGeo, ringMat);
-    outerRing.rotation.x = Math.PI / 2.3;
-    outerRing.rotation.y = 0.25;
-    globeGroup.add(outerRing);
+    // Part D: Central India Trade Gateway Hub Beacon (20.59°N, 78.96°E)
+    const indiaHubPos = latLonToVec3(INDIA_HUB_LAT, INDIA_HUB_LON, GLOBE_RADIUS * 1.012);
+    const indiaHubGroup = new THREE.Group();
+    indiaHubGroup.position.copy(indiaHubPos);
+    indiaHubGroup.lookAt(indiaHubPos.clone().multiplyScalar(2));
 
-    const goldRingMat = new THREE.MeshStandardMaterial({
+    const indiaRingGeo = new THREE.RingGeometry(0.035, 0.058, 24);
+    const indiaRingMat = new THREE.MeshBasicMaterial({
       color: 0xf59e0b,
-      roughness: 0.2,
+      side: THREE.DoubleSide,
+      transparent: true,
+      opacity: 0.95,
+    });
+    const indiaRingMesh = new THREE.Mesh(indiaRingGeo, indiaRingMat);
+    indiaHubGroup.add(indiaRingMesh);
+
+    const indiaCoreGeo = new THREE.SphereGeometry(0.028, 16, 16);
+    const indiaCoreMat = new THREE.MeshStandardMaterial({
+      color: 0xfef3c7,
+      emissive: 0xf59e0b,
+      emissiveIntensity: 1.1,
+      roughness: 0.15,
       metalness: 0.9,
-      transparent: true,
-      opacity: 0.32,
     });
-    const secondRingGeo = new THREE.TorusGeometry(GLOBE_RADIUS * 1.34, 0.006, 12, 96);
-    const secondRing = new THREE.Mesh(secondRingGeo, goldRingMat);
-    secondRing.rotation.x = Math.PI / 1.75;
-    secondRing.rotation.z = -0.35;
-    globeGroup.add(secondRing);
+    const indiaCoreMesh = new THREE.Mesh(indiaCoreGeo, indiaCoreMat);
+    indiaHubGroup.add(indiaCoreMesh);
+    globeGroup.add(indiaHubGroup);
 
-    // Part 4: India Subcontinent luminous contour ribbon on the sphere
-    const indiaCurvePoints = INDIA_OUTLINE_COORDS.map(([lat, lon]) =>
-      latLonToVec3(lat, lon, GLOBE_RADIUS * 1.012)
-    );
-    const indiaCurve = new THREE.CatmullRomCurve3(indiaCurvePoints, true);
-    const indiaContourGeo = new THREE.TubeGeometry(indiaCurve, 100, 0.012, 6, true);
-    const indiaContourMat = new THREE.MeshStandardMaterial({
-      color: 0x10b981,
-      emissive: 0x059669,
-      emissiveIntensity: 0.65,
-      roughness: 0.25,
-      metalness: 0.7,
-    });
-    const indiaContourMesh = new THREE.Mesh(indiaContourGeo, indiaContourMat);
-    globeGroup.add(indiaContourMesh);
-
-    // Part 5: Instanced Global Economic Latitude Lattice Points
-    const latticeCount = 140;
-    const nodeInstGeo = new THREE.SphereGeometry(0.014, 8, 8);
-    const nodeInstMat = new THREE.MeshStandardMaterial({
-      color: 0x38bdf8,
-      roughness: 0.3,
-      metalness: 0.7,
-      transparent: true,
-      opacity: 0.45,
-    });
-    const instancedLattice = new THREE.InstancedMesh(nodeInstGeo, nodeInstMat, latticeCount);
-    const dummy = new THREE.Object3D();
-    for (let i = 0; i < latticeCount; i++) {
-      // Golden spiral spherical distribution
-      const y = 1 - (i / (latticeCount - 1)) * 2;
-      const radiusAtY = Math.sqrt(1 - y * y);
-      const theta = ((i * 2.3999632) % (Math.PI * 2));
-      const x = Math.cos(theta) * radiusAtY;
-      const z = Math.sin(theta) * radiusAtY;
-      dummy.position.set(x * GLOBE_RADIUS * 1.006, y * GLOBE_RADIUS * 1.006, z * GLOBE_RADIUS * 1.006);
-      dummy.scale.setScalar(0.85 + (i % 3) * 0.15);
-      dummy.updateMatrix();
-      instancedLattice.setMatrixAt(i, dummy.matrix);
+    // Part E: Partner Beacons, Curved 3D Trade Arcs, and Travelling Particles
+    interface RouteVisualObject {
+      partner: GlobalTradePartnerNode;
+      arcMesh: THREE.Mesh;
+      arcMaterial: THREE.MeshStandardMaterial;
+      markerGroup: THREE.Group;
+      markerCoreMaterial: THREE.MeshStandardMaterial;
+      markerRingMaterial: THREE.MeshBasicMaterial;
+      hitMesh: THREE.Mesh;
+      curve: THREE.CubicBezierCurve3;
+      particles: THREE.Mesh[];
+      particleMaterials: THREE.MeshBasicMaterial[];
+      phaseOffset: number;
     }
-    instancedLattice.computeBoundingSphere();
-    globeGroup.add(instancedLattice);
 
-    // Part 6: 7 Indian Economic Hub Pillars & Beacons
-    const hubMeshesMap = new Map<string, THREE.Group>();
-    const colorMap = {
-      emerald: 0x10b981,
-      gold: 0xf59e0b,
-      cyan: 0x06b6d4,
-    };
+    const routeObjects: RouteVisualObject[] = [];
+    const hitMeshes: THREE.Mesh[] = [];
 
-    INDIA_ECONOMIC_HUBS.forEach((hub) => {
-      const hubAnchor = new THREE.Group();
-      const surfacePos = latLonToVec3(hub.lat, hub.lon, GLOBE_RADIUS * 1.015);
-      hubAnchor.position.copy(surfacePos);
-      hubAnchor.lookAt(surfacePos.clone().multiplyScalar(2));
+    const sharedMarkerCoreGeo = new THREE.SphereGeometry(0.024, 12, 12);
+    const sharedMarkerRingGeo = new THREE.RingGeometry(0.032, 0.048, 20);
+    const sharedHitGeo = new THREE.SphereGeometry(0.085, 10, 10);
+    const sharedParticleGeo = new THREE.SphereGeometry(0.015, 8, 8);
 
-      const hexColor = colorMap[hub.accentColor];
-      // Base pedestal ring
-      const baseGeo = new THREE.CylinderGeometry(0.042, 0.048, 0.015, 16);
-      baseGeo.rotateX(Math.PI / 2);
-      const baseMat = new THREE.MeshStandardMaterial({
+    allPartners.forEach((partner, idx) => {
+      const hexColor = getRouteHexColor(partner, displayModeRef.current);
+
+      // 1. Destination Marker on Globe Surface
+      const markerPos = latLonToVec3(partner.lat, partner.lon, GLOBE_RADIUS * 1.01);
+      const markerGroup = new THREE.Group();
+      markerGroup.position.copy(markerPos);
+      markerGroup.lookAt(markerPos.clone().multiplyScalar(2));
+
+      const markerRingMat = new THREE.MeshBasicMaterial({
         color: hexColor,
-        emissive: hexColor,
-        emissiveIntensity: 0.45,
-        roughness: 0.2,
-        metalness: 0.85,
-      });
-      const baseMesh = new THREE.Mesh(baseGeo, baseMat);
-      hubAnchor.add(baseMesh);
-
-      // Vertical data spire
-      const spireGeo = new THREE.CylinderGeometry(0.012, 0.02, 0.14, 12);
-      spireGeo.rotateX(Math.PI / 2);
-      spireGeo.translate(0, 0, 0.07);
-      const spireMat = new THREE.MeshStandardMaterial({
-        color: 0xf8fafc,
-        emissive: hexColor,
-        emissiveIntensity: 0.7,
-        roughness: 0.15,
-        metalness: 0.9,
-      });
-      const spireMesh = new THREE.Mesh(spireGeo, spireMat);
-      hubAnchor.add(spireMesh);
-
-      globeGroup.add(hubAnchor);
-      hubMeshesMap.set(hub.id, hubAnchor);
-    });
-
-    // Part 7: High-altitude Domestic & Global Economic Corridor Arcs connecting Mumbai/Delhi/Bengaluru/Chennai/Kolkata
-    const corridorPairs: [number, number][] = [
-      [0, 1], // Mumbai - New Delhi
-      [0, 2], // Mumbai - Bengaluru
-      [1, 6], // New Delhi - Kolkata
-      [2, 3], // Bengaluru - Chennai
-      [0, 4], // Mumbai - GIFT City
-      [2, 5], // Bengaluru - Hyderabad
-      [5, 1], // Hyderabad - New Delhi
-    ];
-
-    corridorPairs.forEach(([idxA, idxB], arcIdx) => {
-      const hubA = INDIA_ECONOMIC_HUBS[idxA];
-      const hubB = INDIA_ECONOMIC_HUBS[idxB];
-      const startVec = latLonToVec3(hubA.lat, hubA.lon, GLOBE_RADIUS * 1.02);
-      const endVec = latLonToVec3(hubB.lat, hubB.lon, GLOBE_RADIUS * 1.02);
-      const midVec = startVec.clone().add(endVec).multiplyScalar(0.5).normalize().multiplyScalar(GLOBE_RADIUS * 1.16);
-
-      const arcCurve = new THREE.QuadraticBezierCurve3(startVec, midVec, endVec);
-      const arcGeo = new THREE.TubeGeometry(arcCurve, 24, 0.006, 6, false);
-      const arcMat = new THREE.MeshStandardMaterial({
-        color: arcIdx % 2 === 0 ? 0xf59e0b : 0x10b981,
-        emissive: arcIdx % 2 === 0 ? 0xd97706 : 0x059669,
-        emissiveIntensity: 0.5,
-        roughness: 0.3,
-        metalness: 0.8,
+        side: THREE.DoubleSide,
         transparent: true,
         opacity: 0.85,
       });
+      const markerRing = new THREE.Mesh(sharedMarkerRingGeo, markerRingMat);
+      markerGroup.add(markerRing);
+
+      const markerCoreMat = new THREE.MeshStandardMaterial({
+        color: 0xf8fafc,
+        emissive: hexColor,
+        emissiveIntensity: 0.9,
+        roughness: 0.2,
+        metalness: 0.8,
+      });
+      const markerCore = new THREE.Mesh(sharedMarkerCoreGeo, markerCoreMat);
+      markerGroup.add(markerCore);
+
+      // Invisible enlarged hit-proxy sphere for reliable mouse/touch picking
+      const hitMat = new THREE.MeshBasicMaterial({ visible: false });
+      const hitMesh = new THREE.Mesh(sharedHitGeo, hitMat);
+      hitMesh.userData.partnerId = partner.id;
+      markerGroup.add(hitMesh);
+      hitMeshes.push(hitMesh);
+
+      globeGroup.add(markerGroup);
+
+      // 2. Curved 3D Spherical Trade Arc from India to Partner
+      const curve = createSphericalTradeArc(
+        INDIA_HUB_LAT,
+        INDIA_HUB_LON,
+        partner.lat,
+        partner.lon,
+        GLOBE_RADIUS
+      );
+
+      // Tube radius scaled slightly by verified trade volume (or thin uniform radius for illustrative links)
+      const tradeVol = partner.totalTradeUsdBn ?? 0;
+      const tubeRadius =
+        partner.dataStatus === 'verified_official'
+          ? THREE.MathUtils.clamp(0.0045 + (tradeVol / 140) * 0.0065, 0.0045, 0.011)
+          : 0.0038;
+
+      const arcGeo = new THREE.TubeGeometry(curve, 44, tubeRadius, 6, false);
+      const arcMat = new THREE.MeshStandardMaterial({
+        color: hexColor,
+        emissive: hexColor,
+        emissiveIntensity: 0.65,
+        roughness: 0.25,
+        metalness: 0.75,
+        transparent: true,
+        opacity: 0.82,
+      });
       const arcMesh = new THREE.Mesh(arcGeo, arcMat);
       globeGroup.add(arcMesh);
+
+      // 3. Animated Glowing Particles Travelling Along the Arc
+      const particles: THREE.Mesh[] = [];
+      const particleMaterials: THREE.MeshBasicMaterial[] = [];
+      const numParticles = partner.dataStatus === 'verified_official' ? 2 : 1;
+
+      for (let pIdx = 0; pIdx < numParticles; pIdx++) {
+        const pMat = new THREE.MeshBasicMaterial({
+          color: pIdx === 0 ? 0x6ee7b7 : 0xfde68a,
+          transparent: true,
+          opacity: 0.95,
+        });
+        const pMesh = new THREE.Mesh(sharedParticleGeo, pMat);
+        globeGroup.add(pMesh);
+        particles.push(pMesh);
+        particleMaterials.push(pMat);
+      }
+
+      routeObjects.push({
+        partner,
+        arcMesh,
+        arcMaterial: arcMat,
+        markerGroup,
+        markerCoreMaterial: markerCoreMat,
+        markerRingMaterial: markerRingMat,
+        hitMesh,
+        curve,
+        particles,
+        particleMaterials,
+        phaseOffset: (idx * 0.17) % 1,
+      });
     });
 
-    // Part 8: Contact grounding radial shadow beneath the globe
-    const shadowGeo = new THREE.PlaneGeometry(3.4, 3.4);
-    const shadowCanvas = document.createElement('canvas');
-    shadowCanvas.width = 128;
-    shadowCanvas.height = 128;
-    const sCtx = shadowCanvas.getContext('2d');
-    if (sCtx) {
-      const grad = sCtx.createRadialGradient(64, 64, 8, 64, 64, 60);
-      grad.addColorStop(0, 'rgba(6, 11, 22, 0.55)');
-      grad.addColorStop(1, 'rgba(6, 11, 22, 0)');
-      sCtx.fillStyle = grad;
-      sCtx.fillRect(0, 0, 128, 128);
-    }
-    const shadowTex = new THREE.CanvasTexture(shadowCanvas);
-    shadowTex.colorSpace = THREE.SRGBColorSpace;
-    const shadowMat = new THREE.MeshBasicMaterial({
-      map: shadowTex,
-      transparent: true,
-      depthWrite: false,
-      opacity: 0.5,
-    });
-    const shadowPlane = new THREE.Mesh(shadowGeo, shadowMat);
-    shadowPlane.rotation.x = -Math.PI / 2;
-    shadowPlane.position.y = -GLOBE_RADIUS * 1.28;
-    scene.add(shadowPlane);
-
-    // Orient globe initially so India (Lat ~21N, Lon ~78E) faces the viewer
-    const INITIAL_ROT_Y = -2.92;
-    const INITIAL_ROT_X = 0.32;
-    globeGroup.rotation.y = INITIAL_ROT_Y;
-    globeGroup.rotation.x = INITIAL_ROT_X;
+    // Orient globe initially toward India
+    globeGroup.rotation.x = cameraTargetRotRef.current.rotX;
+    globeGroup.rotation.y = cameraTargetRotRef.current.rotY;
 
     if (!isSoftwareGl) {
       renderer.compile(scene, camera);
     }
 
-    // Visibility observer so animation pauses when scrolled out of view
+    // IntersectionObserver to pause rendering when scrolled offscreen
     let isVisible = true;
     const observer = new IntersectionObserver(
       (entries) => {
@@ -374,43 +1183,126 @@ export const IndiaEconomicGlobe: React.FC<IndiaEconomicGlobeProps> = ({ theme })
     );
     observer.observe(container);
 
-    // Pointer drag interaction
+    // Raycasting & Pointer Drag / Click Interaction
+    const raycaster = new THREE.Raycaster();
+    const pointerNdc = new THREE.Vector2();
     let isDragging = false;
+    let dragDistance = 0;
     let prevX = 0;
     let prevY = 0;
-    let targetRotY = INITIAL_ROT_Y;
-    let targetRotX = INITIAL_ROT_X;
+    let lastRaycastTime = 0;
+
+    const updatePointerNdc = (clientX: number, clientY: number) => {
+      const rect = renderer.domElement.getBoundingClientRect();
+      pointerNdc.x = ((clientX - rect.left) / rect.width) * 2 - 1;
+      pointerNdc.y = -((clientY - rect.top) / rect.height) * 2 + 1;
+      return rect;
+    };
 
     const onPointerDown = (e: PointerEvent) => {
       isDragging = true;
+      dragDistance = 0;
       prevX = e.clientX;
       prevY = e.clientY;
     };
 
     const onPointerMove = (e: PointerEvent) => {
-      if (!isDragging) return;
-      const dx = e.clientX - prevX;
-      const dy = e.clientY - prevY;
-      prevX = e.clientX;
-      prevY = e.clientY;
-      targetRotY += dx * 0.007;
-      targetRotX = THREE.MathUtils.clamp(targetRotX + dy * 0.005, -0.4, 0.75);
+      if (isDragging) {
+        const dx = e.clientX - prevX;
+        const dy = e.clientY - prevY;
+        dragDistance += Math.abs(dx) + Math.abs(dy);
+        prevX = e.clientX;
+        prevY = e.clientY;
+        cameraTargetRotRef.current.rotY += dx * 0.0065;
+        cameraTargetRotRef.current.rotX = THREE.MathUtils.clamp(
+          cameraTargetRotRef.current.rotX + dy * 0.005,
+          -0.72,
+          0.78
+        );
+        return;
+      }
+
+      // Throttled hover raycast on partner markers
+      const now = performance.now();
+      if (now - lastRaycastTime < 45) return;
+      lastRaycastTime = now;
+
+      const rect = updatePointerNdc(e.clientX, e.clientY);
+      if (
+        e.clientX < rect.left ||
+        e.clientX > rect.right ||
+        e.clientY < rect.top ||
+        e.clientY > rect.bottom
+      ) {
+        if (hoveredIdRef.current !== null) {
+          setHoveredPartnerId(null);
+          setHoverScreenPos(null);
+        }
+        return;
+      }
+
+      raycaster.setFromCamera(pointerNdc, camera);
+      const intersects = raycaster.intersectObjects(hitMeshes, false);
+      const hit = intersects.find((item) => {
+        const pid = item.object.userData.partnerId;
+        return pid && visibleIdsRef.current.has(pid);
+      });
+
+      if (hit) {
+        const pid = hit.object.userData.partnerId as string;
+        setHoveredPartnerId(pid);
+        setHoverScreenPos({
+          x: e.clientX - rect.left,
+          y: e.clientY - rect.top,
+        });
+        renderer.domElement.style.cursor = 'pointer';
+      } else {
+        if (hoveredIdRef.current !== null) {
+          setHoveredPartnerId(null);
+          setHoverScreenPos(null);
+        }
+        renderer.domElement.style.cursor = isDragging ? 'grabbing' : 'grab';
+      }
     };
 
-    const onPointerUp = () => {
+    const onPointerUp = (e: PointerEvent) => {
+      if (!isDragging) return;
       isDragging = false;
+
+      // If pointer barely moved, treat as a click and check if a partner beacon was clicked
+      if (dragDistance < 6) {
+        updatePointerNdc(e.clientX, e.clientY);
+        raycaster.setFromCamera(pointerNdc, camera);
+        const intersects = raycaster.intersectObjects(hitMeshes, false);
+        const hit = intersects.find((item) => {
+          const pid = item.object.userData.partnerId;
+          return pid && visibleIdsRef.current.has(pid);
+        });
+        if (hit) {
+          const pid = hit.object.userData.partnerId as string;
+          const found = partnersRef.current.find((p) => p.id === pid);
+          if (found) {
+            handleSelectPartner(found);
+          }
+        }
+      }
+    };
+
+    const onWheel = (e: WheelEvent) => {
+      e.preventDefault();
+      setZoomDistance((prev) => THREE.MathUtils.clamp(prev + e.deltaY * 0.0025, 3.1, 6.6));
     };
 
     const domElem = renderer.domElement;
     domElem.addEventListener('pointerdown', onPointerDown);
     window.addEventListener('pointermove', onPointerMove);
     window.addEventListener('pointerup', onPointerUp);
+    domElem.addEventListener('wheel', onWheel, { passive: false });
 
-    // Resize listener
     const handleResize = () => {
       if (!container) return;
-      const w = container.clientWidth || 520;
-      const h = container.clientHeight || 420;
+      const w = container.clientWidth || 760;
+      const h = container.clientHeight || 560;
       camera.aspect = w / h;
       camera.updateProjectionMatrix();
       renderer.setSize(w, h);
@@ -421,6 +1313,7 @@ export const IndiaEconomicGlobe: React.FC<IndiaEconomicGlobeProps> = ({ theme })
     let frameId = 0;
     let disposed = false;
     const clock = new THREE.Clock();
+    const tempPoint = new THREE.Vector3();
 
     function afterDraw(cb: () => void) {
       if (disposed) return;
@@ -447,26 +1340,95 @@ export const IndiaEconomicGlobe: React.FC<IndiaEconomicGlobeProps> = ({ theme })
     function tick() {
       if (disposed) return;
       const delta = Math.min(clock.getDelta(), 0.1);
+      const elapsed = clock.getElapsedTime();
 
       if (isVisible) {
         if (isRotatingRef.current && !isDragging) {
-          // Gentle oscillation centered around the Indian subcontinent so India remains prominent
-          const elapsed = clock.getElapsedTime();
-          targetRotY = INITIAL_ROT_Y + Math.sin(elapsed * 0.35) * 0.38;
+          cameraTargetRotRef.current.rotY += delta * 0.14;
         }
 
-        globeGroup.rotation.y = THREE.MathUtils.damp(globeGroup.rotation.y, targetRotY, 5, delta);
-        globeGroup.rotation.x = THREE.MathUtils.damp(globeGroup.rotation.x, targetRotX, 5, delta);
+        globeGroup.rotation.y = THREE.MathUtils.damp(
+          globeGroup.rotation.y,
+          cameraTargetRotRef.current.rotY,
+          5.5,
+          delta
+        );
+        globeGroup.rotation.x = THREE.MathUtils.damp(
+          globeGroup.rotation.x,
+          cameraTargetRotRef.current.rotX,
+          5.5,
+          delta
+        );
 
-        outerRing.rotation.z += delta * 0.15;
-        secondRing.rotation.y -= delta * 0.12;
+        camera.position.z = THREE.MathUtils.damp(
+          camera.position.z,
+          zoomDistanceRef.current,
+          6,
+          delta
+        );
 
-        // Emphasize currently selected Indian hub spire scale smoothly
-        const activeId = selectedHubRef.current.id;
-        hubMeshesMap.forEach((group, id) => {
-          const targetScale = id === activeId ? 1.55 : 1.0;
-          const nextScale = THREE.MathUtils.damp(group.scale.x, targetScale, 7, delta);
-          group.scale.setScalar(nextScale);
+        // Update route colors, visibility, selection dimming, and travelling particles
+        const activeId = selectedIdRef.current;
+        const hoverId = hoveredIdRef.current;
+        const mode = displayModeRef.current;
+        const visibleSet = visibleIdsRef.current;
+
+        routeObjects.forEach((ro) => {
+          const isVis = visibleSet.has(ro.partner.id);
+          ro.arcMesh.visible = isVis;
+          ro.markerGroup.visible = isVis;
+
+          if (!isVis) {
+            ro.particles.forEach((p) => {
+              p.visible = false;
+            });
+            return;
+          }
+
+          const hexColor = getRouteHexColor(ro.partner, mode);
+          ro.arcMaterial.color.setHex(hexColor);
+          ro.arcMaterial.emissive.setHex(hexColor);
+          ro.markerCoreMaterial.emissive.setHex(hexColor);
+          ro.markerRingMaterial.color.setHex(hexColor);
+
+          const isHighlighted = ro.partner.id === activeId || ro.partner.id === hoverId;
+          const hasSelection = activeId !== null;
+
+          // Dim unrelated routes when a partner is actively selected
+          const targetOpacity = isHighlighted ? 0.98 : hasSelection ? 0.24 : 0.78;
+          ro.arcMaterial.opacity = THREE.MathUtils.damp(
+            ro.arcMaterial.opacity,
+            targetOpacity,
+            8,
+            delta
+          );
+          ro.arcMaterial.emissiveIntensity = isHighlighted ? 1.25 : 0.55;
+
+          // Subtle marker scale emphasis
+          const targetScale = isHighlighted ? 1.55 : 1.0;
+          const nextScale = THREE.MathUtils.damp(ro.markerGroup.scale.x, targetScale, 8, delta);
+          ro.markerGroup.scale.setScalar(nextScale);
+
+          // Animate particles along the curved 3D path
+          ro.particles.forEach((pMesh, pIdx) => {
+            pMesh.visible = isHighlighted || !hasSelection;
+            if (!pMesh.visible) return;
+
+            const speed = isHighlighted ? 0.34 : 0.22;
+            const rawT = (elapsed * speed + ro.phaseOffset + pIdx * 0.5) % 1;
+            // In 'imports' mode flow from partner -> India (1 - rawT); in 'exports' flow India -> partner (rawT)
+            const t =
+              mode === 'imports'
+                ? 1 - rawT
+                : mode === 'exports'
+                ? rawT
+                : pIdx === 0
+                ? rawT
+                : 1 - rawT;
+
+            ro.curve.getPointAt(t, tempPoint);
+            pMesh.position.copy(tempPoint);
+          });
         });
 
         renderer.render(scene, camera);
@@ -489,181 +1451,854 @@ export const IndiaEconomicGlobe: React.FC<IndiaEconomicGlobeProps> = ({ theme })
       domElem.removeEventListener('pointerdown', onPointerDown);
       window.removeEventListener('pointermove', onPointerMove);
       window.removeEventListener('pointerup', onPointerUp);
+      domElem.removeEventListener('wheel', onWheel);
       window.removeEventListener('resize', handleResize);
+      albedoTexture.dispose();
+      roughnessTexture.dispose();
+      earthGeo.dispose();
+      earthMat.dispose();
+      atmoGeo.dispose();
+      atmoMat.dispose();
+      indiaTubeGeo.dispose();
+      indiaTubeMat.dispose();
+      sharedMarkerCoreGeo.dispose();
+      sharedMarkerRingGeo.dispose();
+      sharedHitGeo.dispose();
+      sharedParticleGeo.dispose();
+      starGeo.dispose();
+      starMat.dispose();
       renderer.dispose();
     };
-  }, [theme, useStaticFallback]);
+  }, [allPartners, handleSelectPartner, useStaticFallback]);
 
   const showFallback = !webglSupported || useStaticFallback;
 
+  // Count partners per region filter for clean tab labels
+  const regionCounts = useMemo(() => {
+    const map: Record<TradeRegionFilter, number> = {
+      All: allPartners.length,
+      BRICS: 0,
+      'European Union': 0,
+      ASEAN: 0,
+      'North America': 0,
+      'Middle East': 0,
+      'Asia-Pacific': 0,
+      Africa: 0,
+      'Latin America': 0,
+    };
+    allPartners.forEach((p) => {
+      REGION_FILTERS.forEach((rf) => {
+        if (rf !== 'All' && matchesTradeRegionFilter(p, rf)) {
+          map[rf] += 1;
+        }
+      });
+    });
+    return map;
+  }, [allPartners]);
+
   return (
-    <div className="relative w-full h-[430px] sm:h-[460px] rounded-xl border border-slate-800/80 bg-[#070E1E] overflow-hidden select-none flex flex-col justify-between">
-      {/* Top-Left Minimal Spec Label (unboxed metadata per design constitution) */}
-      <div className="relative z-10 flex items-center justify-between px-4 pt-3.5 pointer-events-none">
-        <div className="flex items-center gap-2 text-xs text-slate-400 font-mono-tabular">
-          <Compass className="w-3.5 h-3.5 text-emerald-400" />
-          <span className="text-slate-200 font-medium">India Economic Corridor Model</span>
-          <span aria-hidden="true">·</span>
-          <span>20.59°N, 78.96°E</span>
+    <div
+      className={`rounded-2xl border p-4 sm:p-6 lg:p-7 space-y-5 ${
+        theme === 'dark'
+          ? 'bg-[#070E1E] border-slate-800/90 text-slate-100'
+          : 'bg-white border-slate-200 text-slate-900 shadow-xs'
+      }`}
+    >
+      {/* 1. Section Header & Verified Merchandise Trade Summary Cards */}
+      <div className="flex flex-col xl:flex-row xl:items-end justify-between gap-4 border-b border-slate-800/70 pb-5">
+        <div className="space-y-1.5">
+          <div className="flex flex-wrap items-center gap-2 text-xs font-mono-tabular text-emerald-400">
+            <Globe className="w-3.5 h-3.5" />
+            <span>OFFICIAL BILATERAL MERCHANDISE NETWORK · DEPARTMENT OF COMMERCE (TRADESTAT)</span>
+          </div>
+          <h2
+            className={`font-display text-2xl sm:text-3xl font-semibold tracking-tight ${
+              theme === 'dark' ? 'text-white' : 'text-slate-950'
+            }`}
+          >
+            India&apos;s Global Trade Network
+          </h2>
+          <p className="text-xs sm:text-sm text-slate-400">
+            Explore India&apos;s economic connections across the world — connecting India (highlighted in emerald &amp; gold) with 25 sovereign partners and regional blocs.
+          </p>
         </div>
 
-        <div className="flex items-center gap-1.5 pointer-events-auto">
-          <button
-            type="button"
-            onClick={() => setIsRotating((prev) => !prev)}
-            disabled={showFallback}
-            title={isRotating ? 'Pause orbital motion' : 'Resume orbital motion'}
-            className="px-2.5 py-1 text-xs font-medium text-slate-300 hover:text-white bg-slate-900/90 border border-slate-700/80 rounded-md transition-colors flex items-center gap-1.5 disabled:opacity-40 whitespace-nowrap shrink-0 cursor-pointer"
+        {/* Compact Verified Official Merchandise Trade Summary Cards (FY 2023-24 Matching Denominator) */}
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5 shrink-0">
+          <div
+            className={`px-3.5 py-2.5 rounded-xl border ${
+              theme === 'dark'
+                ? 'bg-[#0B1528] border-slate-800'
+                : 'bg-slate-50 border-slate-200'
+            }`}
           >
-            {isRotating ? <Pause className="w-3 h-3 text-emerald-400" /> : <Play className="w-3 h-3 text-amber-400" />}
-            <span>{isRotating ? 'Pause' : 'Orbit'}</span>
-          </button>
-          <button
-            type="button"
-            onClick={() => setUseStaticFallback((prev) => !prev)}
-            title="Switch between 3D WebGL model and 2D Vector Diagram"
-            className="px-2.5 py-1 text-xs font-medium text-slate-300 hover:text-white bg-slate-900/90 border border-slate-700/80 rounded-md transition-colors flex items-center gap-1.5 whitespace-nowrap shrink-0 cursor-pointer"
+            <div className="text-[11px] text-slate-400">
+              India Merchandise Exports (FY 2023–24)
+            </div>
+            <div className="font-mono-tabular text-base sm:text-lg font-semibold text-emerald-400 mt-0.5">
+              ${INDIA_FY24_TOTAL_EXPORTS_USD_BN.toFixed(2)}B
+            </div>
+            <div className="text-[10px] text-slate-400 font-mono-tabular">
+               Goods only · TRADESTAT Final
+            </div>
+          </div>
+
+          <div
+            className={`px-3.5 py-2.5 rounded-xl border ${
+              theme === 'dark'
+                ? 'bg-[#0B1528] border-slate-800'
+                : 'bg-slate-50 border-slate-200'
+            }`}
           >
-            {showFallback ? <Globe className="w-3 h-3 text-emerald-400" /> : <Layers className="w-3 h-3 text-cyan-400" />}
-            <span>{showFallback ? '3D Globe' : '2D Vector'}</span>
-          </button>
+            <div className="text-[11px] text-slate-400">
+              India Merchandise Imports (FY 2023–24)
+            </div>
+            <div className="font-mono-tabular text-base sm:text-lg font-semibold text-amber-400 mt-0.5">
+              ${INDIA_FY24_TOTAL_IMPORTS_USD_BN.toFixed(2)}B
+            </div>
+            <div className="text-[10px] text-slate-400 font-mono-tabular">
+              Total Trade: ${INDIA_FY24_TOTAL_TRADE_USD_BN.toFixed(2)}B
+            </div>
+          </div>
+
+          <div
+            className={`px-3.5 py-2.5 rounded-xl border ${
+              theme === 'dark'
+                ? 'bg-[#0B1528] border-slate-800'
+                : 'bg-slate-50 border-slate-200'
+            }`}
+          >
+            <div className="text-[11px] text-slate-400">
+              Merchandise Trade Balance (FY 2023–24)
+            </div>
+            <div className="font-mono-tabular text-base sm:text-lg font-semibold text-rose-400 mt-0.5">
+              -${Math.abs(INDIA_FY24_TRADE_BALANCE_USD_BN).toFixed(2)}B
+            </div>
+            <div className="text-[10px] text-slate-400 font-mono-tabular">
+              Formula: Exports − Imports
+            </div>
+          </div>
         </div>
       </div>
 
-      {/* Central Unobstructed 3D Viewport or 2D SVG Fallback */}
-      {showFallback ? (
-        <div className="relative flex-1 flex items-center justify-center p-4">
-          <svg
-            viewBox="0 0 400 280"
-            className="w-full h-full max-h-[260px]"
-            role="img"
-            aria-label="Architectural vector network of Indian economic corridors"
+      {/* 2. Interactive Filter & Display Mode Toolbar */}
+      <div className="space-y-3">
+        <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3">
+          {/* Region Group Filters */}
+          <div
+            className="flex items-center gap-1.5 overflow-x-auto pb-1"
+            role="tablist"
+            aria-label="Filter trade partners by region or economic bloc"
           >
-            <defs>
-              <radialGradient id="indiaGlow" cx="50%" cy="50%" r="50%">
-                <stop offset="0%" stopColor="#10b981" stopOpacity="0.22" />
-                <stop offset="100%" stopColor="#060b16" stopOpacity="0" />
-              </radialGradient>
-            </defs>
-            <circle cx="200" cy="140" r="120" fill="url(#indiaGlow)" stroke="#1e293b" strokeWidth="1" />
-            <circle cx="200" cy="140" r="92" fill="none" stroke="#1e293b" strokeDasharray="3 3" />
-            <ellipse cx="200" cy="140" rx="135" ry="52" fill="none" stroke="#10b981" strokeOpacity="0.3" />
-            {/* Stylized India Polygon & Corridor Lines */}
-            <path
-              d="M195,42 L222,68 L255,105 L230,145 L212,195 L196,232 L176,188 L158,142 L145,112 L172,76 Z"
-              fill="#10b981"
-              fillOpacity="0.09"
-              stroke="#10b981"
-              strokeWidth="1.5"
-            />
-            <line x1="168" y1="152" x2="192" y2="82" stroke="#f59e0b" strokeWidth="1.2" strokeDasharray="2 2" />
-            <line x1="168" y1="152" x2="188" y2="195" stroke="#10b981" strokeWidth="1.2" />
-            <line x1="188" y1="195" x2="206" y2="192" stroke="#06b6d4" strokeWidth="1.2" />
-            <line x1="192" y1="82" x2="236" y2="128" stroke="#10b981" strokeWidth="1.2" />
-            {/* Hub nodes */}
-            {[
-              { id: 'delhi-ncr', cx: 192, cy: 82, label: 'Delhi NCR' },
-              { id: 'gift-ahmedabad', cx: 158, cy: 122, label: 'GIFT City' },
-              { id: 'mumbai', cx: 168, cy: 152, label: 'Mumbai' },
-              { id: 'hyderabad', cx: 195, cy: 162, label: 'Hyderabad' },
-              { id: 'bengaluru', cx: 188, cy: 195, label: 'Bengaluru' },
-              { id: 'chennai', cx: 208, cy: 196, label: 'Chennai' },
-              { id: 'kolkata', cx: 236, cy: 128, label: 'Kolkata' },
-            ].map((node) => {
-              const isSelected = selectedHub.id === node.id;
+            {REGION_FILTERS.map((rf) => {
+              const active = regionFilter === rf;
               return (
-                <g
-                  key={node.id}
-                  className="cursor-pointer"
-                  onClick={() => {
-                    const found = INDIA_ECONOMIC_HUBS.find((h) => h.id === node.id);
-                    if (found) setSelectedHub(found);
-                  }}
+                <button
+                  key={rf}
+                  type="button"
+                  role="tab"
+                  aria-selected={active}
+                  onClick={() => handleSelectRegionFilter(rf)}
+                  className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors whitespace-nowrap shrink-0 cursor-pointer ${
+                    active
+                      ? 'bg-emerald-600 text-white'
+                      : theme === 'dark'
+                      ? 'bg-[#0B1528] text-slate-300 hover:text-white border border-slate-800'
+                      : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
+                  }`}
                 >
-                  <circle
-                    cx={node.cx}
-                    cy={node.cy}
-                    r={isSelected ? 6 : 4}
-                    fill={isSelected ? '#f59e0b' : '#10b981'}
-                  />
-                  <text
-                    x={node.cx + 8}
-                    y={node.cy + 3}
-                    fill={isSelected ? '#f8fafc' : '#94a3b8'}
-                    fontSize="10"
-                    fontFamily="JetBrains Mono, monospace"
-                  >
-                    {node.label}
-                  </text>
-                </g>
+                  <span>{rf === 'All' ? 'All Partners' : rf}</span>
+                  <span className="ml-1.5 font-mono-tabular opacity-75">
+                    ({regionCounts[rf]})
+                  </span>
+                </button>
               );
             })}
-          </svg>
-        </div>
-      ) : (
-        <div
-          ref={mountRef}
-          className="absolute inset-0 w-full h-full cursor-grab active:cursor-grabbing"
-          aria-label="Interactive 3D India Economic Network Globe"
-        />
-      )}
+          </div>
 
-      {/* Unified Collapsible Bottom Control Dock (Zero Side-Panel Occlusion, No backdrop-filter over WebGL) */}
-      <div className="relative z-10 mx-auto w-[94%] max-w-[600px] mb-3">
-        <div className="flex justify-end mb-1">
-          <button
-            type="button"
-            onClick={() => setHudCollapsed((prev) => !prev)}
-            className="px-2.5 py-1 text-[11px] font-medium text-slate-300 hover:text-white bg-[#0B1325] border border-slate-700/80 rounded-t-md flex items-center gap-1 cursor-pointer whitespace-nowrap shrink-0"
+          {/* Route Display Modes */}
+          <div
+            className={`flex items-center gap-1 p-1 rounded-lg border overflow-x-auto shrink-0 ${
+              theme === 'dark'
+                ? 'bg-[#0B1528] border-slate-800'
+                : 'bg-slate-100 border-slate-200'
+            }`}
           >
-            <Eye className="w-3 h-3 text-emerald-400" />
-            <span>{hudCollapsed ? 'Show Hub Telemetry' : 'Hide HUD'}</span>
-            {hudCollapsed ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />}
-          </button>
+            {DISPLAY_MODES.map((m) => {
+              const active = displayMode === m.id;
+              return (
+                <button
+                  key={m.id}
+                  type="button"
+                  onClick={() => setDisplayMode(m.id)}
+                  className={`px-2.5 py-1 rounded-md text-xs font-medium transition-colors whitespace-nowrap shrink-0 cursor-pointer ${
+                    active
+                      ? 'bg-cyan-500/20 text-cyan-300 border border-cyan-500/40'
+                      : 'text-slate-400 hover:text-slate-200'
+                  }`}
+                >
+                  {m.label}
+                </button>
+              );
+            })}
+          </div>
         </div>
 
-        {!hudCollapsed && (
-          <div className="bg-[#0B1325] border border-slate-700/90 rounded-lg p-3 shadow-lg">
-            {/* Regional Node Switcher */}
-            <div className="flex items-center gap-1 overflow-x-auto pb-2 mb-2 border-b border-slate-800">
-              {INDIA_ECONOMIC_HUBS.map((hub) => {
-                const active = selectedHub.id === hub.id;
-                return (
-                  <button
-                    key={hub.id}
-                    type="button"
-                    onClick={() => setSelectedHub(hub)}
-                    className={`px-2.5 py-1 text-xs font-medium rounded transition-colors whitespace-nowrap shrink-0 cursor-pointer ${
-                      active
-                        ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/40'
-                        : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/60'
-                    }`}
-                  >
-                    {hub.city}
-                  </button>
-                );
-              })}
+        {/* Error Banner if dataset failed to load */}
+        {errorMsg && (
+          <div className="rounded-xl border border-amber-500/40 bg-amber-950/20 p-3 flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-xs text-amber-200">
+            <div className="flex items-center gap-2">
+              <AlertTriangle className="w-4 h-4 text-amber-400 shrink-0" />
+              <span>{errorMsg}</span>
+            </div>
+            <button
+              type="button"
+              onClick={() => fetchTradeNetwork(false)}
+              className="px-3 py-1 rounded-md bg-amber-500/20 border border-amber-500/40 text-amber-200 hover:bg-amber-500/30 font-medium flex items-center gap-1.5 self-start sm:self-auto cursor-pointer whitespace-nowrap"
+            >
+              <RefreshCw className="w-3.5 h-3.5" />
+              <span>Retry Official Dataset</span>
+            </button>
+          </div>
+        )}
+      </div>
+
+      {/* 3. Main 12-Column Interactive 3D Globe + Partner Intelligence Workbench */}
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 items-stretch">
+        {/* Left/Center 8 Columns: Interactive 3D Earth Canvas */}
+        <div className="lg:col-span-8 flex flex-col">
+          <div className="relative w-full h-[460px] sm:h-[560px] lg:h-[620px] rounded-xl border border-slate-800/90 bg-[#040915] overflow-hidden select-none flex flex-col justify-between">
+            {/* Top Bar Inside Globe Viewport: Telemetry & Camera Controls */}
+            <div className="relative z-10 flex flex-wrap items-center justify-between gap-2 px-4 pt-3.5 pointer-events-none">
+              <div className="flex flex-wrap items-center gap-2 text-xs text-slate-300 font-mono-tabular bg-[#081226]/90 border border-slate-800 px-3 py-1.5 rounded-lg">
+                <Compass className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
+                <span className="font-semibold text-emerald-400">India Hub: 20.59°N, 78.96°E</span>
+                <span aria-hidden="true">·</span>
+                <span>
+                  Showing {filteredPartners.length} of {allPartners.length} Connections
+                </span>
+              </div>
+
+              {/* Interactive Globe Camera Controls */}
+              <div className="flex flex-wrap items-center gap-1.5 pointer-events-auto">
+                <button
+                  type="button"
+                  onClick={handleResetToIndia}
+                  title="Reset view to India-centered overview"
+                  className="px-2.5 py-1.5 text-xs font-medium text-emerald-300 hover:text-white bg-[#081226]/95 border border-emerald-500/40 rounded-lg transition-colors flex items-center gap-1.5 whitespace-nowrap shrink-0 cursor-pointer"
+                >
+                  <RotateCcw className="w-3.5 h-3.5 text-emerald-400" />
+                  <span>Reset to India</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() =>
+                    setZoomDistance((prev) => THREE.MathUtils.clamp(prev - 0.45, 3.1, 6.6))
+                  }
+                  disabled={showFallback}
+                  title="Zoom in on globe"
+                  aria-label="Zoom in"
+                  className="p-1.5 text-xs text-slate-300 hover:text-white bg-[#081226]/95 border border-slate-700/80 rounded-lg transition-colors disabled:opacity-40 cursor-pointer"
+                >
+                  <ZoomIn className="w-3.5 h-3.5" />
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() =>
+                    setZoomDistance((prev) => THREE.MathUtils.clamp(prev + 0.45, 3.1, 6.6))
+                  }
+                  disabled={showFallback}
+                  title="Zoom out from globe"
+                  aria-label="Zoom out"
+                  className="p-1.5 text-xs text-slate-300 hover:text-white bg-[#081226]/95 border border-slate-700/80 rounded-lg transition-colors disabled:opacity-40 cursor-pointer"
+                >
+                  <ZoomOut className="w-3.5 h-3.5" />
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setIsRotating((prev) => !prev)}
+                  disabled={showFallback}
+                  title={isRotating ? 'Pause globe rotation' : 'Resume globe rotation'}
+                  className="px-2.5 py-1.5 text-xs font-medium text-slate-300 hover:text-white bg-[#081226]/95 border border-slate-700/80 rounded-lg transition-colors flex items-center gap-1.5 disabled:opacity-40 whitespace-nowrap shrink-0 cursor-pointer"
+                >
+                  {isRotating ? (
+                    <Pause className="w-3.5 h-3.5 text-emerald-400" />
+                  ) : (
+                    <Play className="w-3.5 h-3.5 text-amber-400" />
+                  )}
+                  <span>{isRotating ? 'Pause' : 'Rotate'}</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setUseStaticFallback((prev) => !prev)}
+                  title="Switch between 3D WebGL Earth and 2D Global Trade Map"
+                  className="px-2.5 py-1.5 text-xs font-medium text-slate-300 hover:text-white bg-[#081226]/95 border border-slate-700/80 rounded-lg transition-colors flex items-center gap-1.5 whitespace-nowrap shrink-0 cursor-pointer"
+                >
+                  <Layers className="w-3.5 h-3.5 text-cyan-400" />
+                  <span>{showFallback ? '3D Earth' : '2D Map'}</span>
+                </button>
+              </div>
             </div>
 
-            {/* Active Node Readout */}
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-xs">
-              <div className="min-w-0">
-                <div className="flex items-center gap-2 text-slate-200 font-semibold">
-                  <span>{selectedHub.city}</span>
-                  <span className="text-slate-500" aria-hidden="true">·</span>
-                  <span className="text-slate-400 font-normal truncate">{selectedHub.primarySector}</span>
+            {/* Hover Tooltip Overlay on 3D Globe */}
+            {hoveredPartner && hoverScreenPos && !showFallback && (
+              <div
+                style={{
+                  left: Math.min(Math.max(hoverScreenPos.x + 14, 16), 460),
+                  top: Math.min(Math.max(hoverScreenPos.y - 12, 56), 440),
+                }}
+                className="absolute z-20 pointer-events-none bg-[#081226]/95 border border-emerald-500/50 rounded-lg p-2.5 shadow-xl text-xs max-w-[250px]"
+              >
+                <div className="flex items-center justify-between gap-2 font-semibold text-white">
+                  <span>{hoveredPartner.name}</span>
+                  <span className="font-mono-tabular text-[10px] text-emerald-400">
+                    {hoveredPartner.isoCode}
+                  </span>
                 </div>
-                <p className="text-slate-400 text-[11px] mt-0.5 line-clamp-1">{selectedHub.gdpContributionNote}</p>
+                {hoveredPartner.dataStatus === 'verified_official' ? (
+                  <div className="mt-1 space-y-0.5 font-mono-tabular text-[11px] text-slate-300">
+                    <div>
+                      Total Trade:{' '}
+                      <strong className="text-white">
+                        ${hoveredPartner.totalTradeUsdBn?.toFixed(2)}B
+                      </strong>{' '}
+                      ({hoveredPartner.shareOfIndiaTradePct?.toFixed(2)}%)
+                    </div>
+                    <div>
+                      Exp: <span className="text-emerald-400">${hoveredPartner.exportsUsdBn?.toFixed(2)}B</span> · Imp:{' '}
+                      <span className="text-amber-400">${hoveredPartner.importsUsdBn?.toFixed(2)}B</span>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="mt-1 text-[11px] text-slate-400">
+                    Illustrative Geographic Corridor (Click for details)
+                  </div>
+                )}
               </div>
-              <div className="shrink-0 sm:text-right border-t sm:border-t-0 pt-1.5 sm:pt-0 border-slate-800">
-                <div className="text-[10px] text-slate-400">{selectedHub.keyMetricLabel}</div>
-                <div className="font-mono-tabular text-xs font-semibold text-amber-400">
-                  {selectedHub.keyMetricValue}
-                </div>
+            )}
+
+            {/* Central 3D WebGL Canvas OR Resilient 2D World Map SVG Fallback */}
+            {showFallback ? (
+              <div className="relative flex-1 flex items-center justify-center p-4">
+                <svg
+                  viewBox="0 0 720 360"
+                  className="w-full h-full max-h-[440px]"
+                  role="img"
+                  aria-label="2D Global Map of India's International Trade Connections"
+                >
+                  <rect width="720" height="360" fill="#050d1d" rx="12" />
+                  {/* Simplified 2D World Polygons */}
+                  {WORLD_LANDMASS_POLYGONS.map((poly) => {
+                    const pts = poly.coords
+                      .map(([lat, lon]) => `${((lon + 180) / 360) * 720},${((90 - lat) / 180) * 360}`)
+                      .join(' ');
+                    return (
+                      <polygon
+                        key={poly.name}
+                        points={pts}
+                        fill={poly.isIndia ? '#10b981' : '#0f243c'}
+                        fillOpacity={poly.isIndia ? 0.85 : 0.9}
+                        stroke={poly.isIndia ? '#fbbf24' : '#1e4976'}
+                        strokeWidth={poly.isIndia ? '1.8' : '0.9'}
+                      />
+                    );
+                  })}
+                  {/* Curved 2D SVG Arcs from India to Filtered Partners */}
+                  {filteredPartners.map((p) => {
+                    const indX = ((INDIA_HUB_LON + 180) / 360) * 720;
+                    const indY = ((90 - INDIA_HUB_LAT) / 180) * 360;
+                    const px = ((p.lon + 180) / 360) * 720;
+                    const py = ((90 - p.lat) / 180) * 360;
+                    const midX = (indX + px) / 2;
+                    const midY = Math.min(indY, py) - 28;
+                    const isSel = selectedPartner?.id === p.id;
+                    const strokeColor =
+                      p.dataStatus === 'illustrative_corridor'
+                        ? '#64748b'
+                        : p.entityType === 'regional_aggregate'
+                        ? '#a78bfa'
+                        : p.isBricsMember
+                        ? '#f59e0b'
+                        : '#10b981';
+                    return (
+                      <g
+                        key={p.id}
+                        className="cursor-pointer"
+                        onClick={() => handleSelectPartner(p)}
+                      >
+                        <path
+                          d={`M ${indX} ${indY} Q ${midX} ${midY} ${px} ${py}`}
+                          fill="none"
+                          stroke={strokeColor}
+                          strokeWidth={isSel ? '2.4' : '1.2'}
+                          strokeOpacity={isSel ? '0.95' : '0.55'}
+                        />
+                        <circle
+                          cx={px}
+                          cy={py}
+                          r={isSel ? 5.5 : 3.5}
+                          fill={strokeColor}
+                          stroke="#040915"
+                          strokeWidth="1"
+                        />
+                      </g>
+                    );
+                  })}
+                </svg>
+              </div>
+            ) : (
+              <div
+                ref={mountRef}
+                className="absolute inset-0 w-full h-full cursor-grab active:cursor-grabbing"
+                aria-label="Interactive 3D Earth showing India's Global Trade Network"
+              />
+            )}
+
+            {/* Bottom Legend & Active Selection Bar Inside Globe Frame */}
+            <div className="relative z-10 px-4 pb-3.5 pointer-events-none flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+              <div className="flex flex-wrap items-center gap-3 text-[11px] text-slate-300 bg-[#081226]/95 border border-slate-800 px-3 py-2 rounded-lg pointer-events-auto">
+                <span className="font-semibold text-slate-200">Route Legend:</span>
+                {displayMode === 'balance' ? (
+                  <>
+                    <span className="flex items-center gap-1.5">
+                      <span className="w-2.5 h-2.5 rounded-xs bg-emerald-400 inline-block" />
+                      <span>India Trade Surplus (Exports &gt; Imports)</span>
+                    </span>
+                    <span className="flex items-center gap-1.5">
+                      <span className="w-2.5 h-2.5 rounded-xs bg-rose-400 inline-block" />
+                      <span>India Trade Deficit (Imports &gt; Exports)</span>
+                    </span>
+                  </>
+                ) : displayMode === 'exports' ? (
+                  <span className="flex items-center gap-1.5">
+                    <span className="w-2.5 h-2.5 rounded-xs bg-emerald-400 inline-block" />
+                    <span>Indian Merchandise Export Corridors (Outward Flow)</span>
+                  </span>
+                ) : displayMode === 'imports' ? (
+                  <span className="flex items-center gap-1.5">
+                    <span className="w-2.5 h-2.5 rounded-xs bg-amber-400 inline-block" />
+                    <span>Indian Merchandise Import Corridors (Inward Flow)</span>
+                  </span>
+                ) : (
+                  <>
+                    <span className="flex items-center gap-1.5">
+                      <span className="w-2.5 h-2.5 rounded-xs bg-emerald-400 inline-block" />
+                      <span>Major Bilateral</span>
+                    </span>
+                    <span className="flex items-center gap-1.5">
+                      <span className="w-2.5 h-2.5 rounded-xs bg-amber-400 inline-block" />
+                      <span>BRICS &amp; West Asia</span>
+                    </span>
+                    <span className="flex items-center gap-1.5">
+                      <span className="w-2.5 h-2.5 rounded-xs bg-cyan-400 inline-block" />
+                      <span>ASEAN</span>
+                    </span>
+                    <span className="flex items-center gap-1.5">
+                      <span className="w-2.5 h-2.5 rounded-xs bg-violet-400 inline-block" />
+                      <span>Regional Bloc (EU / ASEAN)</span>
+                    </span>
+                  </>
+                )}
+                <span className="flex items-center gap-1.5">
+                  <span className="w-2.5 h-2.5 rounded-xs bg-slate-400 inline-block" />
+                  <span>Illustrative Link</span>
+                </span>
+              </div>
+
+              <div className="text-[11px] text-slate-400 bg-[#081226]/95 border border-slate-800 px-3 py-1.5 rounded-lg font-mono-tabular">
+                Drag to rotate · Scroll to zoom · Click marker or partner row
               </div>
             </div>
           </div>
-        )}
+        </div>
+
+        {/* Right 4 Columns: Selected Partner Intelligence Card + Searchable Partner Directory */}
+        <div className="lg:col-span-4 flex flex-col justify-between gap-4">
+          {/* Mobile Collapsible Drawer Toggle */}
+          <div className="flex lg:hidden items-center justify-between">
+            <span className="text-xs font-semibold text-slate-300">
+              Partner Details &amp; Search Directory ({filteredPartners.length})
+            </span>
+            <button
+              type="button"
+              onClick={() => setMobileSheetOpen((prev) => !prev)}
+              className="px-3 py-1.5 rounded-lg bg-[#0B1528] border border-slate-700 text-xs text-emerald-400 flex items-center gap-1.5 cursor-pointer"
+            >
+              <span>{mobileSheetOpen ? 'Collapse Panel' : 'Expand Panel'}</span>
+              {mobileSheetOpen ? (
+                <ChevronUp className="w-3.5 h-3.5" />
+              ) : (
+                <ChevronDown className="w-3.5 h-3.5" />
+              )}
+            </button>
+          </div>
+
+          {mobileSheetOpen && (
+            <>
+              {/* A. Selected Partner Intelligence Card */}
+              {selectedPartner ? (
+                <div
+                  className={`rounded-xl border p-4 space-y-3.5 ${
+                    theme === 'dark'
+                      ? 'bg-[#0B1528] border-slate-800 text-slate-100'
+                      : 'bg-slate-50 border-slate-200 text-slate-900'
+                  }`}
+                >
+                  <div className="flex items-start justify-between gap-2 border-b border-slate-800/80 pb-3">
+                    <div>
+                      <div className="flex flex-wrap items-center gap-1.5 text-[11px] font-mono-tabular text-emerald-400">
+                        <span>[{selectedPartner.flagCode}]</span>
+                        <span>·</span>
+                        <span>
+                          {selectedPartner.entityType === 'regional_aggregate'
+                            ? 'REGIONAL TRADE BLOC AGGREGATE'
+                            : 'BILATERAL COUNTRY PARTNER'}
+                        </span>
+                        {selectedPartner.isBricsMember && (
+                          <>
+                            <span>·</span>
+                            <span className="text-amber-400">BRICS MEMBER</span>
+                          </>
+                        )}
+                      </div>
+                      <h3 className="text-lg font-display font-semibold tracking-tight mt-0.5">
+                        India ↔ {selectedPartner.name}
+                      </h3>
+                      <div className="text-[11px] text-slate-400 font-mono-tabular mt-0.5">
+                        Coords: {selectedPartner.lat.toFixed(2)}°N, {selectedPartner.lon.toFixed(2)}°E · Period:{' '}
+                        {selectedPartner.reportingPeriod}
+                      </div>
+                    </div>
+
+                    <button
+                      type="button"
+                      onClick={handleResetToIndia}
+                      title="Clear selection and reset to India overview"
+                      className="p-1 rounded-md text-slate-400 hover:text-white cursor-pointer"
+                    >
+                      <X className="w-4 h-4" />
+                    </button>
+                  </div>
+
+                  {/* Verified Bilateral Metrics OR Illustrative Corridor Disclosure */}
+                  {selectedPartner.dataStatus === 'verified_official' &&
+                  selectedPartner.totalTradeUsdBn !== null &&
+                  selectedPartner.exportsUsdBn !== null &&
+                  selectedPartner.importsUsdBn !== null &&
+                  selectedPartner.tradeBalanceUsdBn !== null ? (
+                    <div className="space-y-3">
+                      <div className="grid grid-cols-2 gap-2.5 font-mono-tabular">
+                        <div className="p-2.5 rounded-lg bg-[#060C1A] border border-slate-800/90">
+                          <div className="text-[10px] text-slate-400">
+                            Total Merchandise Trade
+                          </div>
+                          <div className="text-base font-semibold text-white mt-0.5">
+                            ${selectedPartner.totalTradeUsdBn.toFixed(2)}B
+                          </div>
+                          <div className="text-[10px] text-cyan-400">
+                            {selectedPartner.shareOfIndiaTradePct?.toFixed(2)}% of India Total (${INDIA_FY24_TOTAL_TRADE_USD_BN}B)
+                          </div>
+                        </div>
+
+                        <div className="p-2.5 rounded-lg bg-[#060C1A] border border-slate-800/90">
+                          <div className="text-[10px] text-slate-400">
+                            Bilateral Trade Balance
+                          </div>
+                          <div
+                            className={`text-base font-semibold mt-0.5 ${
+                              selectedPartner.tradeBalanceUsdBn >= 0
+                                ? 'text-emerald-400'
+                                : 'text-rose-400'
+                            }`}
+                          >
+                            {selectedPartner.tradeBalanceUsdBn >= 0 ? '+$' : '-$'}
+                            {Math.abs(selectedPartner.tradeBalanceUsdBn).toFixed(2)}B
+                          </div>
+                          <div className="text-[10px] text-slate-400">
+                            {selectedPartner.tradeBalanceUsdBn >= 0
+                              ? 'India Trade Surplus'
+                              : 'India Trade Deficit'}
+                          </div>
+                        </div>
+
+                        <div className="p-2.5 rounded-lg bg-[#060C1A] border border-slate-800/90">
+                          <div className="text-[10px] text-slate-400">
+                            Indian Exports to {selectedPartner.shortName}
+                          </div>
+                          <div className="text-sm font-semibold text-emerald-400 mt-0.5">
+                            ${selectedPartner.exportsUsdBn.toFixed(2)}B
+                          </div>
+                        </div>
+
+                        <div className="p-2.5 rounded-lg bg-[#060C1A] border border-slate-800/90">
+                          <div className="text-[10px] text-slate-400">
+                            Indian Imports from {selectedPartner.shortName}
+                          </div>
+                          <div className="text-sm font-semibold text-amber-400 mt-0.5">
+                            ${selectedPartner.importsUsdBn.toFixed(2)}B
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Proportional Export vs Import Split Bar */}
+                      <div className="space-y-1">
+                        <div className="flex justify-between text-[10px] font-mono-tabular text-slate-400">
+                          <span>
+                            Exports Share:{' '}
+                            {(
+                              (selectedPartner.exportsUsdBn / selectedPartner.totalTradeUsdBn) *
+                              100
+                            ).toFixed(1)}
+                            %
+                          </span>
+                          <span>
+                            Imports Share:{' '}
+                            {(
+                              (selectedPartner.importsUsdBn / selectedPartner.totalTradeUsdBn) *
+                              100
+                            ).toFixed(1)}
+                            %
+                          </span>
+                        </div>
+                        <div className="w-full h-2 rounded-full bg-slate-800 overflow-hidden flex">
+                          <div
+                            style={{
+                              width: `${
+                                (selectedPartner.exportsUsdBn / selectedPartner.totalTradeUsdBn) *
+                                100
+                              }%`,
+                            }}
+                            className="bg-emerald-500 h-full"
+                          />
+                          <div
+                            style={{
+                              width: `${
+                                (selectedPartner.importsUsdBn / selectedPartner.totalTradeUsdBn) *
+                                100
+                              }%`,
+                            }}
+                            className="bg-amber-500 h-full"
+                          />
+                        </div>
+                      </div>
+
+                      {selectedPartner.entityType === 'regional_aggregate' && (
+                        <div className="p-2 rounded-lg bg-violet-950/30 border border-violet-500/40 text-[11px] text-violet-200">
+                          <strong>Regional Aggregate Guardrail:</strong> This represents the collective{' '}
+                          {selectedPartner.shortName} total and is never added to individual member-country figures.
+                        </div>
+                      )}
+                    </div>
+                  ) : (
+                    <div className="p-3 rounded-lg bg-slate-900/90 border border-slate-700 text-xs text-slate-300 space-y-1.5">
+                      <div className="font-semibold text-amber-300 flex items-center gap-1.5">
+                        <Info className="w-3.5 h-3.5 shrink-0" />
+                        <span>Illustrative Geographic Corridor</span>
+                      </div>
+                      <p className="text-[11px] text-slate-400 leading-relaxed">
+                        This connection visualizes the geographic trade corridor between India and{' '}
+                        {selectedPartner.name}. Numeric values are not mixed into the FY 2023–24 top-22 verified bilateral table.
+                      </p>
+                    </div>
+                  )}
+
+                  {/* Commodity Basket & Relationship Summary */}
+                  <div className="space-y-1.5 text-xs border-t border-slate-800/80 pt-2.5">
+                    <div>
+                      <span className="text-slate-400">Key Exports from India: </span>
+                      <span className="text-slate-200">{selectedPartner.keyExportsFromIndia}</span>
+                    </div>
+                    <div>
+                      <span className="text-slate-400">Key Imports to India: </span>
+                      <span className="text-slate-200">{selectedPartner.keyImportsToIndia}</span>
+                    </div>
+                    <p className="text-[11px] text-slate-400 pt-1 leading-relaxed">
+                      {selectedPartner.relationshipNote}
+                    </p>
+                  </div>
+
+                  {/* Source & Verification Footer inside Partner Card */}
+                  <div className="pt-2 border-t border-slate-800/80 flex items-center justify-between text-[11px]">
+                    <span className="text-slate-400 font-mono-tabular">
+                      Source: MoCI · TRADESTAT
+                    </span>
+                    <a
+                      href={selectedPartner.sourceUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-emerald-400 hover:underline flex items-center gap-1 font-medium"
+                    >
+                      <span>Verify on TRADESTAT</span>
+                      <ExternalLink className="w-3 h-3" />
+                    </a>
+                  </div>
+                </div>
+              ) : null}
+
+              {/* B. Searchable Partner Directory List */}
+              <div
+                className={`rounded-xl border p-3.5 flex-1 flex flex-col min-h-[250px] max-h-[340px] ${
+                  theme === 'dark'
+                    ? 'bg-[#0B1528] border-slate-800'
+                    : 'bg-slate-50 border-slate-200'
+                }`}
+              >
+                {/* Search Input */}
+                <div className="relative mb-2.5">
+                  <Search className="w-3.5 h-3.5 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
+                  <input
+                    type="text"
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                    placeholder="Search country, bloc, or commodity..."
+                    aria-label="Search trade partners"
+                    className={`w-full pl-8 pr-7 py-1.5 rounded-lg border text-xs focus:outline-none focus:border-emerald-500 ${
+                      theme === 'dark'
+                        ? 'bg-[#060C1A] border-slate-700 text-slate-100 placeholder:text-slate-500'
+                        : 'bg-white border-slate-300 text-slate-900 placeholder:text-slate-400'
+                    }`}
+                  />
+                  {searchQuery && (
+                    <button
+                      type="button"
+                      onClick={() => setSearchQuery('')}
+                      aria-label="Clear search query"
+                      className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-white cursor-pointer"
+                    >
+                      <X className="w-3.5 h-3.5" />
+                    </button>
+                  )}
+                </div>
+
+                {/* Partner Rows */}
+                {isLoading ? (
+                  <div className="flex-1 flex items-center justify-center text-xs text-slate-400 font-mono-tabular">
+                    Loading official TRADESTAT partner network...
+                  </div>
+                ) : filteredPartners.length === 0 ? (
+                  <div className="flex-1 flex flex-col items-center justify-center text-center p-4 text-xs text-slate-400 space-y-2">
+                    <p>No trade partners match &ldquo;{searchQuery}&rdquo; in {regionFilter}.</p>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setSearchQuery('');
+                        setRegionFilter('All');
+                      }}
+                      className="px-3 py-1 rounded-md bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 cursor-pointer"
+                    >
+                      Reset Filters
+                    </button>
+                  </div>
+                ) : (
+                  <div className="flex-1 overflow-y-auto divide-y divide-slate-800/60 pr-1">
+                    {filteredPartners.map((partner) => {
+                      const isSel = selectedPartner?.id === partner.id;
+                      return (
+                        <button
+                          key={partner.id}
+                          type="button"
+                          onClick={() => handleSelectPartner(partner)}
+                          className={`w-full py-2 px-2.5 text-left transition-colors flex items-center justify-between gap-2 rounded-md cursor-pointer ${
+                            isSel
+                              ? 'bg-emerald-500/15 text-white'
+                              : 'hover:bg-slate-800/50 text-slate-300'
+                          }`}
+                        >
+                          <div className="min-w-0">
+                            <div className="flex items-center gap-1.5 text-xs font-medium truncate">
+                              <span className="font-mono-tabular text-[10px] text-slate-400">
+                                [{partner.flagCode}]
+                              </span>
+                              <span className="truncate">{partner.shortName}</span>
+                              {partner.entityType === 'regional_aggregate' && (
+                                <span className="text-[10px] text-violet-400 font-mono-tabular shrink-0">
+                                  · Bloc
+                                </span>
+                              )}
+                            </div>
+                            <div className="text-[10px] text-slate-400 truncate">
+                              {partner.primaryRegion}
+                              {partner.isBricsMember ? ' · BRICS' : ''}
+                            </div>
+                          </div>
+
+                          <div className="text-right font-mono-tabular shrink-0">
+                            {partner.dataStatus === 'verified_official' &&
+                            partner.totalTradeUsdBn !== null &&
+                            partner.tradeBalanceUsdBn !== null ? (
+                              <>
+                                <div className="text-xs font-semibold text-slate-100">
+                                  ${partner.totalTradeUsdBn.toFixed(2)}B
+                                </div>
+                                <div
+                                  className={`text-[10px] ${
+                                    partner.tradeBalanceUsdBn >= 0
+                                      ? 'text-emerald-400'
+                                      : 'text-rose-400'
+                                  }`}
+                                >
+                                  {partner.tradeBalanceUsdBn >= 0 ? '+' : '-'}$
+                                  {Math.abs(partner.tradeBalanceUsdBn).toFixed(2)}B
+                                </div>
+                              </>
+                            ) : (
+                              <div className="text-[10px] text-slate-400">
+                                Corridor Link
+                              </div>
+                            )}
+                          </div>
+                        </button>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+            </>
+          )}
+        </div>
+      </div>
+
+      {/* 4. Concise Data-Source, Reference-Period & Methodology Footer */}
+      <div
+        className={`pt-3 border-t flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-xs ${
+          theme === 'dark' ? 'border-slate-800/80 text-slate-400' : 'border-slate-200 text-slate-600'
+        }`}
+      >
+        <div className="flex flex-wrap items-center gap-2">
+          <span>
+            <strong className="text-slate-200">Official Source:</strong> Ministry of Commerce &amp; Industry — Department of Commerce TRADESTAT Export Import Data Bank
+          </span>
+          <span aria-hidden="true">·</span>
+          <span className="font-mono-tabular">
+            Reference Period: FY 2023–24 Final Annual Bilateral Merchandise Series (USD Billion)
+          </span>
+        </div>
+
+        <div className="flex flex-wrap items-center gap-4 shrink-0">
+          <a
+            href="https://tradestat.commerce.gov.in/"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="text-emerald-400 hover:underline font-medium flex items-center gap-1"
+          >
+            <span>Open TRADESTAT Portal</span>
+            <ExternalLink className="w-3.5 h-3.5" />
+          </a>
+          {onOpenMerchandiseTradePage && (
+            <button
+              type="button"
+              onClick={onOpenMerchandiseTradePage}
+              className="text-cyan-400 hover:underline font-medium flex items-center gap-1 cursor-pointer"
+            >
+              <span>Monthly Merchandise Trade Series (Sep 2026)</span>
+              <ArrowUpRight className="w-3.5 h-3.5" />
+            </button>
+          )}
+        </div>
       </div>
     </div>
   );

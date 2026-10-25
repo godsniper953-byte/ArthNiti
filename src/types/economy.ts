@@ -62,6 +62,17 @@ export interface ObservationPoint {
   momChangeUsd?: number; // Month-over-Month USD/bbl change between comparable completed months
   momChangePct?: number; // Month-over-Month % change between comparable completed months
   sourceLastUpdated?: string; // e.g. "22 Oct 2026"
+  merchandiseExportsUsdBn?: number; // e.g. 44.40 (USD Billion)
+  merchandiseImportsUsdBn?: number; // e.g. 74.61 (USD Billion)
+  tradeBalanceUsdBn?: number; // Signed Trade Balance = Exports - Imports (e.g. -30.21 USD Billion)
+  tradeDeficitMagnitudeUsdBn?: number; // Positive Deficit Magnitude when Imports > Exports (e.g. 30.21 USD Billion)
+  exportsYoYPct?: number; // Year-over-Year % change in Merchandise Exports (e.g. 23.04)
+  importsYoYPct?: number; // Year-over-Year % change in Merchandise Imports (e.g. 8.00)
+  servicesSurplusEstUsdBn?: number; // Estimated monthly services trade surplus for scope distinction (e.g. 16.91)
+  overallTradeBalanceUsdBn?: number; // Combined Merchandise + Services balance for scope distinction (e.g. -13.30)
+  fyCumulativeExportsUsdBn?: number; // Kept strictly separate from monthly figures (e.g. 259.89)
+  fyCumulativeImportsUsdBn?: number; // Kept strictly separate from monthly figures (e.g. 437.53)
+  fyCumulativeDeficitUsdBn?: number; // Kept strictly separate from monthly figures (e.g. 177.64)
   status: 'Final' | 'Revised' | 'Provisional';
   note?: string;
 }
@@ -183,6 +194,41 @@ export interface OfficialCrudeOilMetadata {
   partialMonthRow?: ObservationPoint;
 }
 
+export interface OfficialMerchandiseTradeMetadata {
+  isOfficialData: boolean;
+  dataOrigin: 'official_moci_csv' | 'user_uploaded_csv' | 'demonstration_fallback';
+  referenceMonthLabel: string; // e.g. "Sep 2026"
+  financialYear: string; // e.g. "2026-27"
+  releaseDate: string; // e.g. "15 Oct 2026"
+  estimateStatus: 'Provisional' | 'Revised' | 'Final';
+  merchandiseExportsUsdBn: number; // 44.40
+  merchandiseImportsUsdBn: number; // 74.61
+  tradeBalanceUsdBn: number; // -30.21 (Exports - Imports)
+  tradeDeficitMagnitudeUsdBn: number; // 30.21 (positive magnitude when Imports > Exports)
+  previousMonthLabel: string; // "Aug 2026"
+  previousMonthBalanceUsdBn: number; // -26.86
+  previousYearSameMonthLabel: string; // "Sep 2025"
+  previousYearSameMonthBalanceUsdBn: number; // -33.00
+  previousYearExportsUsdBn: number; // 36.08
+  previousYearImportsUsdBn: number; // 69.08
+  exportsYoYPct: number; // +23.04
+  importsYoYPct: number; // +8.00
+  deficitYoYChangePct: number; // -8.45 (narrowed from $33.00B to $30.21B)
+  servicesSurplusEstUsdBn: number; // 16.91
+  overallTradeBalanceUsdBn: number; // -13.30
+  fyCumulativePeriodLabel: string; // "Apr–Sep 2026–27 (H1 FY27)"
+  fyCumulativeExportsUsdBn: number; // 259.89
+  fyCumulativeImportsUsdBn: number; // 437.53
+  fyCumulativeDeficitUsdBn: number; // 177.64
+  retrievalTimestamp: string;
+  isStaleOrLagging: boolean;
+  stalenessMessage: string;
+  scopeDistinctionNote: string;
+  commercePortalUrl: string;
+  tradestatUrl: string;
+  rbiDbieForeignTradeUrl: string;
+}
+
 export interface EconomicIndicator {
   id: string;
   name: string;
@@ -190,7 +236,7 @@ export interface EconomicIndicator {
   category: IndicatorCategory;
   pageId: PageId;
   unit: string;
-  unitGroup: 'percent_rate' | 'currency_inr' | 'usd_barrel' | 'equity_index';
+  unitGroup: 'percent_rate' | 'currency_inr' | 'usd_barrel' | 'usd_billion' | 'equity_index';
   frequency: DataFrequency;
   currentValue: number;
   previousValue: number;
@@ -208,6 +254,7 @@ export interface EconomicIndicator {
   officialPlfsMeta?: OfficialPlfsMetadata;
   officialUsdInrMeta?: OfficialUsdInrMetadata;
   officialCrudeMeta?: OfficialCrudeOilMetadata;
+  officialTradeMeta?: OfficialMerchandiseTradeMetadata;
   targetBand?: {
     min: number;
     max: number;
@@ -270,3 +317,57 @@ export interface IndiaEconomicHubNode {
   keyMetricValue: string;
   accentColor: 'emerald' | 'gold' | 'cyan';
 }
+
+export type TradeRegionFilter =
+  | 'All'
+  | 'BRICS'
+  | 'European Union'
+  | 'ASEAN'
+  | 'North America'
+  | 'Middle East'
+  | 'Asia-Pacific'
+  | 'Africa'
+  | 'Latin America';
+
+export type TradeRouteDisplayMode = 'all' | 'exports' | 'imports' | 'balance';
+
+export interface GlobalTradePartnerNode {
+  id: string;
+  name: string;
+  shortName: string;
+  isoCode: string;
+  flagCode: string;
+  entityType: 'country' | 'regional_aggregate';
+  dataStatus: 'verified_official' | 'illustrative_corridor';
+  primaryRegion: Exclude<TradeRegionFilter, 'All'>;
+  isBricsMember: boolean;
+  isAseanMember: boolean;
+  isEuAggregate: boolean;
+  lat: number;
+  lon: number;
+  reportingPeriod: string;
+  exportsUsdBn: number | null;
+  importsUsdBn: number | null;
+  totalTradeUsdBn: number | null;
+  tradeBalanceUsdBn: number | null;
+  shareOfIndiaTradePct: number | null;
+  keyExportsFromIndia: string;
+  keyImportsToIndia: string;
+  relationshipNote: string;
+  sourceUrl: string;
+}
+
+export interface GlobalTradeNetworkDataset {
+  status: 'success' | 'empty' | 'error';
+  partners: GlobalTradePartnerNode[];
+  reportingPeriod: string;
+  indiaTotalMerchandiseExportsUsdBn: number;
+  indiaTotalMerchandiseImportsUsdBn: number;
+  indiaTotalMerchandiseTradeUsdBn: number;
+  indiaTotalMerchandiseBalanceUsdBn: number;
+  sourceName: string;
+  sourceUrl: string;
+  lastUpdated: string;
+  errorMessage?: string;
+}
+

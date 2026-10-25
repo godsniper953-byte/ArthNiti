@@ -27,7 +27,7 @@ const CATEGORY_LABELS: Record<IndicatorCategory | 'all', string> = {
   gdp: 'GDP & Output',
   inflation: 'Inflation',
   labour: 'Labour',
-  currency_oil: 'FX & Crude',
+  currency_oil: 'Trade, FX & Crude',
   markets: 'Markets',
   policy: 'RBI Policy',
 };
@@ -37,7 +37,7 @@ const PAGE_LABELS: Record<PageId, string> = {
   'gdp-growth': 'GDP & Growth',
   inflation: 'Inflation',
   'labour-market': 'Labour Market',
-  'currency-oil': 'Currency & Oil',
+  'currency-oil': 'Currency, Oil & Trade',
   'financial-markets': 'Financial Markets',
   comparisons: 'Economic Comparisons',
   'data-sources': 'Data Sources',

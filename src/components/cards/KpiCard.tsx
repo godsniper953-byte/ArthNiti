@@ -265,6 +265,8 @@ export const KpiCard: React.FC<KpiCardProps> = ({
                 ? `MPC (${indicator.officialRepoMeta.policyStance})`
                 : indicator.officialGdpMeta
                 ? `Base ${indicator.officialGdpMeta.activeBaseYear}`
+                : indicator.officialPlfsMeta
+                ? 'CWS · Age 15+'
                 : `Base ${indicator.officialCpiMeta?.activeBaseYear || '2024=100'}`
               : indicator.frequency}
           </span>
@@ -339,6 +341,8 @@ export const KpiCard: React.FC<KpiCardProps> = ({
             ? ` · Idx ${indicator.officialCpiMeta.latestGeneralIndex}`
             : indicator.isOfficialData && indicator.officialRepoMeta
             ? ` · SDF ${indicator.officialRepoMeta.sdfRate.toFixed(2)}%`
+            : indicator.isOfficialData && indicator.officialPlfsMeta
+            ? ` · R:${indicator.officialPlfsMeta.ruralUrPct.toFixed(1)}% U:${indicator.officialPlfsMeta.urbanUrPct.toFixed(1)}%`
             : ''}
         </span>
         <span className={semantic.colorClass}>{semantic.label}</span>

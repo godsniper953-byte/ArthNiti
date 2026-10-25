@@ -39,7 +39,14 @@ import {
 } from '../../services/economyService';
 
 interface SeriesConfig {
-  key: 'value' | 'secondaryValue' | 'tertiaryValue';
+  key:
+    | 'value'
+    | 'secondaryValue'
+    | 'tertiaryValue'
+    | 'ruralUrPct'
+    | 'urbanUrPct'
+    | 'lfprCwsPct'
+    | 'wprCwsPct';
   name: string;
   color: string;
   unit?: string;

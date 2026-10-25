@@ -48,6 +48,11 @@ export interface ObservationPoint {
   effectiveDate?: string; // e.g. "07 Oct 2026"
   changeBps?: number; // e.g. 25 or -25 or 0
   policyStance?: string; // e.g. "Calibrated Tightening" or "Neutral"
+  ruralUrPct?: number; // e.g. 4.2 (Rural CWS Unemployment Rate %)
+  urbanUrPct?: number; // e.g. 6.9 (Urban CWS Unemployment Rate %)
+  lfprCwsPct?: number; // e.g. 55.5 (Labour Force Participation Rate CWS %, kept distinct from UR)
+  wprCwsPct?: number; // e.g. 52.7 (Worker Population Ratio CWS %, kept distinct from UR)
+  surveyMeasure?: string; // e.g. "Current Weekly Status (CWS) · Age 15+"
   status: 'Final' | 'Revised' | 'Provisional';
   note?: string;
 }
@@ -103,6 +108,25 @@ export interface OfficialRepoMetadata {
   lastVerifiedTimestamp: string;
 }
 
+export interface OfficialPlfsMetadata {
+  isOfficialData: boolean;
+  dataOrigin: 'official_mospi_csv' | 'user_uploaded_csv' | 'demonstration_fallback';
+  referenceMonth: string;
+  releaseDate: string;
+  ageCohort: string;
+  statusApproach: string;
+  overallUrPct: number;
+  ruralUrPct: number;
+  urbanUrPct: number;
+  lfprCwsPct: number;
+  wprCwsPct: number;
+  seriesCompatibilityNote: string;
+  mospiPlfsPortalUrl: string;
+  esankhyikiPlfsCatalogueUrl: string;
+  mospiLatestReleasesUrl: string;
+  lastVerifiedTimestamp: string;
+}
+
 export interface EconomicIndicator {
   id: string;
   name: string;
@@ -125,6 +149,7 @@ export interface EconomicIndicator {
   officialCpiMeta?: OfficialCpiMetadata;
   officialGdpMeta?: OfficialGdpMetadata;
   officialRepoMeta?: OfficialRepoMetadata;
+  officialPlfsMeta?: OfficialPlfsMetadata;
   targetBand?: {
     min: number;
     max: number;

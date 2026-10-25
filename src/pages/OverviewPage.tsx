@@ -42,6 +42,9 @@ interface OverviewPageProps {
   repoLoading?: boolean;
   repoError?: string | null;
   onRetryRepo?: () => void;
+  plfsLoading?: boolean;
+  plfsError?: string | null;
+  onRetryPlfs?: () => void;
 }
 
 export const OverviewPage: React.FC<OverviewPageProps> = ({
@@ -59,6 +62,9 @@ export const OverviewPage: React.FC<OverviewPageProps> = ({
   repoLoading = false,
   repoError = null,
   onRetryRepo,
+  plfsLoading = false,
+  plfsError = null,
+  onRetryPlfs,
 }) => {
   const kpiSectionRef = useRef<HTMLDivElement | null>(null);
 
@@ -101,7 +107,7 @@ export const OverviewPage: React.FC<OverviewPageProps> = ({
                   ARTHNITI — INDIAN ECONOMIC INTELLIGENCE
                 </span>
                 <span aria-hidden="true">·</span>
-                <span>Official MoSPI GDP &amp; CPI + Official RBI Repo Rate</span>
+                <span>Official MoSPI GDP, CPI &amp; PLFS + Official RBI Repo Rate</span>
               </div>
 
               {/* Large ARTHNITI Wordmark & Tagline */}
@@ -168,13 +174,13 @@ export const OverviewPage: React.FC<OverviewPageProps> = ({
                 <div>
                   <div className="text-slate-400 text-[11px]">Official Series</div>
                   <div className="font-mono-tabular font-semibold text-emerald-400 mt-0.5">
-                    GDP · CPI · RBI Repo
+                    GDP · CPI · PLFS · Repo
                   </div>
                 </div>
                 <div>
                   <div className="text-slate-400 text-[11px]">Latest Official Releases</div>
                   <div className="font-mono-tabular font-semibold mt-0.5">
-                    Q1 FY27 · Sep 26 · 07 Oct 26
+                    15 Oct · 12 Oct · 07 Oct
                   </div>
                 </div>
               </div>
@@ -215,7 +221,7 @@ export const OverviewPage: React.FC<OverviewPageProps> = ({
             </h2>
           </div>
           <p className="text-xs text-slate-400">
-            Real GDP Growth, CPI Inflation, and RBI Repo Rate display official data; remaining 3 cards show labelled illustrative series.
+            Real GDP Growth, CPI Inflation, Unemployment Rate (PLFS), and RBI Repo Rate display official data; remaining 2 cards show labelled illustrative series.
           </p>
         </div>
 
@@ -238,6 +244,8 @@ export const OverviewPage: React.FC<OverviewPageProps> = ({
                     ? gdpLoading
                     : ind.id === 'rbi-repo-rate'
                     ? repoLoading
+                    : ind.id === 'unemployment-rate'
+                    ? plfsLoading
                     : false
                 }
                 errorMessage={
@@ -247,6 +255,8 @@ export const OverviewPage: React.FC<OverviewPageProps> = ({
                     ? gdpError
                     : ind.id === 'rbi-repo-rate'
                     ? repoError
+                    : ind.id === 'unemployment-rate'
+                    ? plfsError
                     : null
                 }
                 onRetryFetch={
@@ -256,6 +266,8 @@ export const OverviewPage: React.FC<OverviewPageProps> = ({
                     ? onRetryGdp
                     : ind.id === 'rbi-repo-rate'
                     ? onRetryRepo
+                    : ind.id === 'unemployment-rate'
+                    ? onRetryPlfs
                     : undefined
                 }
               />

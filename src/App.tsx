@@ -27,6 +27,11 @@ import {
   loadOfficialRepoData,
   saveUserUploadedRepoCsv,
 } from './services/repoDataService';
+import {
+  clearUserUploadedPlfsCsv,
+  loadOfficialPlfsData,
+  saveUserUploadedPlfsCsv,
+} from './services/plfsDataService';
 import { EconomicIndicator, PageId } from './types/economy';
 import { Sidebar } from './components/navigation/Sidebar';
 import { TopBar } from './components/navigation/TopBar';
@@ -74,6 +79,15 @@ export default function App() {
   const [repoDataOrigin, setRepoDataOrigin] = useState<
     'official_rbi_csv' | 'user_uploaded_csv' | 'demonstration_fallback'
   >('official_rbi_csv');
+
+  // Official MoSPI PLFS Unemployment Rate State (kept separate from UI components via plfsDataService)
+  const [officialPlfsIndicator, setOfficialPlfsIndicator] = useState<EconomicIndicator | null>(null);
+  const [plfsLoading, setPlfsLoading] = useState<boolean>(true);
+  const [plfsError, setPlfsError] = useState<string | null>(null);
+  const [plfsLastVerified, setPlfsLastVerified] = useState<string>('Verifying...');
+  const [plfsDataOrigin, setPlfsDataOrigin] = useState<
+    'official_mospi_csv' | 'user_uploaded_csv' | 'demonstration_fallback'
+  >('official_mospi_csv');
 
   const baseIndicators = useMemo(() => getIndicatorsSync(), []);
   const sources = useMemo(() => getDataSourcesSync(), []);
@@ -131,11 +145,34 @@ export default function App() {
     setRepoLoading(false);
   }, []);
 
+  const handleFetchOfficialPlfs = useCallback(async (simulateError = false) => {
+    setPlfsLoading(true);
+    setPlfsError(null);
+    const result = await loadOfficialPlfsData({ simulateError });
+    setPlfsLastVerified(result.lastVerified);
+    setPlfsDataOrigin(result.dataOrigin);
+    if (result.status === 'success' && result.indicator) {
+      setOfficialPlfsIndicator(result.indicator);
+      setPlfsError(null);
+    } else {
+      setPlfsError(
+        result.errorMessage || 'Failed to load official MoSPI PLFS Unemployment dataset.'
+      );
+    }
+    setPlfsLoading(false);
+  }, []);
+
   useEffect(() => {
     handleFetchOfficialCpi(false);
     handleFetchOfficialGdp(false);
     handleFetchOfficialRepo(false);
-  }, [handleFetchOfficialCpi, handleFetchOfficialGdp, handleFetchOfficialRepo]);
+    handleFetchOfficialPlfs(false);
+  }, [
+    handleFetchOfficialCpi,
+    handleFetchOfficialGdp,
+    handleFetchOfficialRepo,
+    handleFetchOfficialPlfs,
+  ]);
 
   const handleUploadCustomCsv = useCallback((csvText: string) => {
     try {
@@ -278,15 +315,69 @@ export default function App() {
     );
   }, [baseIndicators]);
 
-  // Merge official MoSPI GDP, CPI, and RBI Repo Rate indicators into the global indicator list
+  const handleUploadCustomPlfsCsv = useCallback((csvText: string) => {
+    try {
+      const updated = saveUserUploadedPlfsCsv(csvText);
+      setOfficialPlfsIndicator(updated);
+      setPlfsError(null);
+      setPlfsDataOrigin('user_uploaded_csv');
+      setPlfsLastVerified(
+        new Date().toLocaleTimeString('en-IN', {
+          hour: '2-digit',
+          minute: '2-digit',
+          second: '2-digit',
+        })
+      );
+      return { ok: true };
+    } catch (err: any) {
+      return {
+        ok: false,
+        error: err?.message || 'Invalid MoSPI PLFS CSV format.',
+      };
+    }
+  }, []);
+
+  const handleResetCustomPlfsCsv = useCallback(() => {
+    clearUserUploadedPlfsCsv();
+    handleFetchOfficialPlfs(false);
+  }, [handleFetchOfficialPlfs]);
+
+  const handleActivatePlfsDemoFallback = useCallback(() => {
+    const demoFallback =
+      baseIndicators.find((i) => i.id === 'unemployment-rate') || baseIndicators[2];
+    setOfficialPlfsIndicator({
+      ...demoFallback,
+      name: 'Unemployment Rate (Labelled Demonstration Fallback)',
+      shortName: 'Unemployment Rate (Demo Fallback)',
+      sourceShortName: 'MoSPI PLFS (Demo Fallback)',
+      isOfficialData: false,
+    });
+    setPlfsError(null);
+    setPlfsDataOrigin('demonstration_fallback');
+    setPlfsLastVerified(
+      `${new Date().toLocaleTimeString('en-IN', {
+        hour: '2-digit',
+        minute: '2-digit',
+      })} (Demo State)`
+    );
+  }, [baseIndicators]);
+
+  // Merge official MoSPI GDP, CPI, PLFS Unemployment, and RBI Repo Rate indicators into the global indicator list
   const indicators = useMemo(() => {
     return baseIndicators.map((ind) => {
       if (ind.id === 'gdp-growth' && officialGdpIndicator) return officialGdpIndicator;
       if (ind.id === 'cpi-inflation' && officialCpiIndicator) return officialCpiIndicator;
       if (ind.id === 'rbi-repo-rate' && officialRepoIndicator) return officialRepoIndicator;
+      if (ind.id === 'unemployment-rate' && officialPlfsIndicator) return officialPlfsIndicator;
       return ind;
     });
-  }, [baseIndicators, officialGdpIndicator, officialCpiIndicator, officialRepoIndicator]);
+  }, [
+    baseIndicators,
+    officialGdpIndicator,
+    officialCpiIndicator,
+    officialRepoIndicator,
+    officialPlfsIndicator,
+  ]);
 
   useEffect(() => {
     const htmlEl = document.documentElement;
@@ -360,6 +451,9 @@ export default function App() {
             repoLoading={repoLoading}
             repoError={repoError}
             onRetryRepo={() => handleFetchOfficialRepo(false)}
+            plfsLoading={plfsLoading}
+            plfsError={plfsError}
+            onRetryPlfs={() => handleFetchOfficialPlfs(false)}
           />
         );
       case 'gdp-growth':
@@ -394,7 +488,20 @@ export default function App() {
           />
         );
       case 'labour-market':
-        return <LabourMarketPage indicator={labourIndicator} theme={theme} />;
+        return (
+          <LabourMarketPage
+            indicator={labourIndicator}
+            isLoading={plfsLoading}
+            errorMessage={plfsError}
+            lastVerified={plfsLastVerified}
+            dataOrigin={plfsDataOrigin}
+            onRefreshOfficialPlfs={(simErr) => handleFetchOfficialPlfs(Boolean(simErr))}
+            onUploadCustomCsv={handleUploadCustomPlfsCsv}
+            onResetCustomCsv={handleResetCustomPlfsCsv}
+            onActivateDemoFallback={handleActivatePlfsDemoFallback}
+            theme={theme}
+          />
+        );
       case 'currency-oil':
         return (
           <CurrencyOilPage
@@ -478,7 +585,7 @@ export default function App() {
           <div>
             <span className="font-semibold text-emerald-400">Data Provenance: </span>
             <span>
-              <strong>Real GDP Growth</strong> (<code className="font-mono-tabular">Base 2022–23</code>, Q1 FY27: <strong className="font-mono-tabular text-emerald-400">7.8% YoY</strong>), <strong>CPI Inflation</strong> (<code className="font-mono-tabular">Base 2024=100</code>, Sep 2026: <strong className="font-mono-tabular text-emerald-400">5.54% YoY</strong>), &amp; <strong>RBI Repo Rate</strong> (07 Oct 2026 MPC: <strong className="font-mono-tabular text-emerald-400">5.50%</strong>) use official data.
+              <strong>Real GDP</strong> (Q1 FY27: <strong className="font-mono-tabular text-emerald-400">7.8%</strong>), <strong>CPI Inflation</strong> (Sep 2026: <strong className="font-mono-tabular text-emerald-400">5.54%</strong>), <strong>PLFS Unemployment</strong> (Sep 2026 CWS 15+: <strong className="font-mono-tabular text-emerald-400">5.0%</strong>), &amp; <strong>RBI Repo Rate</strong> (<strong className="font-mono-tabular text-emerald-400">5.50%</strong>) use official data.
             </span>
           </div>
           <div className="flex flex-wrap items-center gap-3 self-start sm:self-auto shrink-0">
@@ -495,6 +602,13 @@ export default function App() {
               className="text-amber-400 hover:underline font-medium cursor-pointer whitespace-nowrap"
             >
               MoSPI CPI →
+            </button>
+            <button
+              type="button"
+              onClick={() => handleSelectPage('labour-market', 'unemployment-rate')}
+              className="text-emerald-300 hover:underline font-medium cursor-pointer whitespace-nowrap"
+            >
+              MoSPI PLFS →
             </button>
             <button
               type="button"

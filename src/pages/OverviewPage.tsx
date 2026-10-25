@@ -33,6 +33,9 @@ interface OverviewPageProps {
   sources: DataSourceMetadata[];
   onSelectPage: (pageId: PageId, indicatorId?: string) => void;
   theme: 'dark' | 'light';
+  cpiLoading?: boolean;
+  cpiError?: string | null;
+  onRetryCpi?: () => void;
 }
 
 export const OverviewPage: React.FC<OverviewPageProps> = ({
@@ -41,6 +44,9 @@ export const OverviewPage: React.FC<OverviewPageProps> = ({
   sources,
   onSelectPage,
   theme,
+  cpiLoading = false,
+  cpiError = null,
+  onRetryCpi,
 }) => {
   const kpiSectionRef = useRef<HTMLDivElement | null>(null);
 
@@ -83,9 +89,7 @@ export const OverviewPage: React.FC<OverviewPageProps> = ({
                   ARTHNITI — INDIAN ECONOMIC INTELLIGENCE
                 </span>
                 <span aria-hidden="true">·</span>
-                <span>10Y Series (2016–2026)</span>
-                <span aria-hidden="true">·</span>
-                <span>Illustrative Dev Dataset</span>
+                <span>Official MoSPI CPI + 10Y Macro Series</span>
               </div>
 
               {/* Large ARTHNITI Wordmark & Tagline */}
@@ -107,7 +111,7 @@ export const OverviewPage: React.FC<OverviewPageProps> = ({
                   theme === 'dark' ? 'text-slate-300' : 'text-slate-600'
                 }`}
               >
-                Explore 10 years of Indian macroeconomic architecture—spanning National Accounts GDP, CPI inflation dynamics, PLFS labour participation, Rupee exchange corridors, and RBI monetary policy transmission—with transparent source attribution.
+                Explore 10 years of Indian macroeconomic architecture—featuring official MoSPI All-India Combined CPI inflation alongside National Accounts GDP, PLFS labour participation, Rupee exchange corridors, and RBI monetary policy transmission.
               </p>
             </div>
 
@@ -150,15 +154,15 @@ export const OverviewPage: React.FC<OverviewPageProps> = ({
                   </div>
                 </div>
                 <div>
-                  <div className="text-slate-400 text-[11px]">Historical Horizon</div>
-                  <div className="font-mono-tabular font-semibold mt-0.5">
-                    2016 – Q3 2026 (10Y)
+                  <div className="text-slate-400 text-[11px]">CPI Official Series</div>
+                  <div className="font-mono-tabular font-semibold text-emerald-400 mt-0.5">
+                    Base 2024=100 (Sep 2026)
                   </div>
                 </div>
                 <div>
                   <div className="text-slate-400 text-[11px]">Data Freshness</div>
-                  <div className="font-mono-tabular font-semibold text-emerald-400 mt-0.5">
-                    Oct 2026 Release Cycle
+                  <div className="font-mono-tabular font-semibold mt-0.5">
+                    12 Oct 2026 Release
                   </div>
                 </div>
               </div>
@@ -199,7 +203,7 @@ export const OverviewPage: React.FC<OverviewPageProps> = ({
             </h2>
           </div>
           <p className="text-xs text-slate-400">
-            Select any card to inspect full 10-year series, methodology, and CSV downloads.
+            CPI Inflation displays official MoSPI data; remaining 5 cards show clearly labelled illustrative series.
           </p>
         </div>
 
@@ -211,7 +215,14 @@ export const OverviewPage: React.FC<OverviewPageProps> = ({
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.22, delay: idx * 0.04 }}
             >
-              <KpiCard indicator={ind} onSelectPage={onSelectPage} theme={theme} />
+              <KpiCard
+                indicator={ind}
+                onSelectPage={onSelectPage}
+                theme={theme}
+                isLoading={ind.id === 'cpi-inflation' ? cpiLoading : false}
+                errorMessage={ind.id === 'cpi-inflation' ? cpiError : null}
+                onRetryFetch={ind.id === 'cpi-inflation' ? onRetryCpi : undefined}
+              />
             </motion.div>
           ))}
         </div>

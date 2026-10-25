@@ -33,11 +33,28 @@ export interface ObservationPoint {
   date: string; // e.g. "2026-Q2" or "2026-09"
   timestamp: number; // sortable epoch ms
   label: string; // e.g. "Q2 FY27" or "Sep 2026"
-  value: number;
-  secondaryValue?: number; // e.g. Nominal GDP or Core CPI
-  tertiaryValue?: number; // e.g. Food CPI
+  value: number; // Primary value (e.g. YoY Inflation Rate %)
+  secondaryValue?: number; // e.g. Core CPI % or Nominal GDP
+  tertiaryValue?: number; // e.g. Food CFPI %
+  generalIndexValue?: number; // CPI Index Level (e.g. 109.49) kept distinct from YoY % rate
+  baseYear?: string; // e.g. "2024=100" or "2012=100"
+  releaseDate?: string; // e.g. "12 Oct 2026"
   status: 'Final' | 'Revised' | 'Provisional';
   note?: string;
+}
+
+export interface OfficialCpiMetadata {
+  isOfficialData: boolean;
+  dataOrigin: 'official_mospi_csv' | 'user_uploaded_csv' | 'demonstration_fallback';
+  referenceMonth: string;
+  releaseDate: string;
+  provisionalOrFinal: 'Provisional' | 'Final' | 'Revised';
+  latestGeneralIndex: number;
+  activeBaseYear: string;
+  historicalBaseYearNote: string;
+  mospiPortalUrl: string;
+  esankhyikiCatalogueUrl: string;
+  lastUpdatedTimestamp: string;
 }
 
 export interface EconomicIndicator {
@@ -58,6 +75,8 @@ export interface EconomicIndicator {
   sourceId: string;
   sourceShortName: string;
   semanticPolarity: SemanticPolarity;
+  isOfficialData?: boolean;
+  officialCpiMeta?: OfficialCpiMetadata;
   targetBand?: {
     min: number;
     max: number;
@@ -76,6 +95,7 @@ export interface DataSourceMetadata {
   shortName: string;
   ministryOrBody: string;
   officialUrl: string;
+  secondaryUrl?: string;
   primaryIndicators: string[];
   unitsAndBaseYear: string;
   frequency: string;
@@ -104,6 +124,7 @@ export interface LatestDataRelease {
   source: string;
   summaryNote: string;
   pageId: PageId;
+  isOfficial?: boolean;
 }
 
 export interface IndiaEconomicHubNode {

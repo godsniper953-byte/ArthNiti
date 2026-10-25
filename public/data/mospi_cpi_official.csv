@@ -1,0 +1,48 @@
+Year_Month,Period_Label,Headline_CPI_YoY_Pct,Core_CPI_YoY_Pct,Food_CFPI_YoY_Pct,General_CPI_Index,Base_Year,Status,Release_Date,Official_Note
+2017-03,Mar 2017,3.89,4.80,2.01,130.9,2012=100,Final,12 Apr 2017,MoSPI NSO All-India Combined
+2017-06,Jun 2017,1.46,3.85,-2.12,132.0,2012=100,Final,12 Jul 2017,Record food deflation post harvest
+2017-09,Sep 2017,3.28,4.50,1.25,135.2,2012=100,Final,12 Oct 2017,MoSPI NSO All-India Combined
+2017-12,Dec 2017,5.21,5.10,4.96,137.2,2012=100,Final,12 Jan 2018,MoSPI NSO All-India Combined
+2018-03,Mar 2018,4.28,5.30,2.81,136.5,2012=100,Final,12 Apr 2018,MoSPI NSO All-India Combined
+2018-06,Jun 2018,4.92,6.20,2.91,138.5,2012=100,Final,12 Jul 2018,MoSPI NSO All-India Combined
+2018-09,Sep 2018,3.70,5.80,0.51,140.2,2012=100,Final,12 Oct 2018,MoSPI NSO All-India Combined
+2018-12,Dec 2018,2.11,5.60,-2.65,140.1,2012=100,Final,14 Jan 2019,MoSPI NSO All-India Combined
+2019-03,Mar 2019,2.86,5.00,0.30,140.4,2012=100,Final,12 Apr 2019,MoSPI NSO All-India Combined
+2019-06,Jun 2019,3.18,4.10,2.17,142.9,2012=100,Final,12 Jul 2019,MoSPI NSO All-India Combined
+2019-09,Sep 2019,3.99,4.00,5.11,145.8,2012=100,Final,14 Oct 2019,MoSPI NSO All-India Combined
+2019-12,Dec 2019,7.35,3.75,14.19,150.4,2012=100,Final,13 Jan 2020,Unseasonal monsoon onion and vegetable spike
+2020-03,Mar 2020,5.84,4.00,8.76,148.6,2012=100,Final,13 Apr 2020,MoSPI NSO All-India Combined
+2020-06,Jun 2020,6.23,5.10,8.72,151.8,2012=100,Final,13 Jul 2020,Pandemic supply chain disruption
+2020-09,Sep 2020,7.27,5.40,10.68,156.4,2012=100,Final,12 Oct 2020,MoSPI NSO All-India Combined
+2020-12,Dec 2020,4.59,5.50,3.41,157.3,2012=100,Final,12 Jan 2021,MoSPI NSO All-India Combined
+2021-03,Mar 2021,5.52,5.90,4.87,156.8,2012=100,Final,12 Apr 2021,MoSPI NSO All-India Combined
+2021-06,Jun 2021,6.26,6.10,5.15,161.3,2012=100,Final,12 Jul 2021,MoSPI NSO All-India Combined
+2021-09,Sep 2021,4.35,5.80,0.68,163.2,2012=100,Final,12 Oct 2021,MoSPI NSO All-India Combined
+2021-12,Dec 2021,5.66,6.00,4.05,166.2,2012=100,Final,12 Jan 2022,MoSPI NSO All-India Combined
+2022-04,Apr 2022,7.79,7.00,8.31,170.1,2012=100,Final,12 May 2022,Global commodity shock pushes CPI above 6% upper band
+2022-09,Sep 2022,7.41,6.10,8.60,175.3,2012=100,Final,12 Oct 2022,MoSPI NSO All-India Combined
+2022-12,Dec 2022,5.72,6.10,4.19,175.7,2012=100,Final,12 Jan 2023,MoSPI NSO All-India Combined
+2023-03,Mar 2023,5.66,5.80,4.79,177.2,2012=100,Final,12 Apr 2023,MoSPI NSO All-India Combined
+2023-07,Jul 2023,7.44,4.90,11.51,186.3,2012=100,Final,14 Aug 2023,Monsoon tomato and vegetable price surge
+2023-12,Dec 2023,5.69,3.80,9.53,185.7,2012=100,Final,12 Jan 2024,MoSPI NSO All-India Combined
+2024-01,Jan 2024,5.10,3.60,8.30,185.5,2012=100,Final,12 Feb 2024,MoSPI NSO All-India Combined
+2024-03,Mar 2024,4.85,3.25,8.52,185.8,2012=100,Final,12 Apr 2024,MoSPI NSO All-India Combined
+2024-06,Jun 2024,5.08,3.15,9.36,190.2,2012=100,Final,12 Jul 2024,MoSPI NSO All-India Combined
+2024-07,Jul 2024,3.60,3.35,5.42,193.0,2012=100,Final,12 Aug 2024,High base effect from July 2023 cools YoY rate
+2024-09,Sep 2024,5.49,3.50,9.24,193.3,2012=100,Final,14 Oct 2024,MoSPI NSO All-India Combined
+2024-10,Oct 2024,6.21,3.70,10.87,196.8,2012=100,Final,12 Nov 2024,Vegetable and edible oil prices breach 6% upper band
+2024-12,Dec 2024,5.22,3.60,8.39,195.4,2012=100,Final,13 Jan 2025,MoSPI NSO All-India Combined
+2025-01,Jan 2025,4.26,3.65,5.97,193.4,2012=100,Final,12 Feb 2025,Winter harvest arrivals ease food prices
+2025-03,Mar 2025,3.34,3.70,3.84,192.0,2012=100,Final,15 Apr 2025,MoSPI NSO All-India Combined
+2025-06,Jun 2025,2.10,3.55,0.95,194.2,2012=100,Final,14 Jul 2025,Favorable base effect and food disinflation
+2025-09,Sep 2025,1.44,3.50,-0.45,196.1,2012=100,Final,13 Oct 2025,MoSPI NSO All-India Combined
+2025-12,Dec 2025,1.33,3.55,-0.80,198.0,2012=100,Final,12 Jan 2026,Final release under 2012=100 base year series
+2026-01,Jan 2026,2.75,3.40,2.13,103.62,2024=100,Final,12 Feb 2026,Transition to revised MoSPI CPI Base Year 2024=100
+2026-02,Feb 2026,3.21,3.50,3.47,104.15,2024=100,Final,12 Mar 2026,MoSPI Revised Base 2024=100 All-India Combined
+2026-03,Mar 2026,3.40,3.55,3.87,104.84,2024=100,Final,13 Apr 2026,MoSPI Revised Base 2024=100 All-India Combined
+2026-04,Apr 2026,3.48,3.60,4.20,105.12,2024=100,Final,12 May 2026,MoSPI Revised Base 2024=100 All-India Combined
+2026-05,May 2026,3.93,3.65,4.78,105.91,2024=100,Final,12 Jun 2026,MoSPI Revised Base 2024=100 All-India Combined
+2026-06,Jun 2026,4.38,3.70,5.32,107.00,2024=100,Final,13 Jul 2026,MoSPI Revised Base 2024=100 All-India Combined
+2026-07,Jul 2026,4.45,3.72,5.52,107.95,2024=100,Final,12 Aug 2026,MoSPI Revised Base 2024=100 All-India Combined
+2026-08,Aug 2026,4.83,3.78,5.97,108.74,2024=100,Final,14 Sep 2026,MoSPI Revised Base 2024=100 (Final)
+2026-09,Sep 2026,5.54,3.85,7.74,109.49,2024=100,Provisional,12 Oct 2026,Latest MoSPI All-India Combined Press Release (Base 2024=100)

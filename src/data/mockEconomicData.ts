@@ -643,14 +643,16 @@ export const LATEST_DATA_RELEASES: LatestDataRelease[] = [
   {
     id: 'rel-1',
     indicatorId: 'cpi-inflation',
-    indicatorName: 'CPI Headline Inflation (Combined)',
-    period: 'Sep 2026 (Illust.)',
+    indicatorName: 'All-India Combined CPI Inflation (Official MoSPI)',
+    period: 'Sep 2026 (Provisional)',
     releaseDate: '12 Oct 2026',
-    actualValue: '4.41% YoY',
-    previousValue: '4.52% YoY',
-    source: 'MoSPI (NSO)',
-    summaryNote: 'Kharif harvest arrivals cooled vegetable and pulses prices; Core CPI steady at 3.70%.',
+    actualValue: '5.54% YoY',
+    previousValue: '4.83% YoY (Aug Final)',
+    source: 'MoSPI · eSankhyiki (Official)',
+    summaryNote:
+      'Official MoSPI release (Base 2024=100): General CPI Index at 109.49; Consumer Food Price Index (CFPI) YoY inflation at 7.74%.',
     pageId: 'inflation',
+    isOfficial: true,
   },
   {
     id: 'rel-2',

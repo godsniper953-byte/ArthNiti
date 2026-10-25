@@ -1,14 +1,31 @@
 import React, { useEffect, useState } from 'react';
-import { ArrowDownRight, ArrowRight, ArrowUpRight, ExternalLink } from 'lucide-react';
+import {
+  AlertTriangle,
+  ArrowDownRight,
+  ArrowRight,
+  ArrowUpRight,
+  ExternalLink,
+  RefreshCw,
+} from 'lucide-react';
 import { EconomicIndicator, PageId } from '../../types/economy';
 
 interface KpiCardProps {
   indicator: EconomicIndicator;
   onSelectPage: (pageId: PageId, indicatorId?: string) => void;
   theme: 'dark' | 'light';
+  isLoading?: boolean;
+  errorMessage?: string | null;
+  onRetryFetch?: () => void;
 }
 
-export const KpiCard: React.FC<KpiCardProps> = ({ indicator, onSelectPage, theme }) => {
+export const KpiCard: React.FC<KpiCardProps> = ({
+  indicator,
+  onSelectPage,
+  theme,
+  isLoading = false,
+  errorMessage = null,
+  onRetryFetch,
+}) => {
   const [displayedValue, setDisplayedValue] = useState<number>(indicator.currentValue);
 
   // Smoothly interpolate numeric value only when the underlying value changes
@@ -40,6 +57,70 @@ export const KpiCard: React.FC<KpiCardProps> = ({ indicator, onSelectPage, theme
     return () => cancelAnimationFrame(rafId);
   }, [indicator.currentValue]);
 
+  // Loading Skeleton State for real data fetch
+  if (isLoading) {
+    return (
+      <div
+        className={`w-full rounded-xl p-5 border animate-pulse ${
+          theme === 'dark' ? 'bg-[#0B1325] border-slate-800/90' : 'bg-white border-slate-200'
+        }`}
+        role="status"
+        aria-label={`Loading ${indicator.shortName} official data`}
+      >
+        <div className="h-3 w-36 bg-slate-700/60 rounded" />
+        <div className="h-4 w-28 bg-slate-700/80 rounded mt-2" />
+        <div className="h-8 w-24 bg-slate-700/80 rounded mt-4" />
+        <div className="h-3 w-40 bg-slate-700/50 rounded mt-4" />
+      </div>
+    );
+  }
+
+  // Explicit Error State (never silently substitute sample data when real fetch fails)
+  if (errorMessage) {
+    return (
+      <div
+        className={`w-full rounded-xl p-5 border flex flex-col justify-between ${
+          theme === 'dark'
+            ? 'bg-red-950/15 border-red-500/40 text-slate-100'
+            : 'bg-red-50 border-red-200 text-slate-900'
+        }`}
+        role="alert"
+      >
+        <div>
+          <div className="flex items-center justify-between text-xs text-red-400 font-medium">
+            <span className="flex items-center gap-1.5">
+              <AlertTriangle className="w-3.5 h-3.5 shrink-0" />
+              <span>Official Data Fetch Failed</span>
+            </span>
+            <span>{indicator.shortName}</span>
+          </div>
+          <p className="text-xs text-slate-400 mt-2 line-clamp-2 leading-relaxed">
+            {errorMessage}
+          </p>
+        </div>
+        <div className="mt-4 pt-2.5 border-t border-red-500/20 flex items-center justify-between gap-2">
+          <button
+            type="button"
+            onClick={() => onSelectPage(indicator.pageId, indicator.id)}
+            className="text-xs text-amber-400 hover:underline cursor-pointer"
+          >
+            Open Inflation Page →
+          </button>
+          {onRetryFetch && (
+            <button
+              type="button"
+              onClick={onRetryFetch}
+              className="px-2.5 py-1 rounded bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-medium flex items-center gap-1 cursor-pointer"
+            >
+              <RefreshCw className="w-3 h-3" />
+              <span>Retry</span>
+            </button>
+          )}
+        </div>
+      </div>
+    );
+  }
+
   // Determine meaningful economic semantic tone (not assuming every increase is positive)
   const getSemanticAssessment = () => {
     const delta = indicator.changeValue;
@@ -69,7 +150,6 @@ export const KpiCard: React.FC<KpiCardProps> = ({ indicator, onSelectPage, theme
     }
 
     if (indicator.semanticPolarity === 'lower_is_favorable') {
-      // For Unemployment, Crude Oil import cost, and USD/INR rate, a decrease is macroeconomically favorable
       const isFavorable = delta < 0;
       return {
         tone: isFavorable ? ('favorable' as const) : ('adverse' as const),
@@ -95,7 +175,7 @@ export const KpiCard: React.FC<KpiCardProps> = ({ indicator, onSelectPage, theme
       const isFavorable = withinBand && movingTowardMidpoint;
       return {
         tone: isFavorable ? ('favorable' as const) : ('caution' as const),
-        label: withinBand ? 'Within 2–6% Target' : 'Above Target Band',
+        label: withinBand ? 'Within 2–6% RBI Band' : 'Above 6% Target Band',
         colorClass: isFavorable
           ? theme === 'dark'
             ? 'text-emerald-400'
@@ -140,7 +220,11 @@ export const KpiCard: React.FC<KpiCardProps> = ({ indicator, onSelectPage, theme
     if (indicator.unitGroup === 'equity_index') {
       return Math.round(displayedValue).toLocaleString('en-IN');
     }
-    if (indicator.id === 'usd-inr' || indicator.id === 'cpi-inflation' || indicator.id === 'rbi-repo-rate') {
+    if (
+      indicator.id === 'usd-inr' ||
+      indicator.id === 'cpi-inflation' ||
+      indicator.id === 'rbi-repo-rate'
+    ) {
       return displayedValue.toFixed(2);
     }
     return displayedValue.toFixed(1);
@@ -151,7 +235,11 @@ export const KpiCard: React.FC<KpiCardProps> = ({ indicator, onSelectPage, theme
       type="button"
       onClick={() => onSelectPage(indicator.pageId, indicator.id)}
       className={`group text-left w-full rounded-xl p-5 border transition-all duration-150 cursor-pointer focus-visible:outline-2 focus-visible:outline-emerald-500 ${
-        theme === 'dark'
+        indicator.isOfficialData
+          ? theme === 'dark'
+            ? 'bg-[#0B1325] border-emerald-500/40 hover:border-emerald-400 hover:-translate-y-0.5'
+            : 'bg-white border-emerald-500/50 hover:border-emerald-600 hover:-translate-y-0.5 shadow-xs'
+          : theme === 'dark'
           ? 'bg-[#0B1325] border-slate-800/90 hover:border-emerald-500/45 hover:-translate-y-0.5'
           : 'bg-white border-slate-200 hover:border-emerald-600/50 hover:-translate-y-0.5 shadow-xs'
       }`}
@@ -159,11 +247,23 @@ export const KpiCard: React.FC<KpiCardProps> = ({ indicator, onSelectPage, theme
       {/* Top Unboxed Metadata Kicker (Zero-Pill Discipline) */}
       <div className="flex items-center justify-between gap-2 text-xs text-slate-400">
         <div className="flex items-center gap-1.5 truncate">
-          <span className={theme === 'dark' ? 'text-slate-300 font-medium' : 'text-slate-700 font-medium'}>
+          <span
+            className={
+              indicator.isOfficialData
+                ? 'text-emerald-400 font-semibold'
+                : theme === 'dark'
+                ? 'text-slate-300 font-medium'
+                : 'text-slate-700 font-medium'
+            }
+          >
             {indicator.sourceShortName}
           </span>
           <span aria-hidden="true">·</span>
-          <span>{indicator.frequency}</span>
+          <span>
+            {indicator.isOfficialData
+              ? `Base ${indicator.officialCpiMeta?.activeBaseYear || '2024=100'}`
+              : indicator.frequency}
+          </span>
         </div>
         <ExternalLink className="w-3.5 h-3.5 opacity-0 group-hover:opacity-100 transition-opacity text-emerald-400 shrink-0" />
       </div>
@@ -186,7 +286,11 @@ export const KpiCard: React.FC<KpiCardProps> = ({ indicator, onSelectPage, theme
                 theme === 'dark' ? 'text-white' : 'text-slate-950'
               }`}
             >
-              {indicator.id === 'usd-inr' ? `₹${formattedNumber}` : indicator.id === 'crude-oil' ? `$${formattedNumber}` : formattedNumber}
+              {indicator.id === 'usd-inr'
+                ? `₹${formattedNumber}`
+                : indicator.id === 'crude-oil'
+                ? `$${formattedNumber}`
+                : formattedNumber}
             </span>
             <span className="text-xs font-mono-tabular text-slate-400">{indicator.unit}</span>
           </div>
@@ -225,7 +329,12 @@ export const KpiCard: React.FC<KpiCardProps> = ({ indicator, onSelectPage, theme
           theme === 'dark' ? 'border-slate-800/80 text-slate-400' : 'border-slate-100 text-slate-500'
         }`}
       >
-        <span className="font-mono-tabular">{indicator.reportingPeriod}</span>
+        <span className="font-mono-tabular">
+          {indicator.reportingPeriod}
+          {indicator.isOfficialData && indicator.officialCpiMeta
+            ? ` · Idx ${indicator.officialCpiMeta.latestGeneralIndex}`
+            : ''}
+        </span>
         <span className={semantic.colorClass}>{semantic.label}</span>
       </div>
     </button>

@@ -129,15 +129,28 @@ export const DataSourcesPage: React.FC<DataSourcesPageProps> = ({ sources, theme
                   <h2 className="text-base sm:text-lg font-semibold mt-0.5">{src.name}</h2>
                 </div>
 
+              <div className="flex flex-wrap items-center gap-3 shrink-0">
                 <a
                   href={src.officialUrl}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="inline-flex items-center gap-1.5 text-xs font-mono-tabular text-amber-500 hover:text-amber-400 shrink-0"
+                  className="inline-flex items-center gap-1.5 text-xs font-mono-tabular text-amber-500 hover:text-amber-400"
                 >
                   <span>{src.officialUrl}</span>
                   <ExternalLink className="w-3.5 h-3.5" />
                 </a>
+                {src.secondaryUrl && (
+                  <a
+                    href={src.secondaryUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex items-center gap-1.5 text-xs font-mono-tabular text-emerald-500 hover:text-emerald-400"
+                  >
+                    <span>eSankhyiki Catalogue</span>
+                    <ExternalLink className="w-3.5 h-3.5" />
+                  </a>
+                )}
+              </div>
               </div>
 
               {/* Metadata Grid */}

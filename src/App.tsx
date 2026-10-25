@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { AnimatePresence, motion, useReducedMotion } from 'motion/react';
 import { ArrowUpRight, Compass, X } from 'lucide-react';
 import {
@@ -12,7 +12,12 @@ import {
   getLatestReleasesSync,
   getSectorGvaSync,
 } from './services/economyService';
-import { PageId } from './types/economy';
+import {
+  clearUserUploadedCpiCsv,
+  loadOfficialCpiData,
+  saveUserUploadedCpiCsv,
+} from './services/cpiDataService';
+import { EconomicIndicator, PageId } from './types/economy';
 import { Sidebar } from './components/navigation/Sidebar';
 import { TopBar } from './components/navigation/TopBar';
 import { OverviewPage } from './pages/OverviewPage';
@@ -33,10 +38,95 @@ export default function App() {
   const [theme, setTheme] = useState<'dark' | 'light'>('dark');
   const shouldReduceMotion = useReducedMotion();
 
-  const indicators = useMemo(() => getIndicatorsSync(), []);
+  // Official MoSPI CPI Data State (kept separate from UI components via cpiDataService)
+  const [officialCpiIndicator, setOfficialCpiIndicator] = useState<EconomicIndicator | null>(null);
+  const [cpiLoading, setCpiLoading] = useState<boolean>(true);
+  const [cpiError, setCpiError] = useState<string | null>(null);
+  const [cpiLastUpdated, setCpiLastUpdated] = useState<string>('Loading...');
+  const [cpiDataOrigin, setCpiDataOrigin] = useState<
+    'official_mospi_csv' | 'user_uploaded_csv' | 'demonstration_fallback'
+  >('official_mospi_csv');
+
+  const baseIndicators = useMemo(() => getIndicatorsSync(), []);
   const sources = useMemo(() => getDataSourcesSync(), []);
   const sectorGva = useMemo(() => getSectorGvaSync(), []);
   const latestReleases = useMemo(() => getLatestReleasesSync(), []);
+
+  const handleFetchOfficialCpi = useCallback(async (simulateError = false) => {
+    setCpiLoading(true);
+    setCpiError(null);
+    const result = await loadOfficialCpiData({ simulateError });
+    setCpiLastUpdated(result.lastUpdated);
+    setCpiDataOrigin(result.dataOrigin);
+    if (result.status === 'success' && result.indicator) {
+      setOfficialCpiIndicator(result.indicator);
+      setCpiError(null);
+    } else {
+      setCpiError(
+        result.errorMessage || 'Failed to load official MoSPI CPI dataset.'
+      );
+    }
+    setCpiLoading(false);
+  }, []);
+
+  useEffect(() => {
+    handleFetchOfficialCpi(false);
+  }, [handleFetchOfficialCpi]);
+
+  const handleUploadCustomCsv = useCallback((csvText: string) => {
+    try {
+      const updated = saveUserUploadedCpiCsv(csvText);
+      setOfficialCpiIndicator(updated);
+      setCpiError(null);
+      setCpiDataOrigin('user_uploaded_csv');
+      setCpiLastUpdated(
+        new Date().toLocaleTimeString('en-IN', {
+          hour: '2-digit',
+          minute: '2-digit',
+          second: '2-digit',
+        })
+      );
+      return { ok: true };
+    } catch (err: any) {
+      return {
+        ok: false,
+        error: err?.message || 'Invalid CSV format.',
+      };
+    }
+  }, []);
+
+  const handleResetCustomCsv = useCallback(() => {
+    clearUserUploadedCpiCsv();
+    handleFetchOfficialCpi(false);
+  }, [handleFetchOfficialCpi]);
+
+  const handleActivateDemoFallback = useCallback(() => {
+    const demoFallback =
+      baseIndicators.find((i) => i.id === 'cpi-inflation') || baseIndicators[1];
+    setOfficialCpiIndicator({
+      ...demoFallback,
+      name: 'CPI Headline Inflation (Labelled Demonstration Fallback)',
+      shortName: 'CPI Inflation (Demo Fallback)',
+      sourceShortName: 'MoSPI (Demo Fallback)',
+      isOfficialData: false,
+    });
+    setCpiError(null);
+    setCpiDataOrigin('demonstration_fallback');
+    setCpiLastUpdated(
+      `${new Date().toLocaleTimeString('en-IN', {
+        hour: '2-digit',
+        minute: '2-digit',
+      })} (Demo State)`
+    );
+  }, [baseIndicators]);
+
+  // Merge official MoSPI CPI indicator into the global indicator list
+  const indicators = useMemo(() => {
+    if (!officialCpiIndicator) return baseIndicators;
+    return baseIndicators.map((ind) =>
+      ind.id === 'cpi-inflation' ? officialCpiIndicator : ind
+    );
+  }, [baseIndicators, officialCpiIndicator]);
 
   useEffect(() => {
     const htmlEl = document.documentElement;
@@ -101,6 +191,9 @@ export default function App() {
             sources={sources}
             onSelectPage={handleSelectPage}
             theme={theme}
+            cpiLoading={cpiLoading}
+            cpiError={cpiError}
+            onRetryCpi={() => handleFetchOfficialCpi(false)}
           />
         );
       case 'gdp-growth':
@@ -112,7 +205,20 @@ export default function App() {
           />
         );
       case 'inflation':
-        return <InflationPage indicator={cpiIndicator} theme={theme} />;
+        return (
+          <InflationPage
+            indicator={cpiIndicator}
+            isLoading={cpiLoading}
+            errorMessage={cpiError}
+            lastUpdated={cpiLastUpdated}
+            dataOrigin={cpiDataOrigin}
+            onRefreshOfficialCpi={(simErr) => handleFetchOfficialCpi(Boolean(simErr))}
+            onUploadCustomCsv={handleUploadCustomCsv}
+            onResetCustomCsv={handleResetCustomCsv}
+            onActivateDemoFallback={handleActivateDemoFallback}
+            theme={theme}
+          />
+        );
       case 'labour-market':
         return <LabourMarketPage indicator={labourIndicator} theme={theme} />;
       case 'currency-oil':
@@ -179,7 +285,7 @@ export default function App() {
           onToggleTheme={() => setTheme((prev) => (prev === 'dark' ? 'light' : 'dark'))}
         />
 
-        {/* Illustrative Data Transparency Notice Strip */}
+        {/* Data Provenance & Transparency Notice Strip */}
         <div
           className={`px-4 sm:px-6 py-2 border-b text-xs flex flex-col sm:flex-row sm:items-center justify-between gap-1 ${
             theme === 'dark'
@@ -188,17 +294,17 @@ export default function App() {
           }`}
         >
           <div>
-            <span className="font-semibold text-amber-400">Development Notice: </span>
+            <span className="font-semibold text-emerald-400">Data Provenance: </span>
             <span>
-              Displaying structured 10-year illustrative Indian macroeconomic series (2016–2026) with official MoSPI, RBI, PLFS, and PPAC definitions.
+              <strong>CPI Inflation</strong> is powered by official MoSPI All-India Combined data (<code className="font-mono-tabular">Base 2024=100</code>, Sep 2026: <strong className="font-mono-tabular text-emerald-400">5.54% YoY</strong>). Other indicators display clearly labelled illustrative series.
             </span>
           </div>
           <button
             type="button"
-            onClick={() => handleSelectPage('data-sources')}
+            onClick={() => handleSelectPage('inflation', 'cpi-inflation')}
             className="text-emerald-400 hover:underline font-medium self-start sm:self-auto cursor-pointer whitespace-nowrap shrink-0"
           >
-            Inspect Sources &amp; Methodology →
+            Inspect Official MoSPI CPI →
           </button>
         </div>
 

@@ -76,10 +76,10 @@ export const DataSourcesPage: React.FC<DataSourcesPageProps> = ({ sources, theme
           <FileText className="w-5 h-5 text-emerald-400 shrink-0 mt-0.5" />
           <div className="space-y-1 text-xs leading-relaxed">
             <div className="font-semibold text-sm text-emerald-400">
-              Frontend Phase Disclosure — Illustrative Development Series
+              Data Provenance Disclosure — Official MoSPI GDP &amp; CPI + Illustrative Macro Series
             </div>
             <p>
-              ArthNiti is currently operating in standalone frontend mode using a curated 10-year illustrative dataset modeled on official MoSPI, RBI DBIE, PLFS, PPAC, and NSE historical trajectories. No series is claimed to be a live real-time feed. When connected to the FastAPI backend via <code className="font-mono-tabular">VITE_API_BASE_URL</code>, the service layer automatically switches to upstream institutional ingestion.
+              <strong>Real GDP Growth (Base Year 2022–23, Constant Prices)</strong> and <strong>All-India Combined CPI Inflation (Base Year 2024 = 100)</strong> are powered by official MoSPI National Statistical Office (NSO) datasets (<code className="font-mono-tabular">/data/mospi_gdp_official.csv</code> and <code className="font-mono-tabular">/data/mospi_cpi_official.csv</code>) with zero-code browser CSV updaters. The remaining 5 indicators use clearly labelled illustrative series modeled on RBI DBIE, PLFS, PPAC, and NSE historical data.
             </p>
           </div>
         </div>
@@ -147,6 +147,17 @@ export const DataSourcesPage: React.FC<DataSourcesPageProps> = ({ sources, theme
                     className="inline-flex items-center gap-1.5 text-xs font-mono-tabular text-emerald-500 hover:text-emerald-400"
                   >
                     <span>eSankhyiki Catalogue</span>
+                    <ExternalLink className="w-3.5 h-3.5" />
+                  </a>
+                )}
+                {src.id === 'mospi-nso' && (
+                  <a
+                    href="https://mospi.gov.in/faq"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex items-center gap-1.5 text-xs font-mono-tabular text-cyan-400 hover:text-cyan-300"
+                  >
+                    <span>MoSPI Methodology FAQ</span>
                     <ExternalLink className="w-3.5 h-3.5" />
                   </a>
                 )}

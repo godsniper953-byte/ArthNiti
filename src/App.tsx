@@ -17,6 +17,11 @@ import {
   loadOfficialCpiData,
   saveUserUploadedCpiCsv,
 } from './services/cpiDataService';
+import {
+  clearUserUploadedGdpCsv,
+  loadOfficialGdpData,
+  saveUserUploadedGdpCsv,
+} from './services/gdpDataService';
 import { EconomicIndicator, PageId } from './types/economy';
 import { Sidebar } from './components/navigation/Sidebar';
 import { TopBar } from './components/navigation/TopBar';
@@ -47,6 +52,15 @@ export default function App() {
     'official_mospi_csv' | 'user_uploaded_csv' | 'demonstration_fallback'
   >('official_mospi_csv');
 
+  // Official MoSPI GDP Data State (kept separate from UI components via gdpDataService)
+  const [officialGdpIndicator, setOfficialGdpIndicator] = useState<EconomicIndicator | null>(null);
+  const [gdpLoading, setGdpLoading] = useState<boolean>(true);
+  const [gdpError, setGdpError] = useState<string | null>(null);
+  const [gdpLastUpdated, setGdpLastUpdated] = useState<string>('Loading...');
+  const [gdpDataOrigin, setGdpDataOrigin] = useState<
+    'official_mospi_csv' | 'user_uploaded_csv' | 'demonstration_fallback'
+  >('official_mospi_csv');
+
   const baseIndicators = useMemo(() => getIndicatorsSync(), []);
   const sources = useMemo(() => getDataSourcesSync(), []);
   const sectorGva = useMemo(() => getSectorGvaSync(), []);
@@ -69,9 +83,27 @@ export default function App() {
     setCpiLoading(false);
   }, []);
 
+  const handleFetchOfficialGdp = useCallback(async (simulateError = false) => {
+    setGdpLoading(true);
+    setGdpError(null);
+    const result = await loadOfficialGdpData({ simulateError });
+    setGdpLastUpdated(result.lastUpdated);
+    setGdpDataOrigin(result.dataOrigin);
+    if (result.status === 'success' && result.indicator) {
+      setOfficialGdpIndicator(result.indicator);
+      setGdpError(null);
+    } else {
+      setGdpError(
+        result.errorMessage || 'Failed to load official MoSPI GDP dataset.'
+      );
+    }
+    setGdpLoading(false);
+  }, []);
+
   useEffect(() => {
     handleFetchOfficialCpi(false);
-  }, [handleFetchOfficialCpi]);
+    handleFetchOfficialGdp(false);
+  }, [handleFetchOfficialCpi, handleFetchOfficialGdp]);
 
   const handleUploadCustomCsv = useCallback((csvText: string) => {
     try {
@@ -120,13 +152,61 @@ export default function App() {
     );
   }, [baseIndicators]);
 
-  // Merge official MoSPI CPI indicator into the global indicator list
-  const indicators = useMemo(() => {
-    if (!officialCpiIndicator) return baseIndicators;
-    return baseIndicators.map((ind) =>
-      ind.id === 'cpi-inflation' ? officialCpiIndicator : ind
+  const handleUploadCustomGdpCsv = useCallback((csvText: string) => {
+    try {
+      const updated = saveUserUploadedGdpCsv(csvText);
+      setOfficialGdpIndicator(updated);
+      setGdpError(null);
+      setGdpDataOrigin('user_uploaded_csv');
+      setGdpLastUpdated(
+        new Date().toLocaleTimeString('en-IN', {
+          hour: '2-digit',
+          minute: '2-digit',
+          second: '2-digit',
+        })
+      );
+      return { ok: true };
+    } catch (err: any) {
+      return {
+        ok: false,
+        error: err?.message || 'Invalid GDP CSV format.',
+      };
+    }
+  }, []);
+
+  const handleResetCustomGdpCsv = useCallback(() => {
+    clearUserUploadedGdpCsv();
+    handleFetchOfficialGdp(false);
+  }, [handleFetchOfficialGdp]);
+
+  const handleActivateGdpDemoFallback = useCallback(() => {
+    const demoFallback =
+      baseIndicators.find((i) => i.id === 'gdp-growth') || baseIndicators[0];
+    setOfficialGdpIndicator({
+      ...demoFallback,
+      name: 'Real GDP Growth Rate (Labelled Demonstration Fallback)',
+      shortName: 'Real GDP Growth (Demo Fallback)',
+      sourceShortName: 'MoSPI (Demo Fallback)',
+      isOfficialData: false,
+    });
+    setGdpError(null);
+    setGdpDataOrigin('demonstration_fallback');
+    setGdpLastUpdated(
+      `${new Date().toLocaleTimeString('en-IN', {
+        hour: '2-digit',
+        minute: '2-digit',
+      })} (Demo State)`
     );
-  }, [baseIndicators, officialCpiIndicator]);
+  }, [baseIndicators]);
+
+  // Merge official MoSPI GDP and CPI indicators into the global indicator list
+  const indicators = useMemo(() => {
+    return baseIndicators.map((ind) => {
+      if (ind.id === 'gdp-growth' && officialGdpIndicator) return officialGdpIndicator;
+      if (ind.id === 'cpi-inflation' && officialCpiIndicator) return officialCpiIndicator;
+      return ind;
+    });
+  }, [baseIndicators, officialGdpIndicator, officialCpiIndicator]);
 
   useEffect(() => {
     const htmlEl = document.documentElement;
@@ -194,6 +274,9 @@ export default function App() {
             cpiLoading={cpiLoading}
             cpiError={cpiError}
             onRetryCpi={() => handleFetchOfficialCpi(false)}
+            gdpLoading={gdpLoading}
+            gdpError={gdpError}
+            onRetryGdp={() => handleFetchOfficialGdp(false)}
           />
         );
       case 'gdp-growth':
@@ -201,6 +284,14 @@ export default function App() {
           <GdpGrowthPage
             indicator={gdpIndicator}
             sectorGva={sectorGva}
+            isLoading={gdpLoading}
+            errorMessage={gdpError}
+            lastUpdated={gdpLastUpdated}
+            dataOrigin={gdpDataOrigin}
+            onRefreshOfficialGdp={(simErr) => handleFetchOfficialGdp(Boolean(simErr))}
+            onUploadCustomCsv={handleUploadCustomGdpCsv}
+            onResetCustomCsv={handleResetCustomGdpCsv}
+            onActivateDemoFallback={handleActivateGdpDemoFallback}
             theme={theme}
           />
         );
@@ -296,16 +387,25 @@ export default function App() {
           <div>
             <span className="font-semibold text-emerald-400">Data Provenance: </span>
             <span>
-              <strong>CPI Inflation</strong> is powered by official MoSPI All-India Combined data (<code className="font-mono-tabular">Base 2024=100</code>, Sep 2026: <strong className="font-mono-tabular text-emerald-400">5.54% YoY</strong>). Other indicators display clearly labelled illustrative series.
+              <strong>Real GDP Growth</strong> (<code className="font-mono-tabular">Base 2022–23</code>, Q1 FY27: <strong className="font-mono-tabular text-emerald-400">7.8% YoY</strong>) &amp; <strong>CPI Inflation</strong> (<code className="font-mono-tabular">Base 2024=100</code>, Sep 2026: <strong className="font-mono-tabular text-emerald-400">5.54% YoY</strong>) use official MoSPI data. Other indicators display clearly labelled illustrative series.
             </span>
           </div>
-          <button
-            type="button"
-            onClick={() => handleSelectPage('inflation', 'cpi-inflation')}
-            className="text-emerald-400 hover:underline font-medium self-start sm:self-auto cursor-pointer whitespace-nowrap shrink-0"
-          >
-            Inspect Official MoSPI CPI →
-          </button>
+          <div className="flex items-center gap-3 self-start sm:self-auto shrink-0">
+            <button
+              type="button"
+              onClick={() => handleSelectPage('gdp-growth', 'gdp-growth')}
+              className="text-emerald-400 hover:underline font-medium cursor-pointer whitespace-nowrap"
+            >
+              Inspect MoSPI GDP →
+            </button>
+            <button
+              type="button"
+              onClick={() => handleSelectPage('inflation', 'cpi-inflation')}
+              className="text-amber-400 hover:underline font-medium cursor-pointer whitespace-nowrap"
+            >
+              Inspect MoSPI CPI →
+            </button>
+          </div>
         </div>
 
         {/* Main Content Viewport with Motion Page Transition */}

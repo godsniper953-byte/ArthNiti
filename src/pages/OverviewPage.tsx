@@ -36,6 +36,9 @@ interface OverviewPageProps {
   cpiLoading?: boolean;
   cpiError?: string | null;
   onRetryCpi?: () => void;
+  gdpLoading?: boolean;
+  gdpError?: string | null;
+  onRetryGdp?: () => void;
 }
 
 export const OverviewPage: React.FC<OverviewPageProps> = ({
@@ -47,6 +50,9 @@ export const OverviewPage: React.FC<OverviewPageProps> = ({
   cpiLoading = false,
   cpiError = null,
   onRetryCpi,
+  gdpLoading = false,
+  gdpError = null,
+  onRetryGdp,
 }) => {
   const kpiSectionRef = useRef<HTMLDivElement | null>(null);
 
@@ -89,7 +95,7 @@ export const OverviewPage: React.FC<OverviewPageProps> = ({
                   ARTHNITI — INDIAN ECONOMIC INTELLIGENCE
                 </span>
                 <span aria-hidden="true">·</span>
-                <span>Official MoSPI CPI + 10Y Macro Series</span>
+                <span>Official MoSPI GDP &amp; CPI + Macro Series</span>
               </div>
 
               {/* Large ARTHNITI Wordmark & Tagline */}
@@ -154,15 +160,15 @@ export const OverviewPage: React.FC<OverviewPageProps> = ({
                   </div>
                 </div>
                 <div>
-                  <div className="text-slate-400 text-[11px]">CPI Official Series</div>
+                  <div className="text-slate-400 text-[11px]">Official MoSPI Series</div>
                   <div className="font-mono-tabular font-semibold text-emerald-400 mt-0.5">
-                    Base 2024=100 (Sep 2026)
+                    GDP (2022–23) · CPI (2024=100)
                   </div>
                 </div>
                 <div>
-                  <div className="text-slate-400 text-[11px]">Data Freshness</div>
+                  <div className="text-slate-400 text-[11px]">Latest Official Releases</div>
                   <div className="font-mono-tabular font-semibold mt-0.5">
-                    12 Oct 2026 Release
+                    Q1 FY27 GDP · Sep 2026 CPI
                   </div>
                 </div>
               </div>
@@ -203,7 +209,7 @@ export const OverviewPage: React.FC<OverviewPageProps> = ({
             </h2>
           </div>
           <p className="text-xs text-slate-400">
-            CPI Inflation displays official MoSPI data; remaining 5 cards show clearly labelled illustrative series.
+            Real GDP Growth and CPI Inflation display official MoSPI data; remaining 4 cards show clearly labelled illustrative series.
           </p>
         </div>
 
@@ -219,9 +225,27 @@ export const OverviewPage: React.FC<OverviewPageProps> = ({
                 indicator={ind}
                 onSelectPage={onSelectPage}
                 theme={theme}
-                isLoading={ind.id === 'cpi-inflation' ? cpiLoading : false}
-                errorMessage={ind.id === 'cpi-inflation' ? cpiError : null}
-                onRetryFetch={ind.id === 'cpi-inflation' ? onRetryCpi : undefined}
+                isLoading={
+                  ind.id === 'cpi-inflation'
+                    ? cpiLoading
+                    : ind.id === 'gdp-growth'
+                    ? gdpLoading
+                    : false
+                }
+                errorMessage={
+                  ind.id === 'cpi-inflation'
+                    ? cpiError
+                    : ind.id === 'gdp-growth'
+                    ? gdpError
+                    : null
+                }
+                onRetryFetch={
+                  ind.id === 'cpi-inflation'
+                    ? onRetryCpi
+                    : ind.id === 'gdp-growth'
+                    ? onRetryGdp
+                    : undefined
+                }
               />
             </motion.div>
           ))}
@@ -257,18 +281,18 @@ export const OverviewPage: React.FC<OverviewPageProps> = ({
           {/* Historical Trend Chart (8 cols) */}
           <div className="lg:col-span-8">
             <AnalyticalChartPanel
-              title="India Real vs. Nominal GDP Growth Trajectory (2017–2026)"
-              subtitle="Quarterly year-over-year percentage change at constant (2011–12) and current market prices"
+              title="India Real vs. Nominal GDP Growth Trajectory (Official MoSPI · Base 2022–23)"
+              subtitle="Quarterly year-over-year percentage change at constant (2022–23) and current market prices (Q1 FY24 – Q1 FY27)"
               unit="% YoY"
-              sourceLabel="MoSPI (NSO)"
+              sourceLabel="MoSPI · NSO (Official Base 2022–23)"
               frequencyLabel="Quarterly"
               observations={gdpIndicator.observations}
               seriesConfig={[
-                { key: 'value', name: 'Real GDP Growth (Constant 2011–12)', color: '#10b981' },
+                { key: 'value', name: 'Real GDP Growth (Constant 2022–23 Prices)', color: '#10b981' },
                 { key: 'secondaryValue', name: 'Nominal GDP Growth (Current Prices)', color: '#f59e0b' },
               ]}
               defaultChartType="area"
-              defaultRange="10Y"
+              defaultRange="MAX"
               zeroReferenceLine
               theme={theme}
             />
@@ -289,27 +313,27 @@ export const OverviewPage: React.FC<OverviewPageProps> = ({
               </div>
 
               <h3 className="text-base font-semibold tracking-tight">
-                Observed Structural Shifts (2017–2026)
+                Observed Structural Shifts (Base 2022–23 Series)
               </h3>
 
               <div className="space-y-3 text-xs leading-relaxed text-slate-400">
                 <p>
                   <strong className={theme === 'dark' ? 'text-slate-100' : 'text-slate-900'}>
-                    1. Post-Pandemic Normalization:
+                    1. Sustained 7.8% Real Expansion:
                   </strong>{' '}
-                  Following the sharp Q2 2020 lockdown contraction (-23.4% YoY) and subsequent base-effect rebound (+21.6% in Q2 2021), India&apos;s real output stabilized along a 6.5%–7.2% expansion corridor.
+                  Under MoSPI&apos;s revised Base Year 2022–23 series, India&apos;s Real GDP expanded by {gdpIndicator.currentValue}% YoY in Q1 FY 2026–27 (Apr–Jun 2026), following 7.7% full-year growth in FY 2025–26.
                 </p>
                 <p>
                   <strong className={theme === 'dark' ? 'text-slate-100' : 'text-slate-900'}>
-                    2. Narrowing Deflator Wedge:
+                    2. Implicit Deflator Wedge:
                   </strong>{' '}
-                  The spread between Nominal GDP (10.6%) and Real GDP (7.1%) reflects an implicit GDP deflator of ~3.5%, signaling moderating wholesale and input cost pressures compared to 2022.
+                  The spread between Nominal GDP (10.3% YoY) and Real GDP ({gdpIndicator.currentValue}% YoY) in Q1 FY27 implies an economy-wide GDP deflator of ~2.5%, reflecting benign industrial input prices.
                 </p>
                 <p>
                   <strong className={theme === 'dark' ? 'text-slate-100' : 'text-slate-900'}>
                     3. Monetary-Inflation Alignment:
                   </strong>{' '}
-                  With Headline CPI at {cpiIndicator.currentValue}% YoY—inside the RBI&apos;s 2%–6% mandate—the policy repo rate at 5.75% maintains positive real interest rates of ~1.34%.
+                  With official All-India Combined CPI at {cpiIndicator.currentValue}% YoY (Base 2024=100)—inside the RBI&apos;s 2%–6% mandate—the policy repo rate at 5.75% maintains positive real interest rates.
                 </p>
               </div>
             </div>
@@ -325,8 +349,8 @@ export const OverviewPage: React.FC<OverviewPageProps> = ({
                 <span className="font-mono-tabular font-medium">NSO · MoSPI & RBI DBIE</span>
               </div>
               <div className="flex items-center justify-between">
-                <span className="text-slate-400">Base Year Benchmark:</span>
-                <span className="font-mono-tabular">GDP: 2011–12 | CPI: 2012=100</span>
+                <span className="text-slate-400">Official Base Years:</span>
+                <span className="font-mono-tabular">GDP: 2022–23 | CPI: 2024=100</span>
               </div>
               <button
                 type="button"

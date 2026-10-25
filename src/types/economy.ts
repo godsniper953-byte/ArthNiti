@@ -30,15 +30,20 @@ export type DateRangeFilter = '1Y' | '3Y' | '5Y' | '10Y' | 'MAX';
 export type ChartDisplayType = 'line' | 'area' | 'bar';
 
 export interface ObservationPoint {
-  date: string; // e.g. "2026-Q2" or "2026-09"
+  date: string; // e.g. "2026-27-Q1" or "2026-09"
   timestamp: number; // sortable epoch ms
-  label: string; // e.g. "Q2 FY27" or "Sep 2026"
-  value: number; // Primary value (e.g. YoY Inflation Rate %)
-  secondaryValue?: number; // e.g. Core CPI % or Nominal GDP
+  label: string; // e.g. "Q1 FY27" or "Sep 2026"
+  value: number; // Primary value (e.g. Real GDP YoY % or YoY Inflation Rate %)
+  secondaryValue?: number; // e.g. Nominal GDP YoY % or Core CPI %
   tertiaryValue?: number; // e.g. Food CFPI %
   generalIndexValue?: number; // CPI Index Level (e.g. 109.49) kept distinct from YoY % rate
-  baseYear?: string; // e.g. "2024=100" or "2012=100"
-  releaseDate?: string; // e.g. "12 Oct 2026"
+  financialYear?: string; // e.g. "2026-27"
+  quarter?: string; // e.g. "Q1"
+  referencePeriod?: string; // e.g. "Apr-Jun 2026"
+  realGdpConstantLakhCr?: number; // e.g. 90.41 (₹ Lakh Crore at Constant 2022-23 Prices)
+  estimateStatusLabel?: string; // e.g. "Quarterly Estimate (Q1)" or "Provisional Estimate"
+  baseYear?: string; // e.g. "2022-23=100" or "2024=100"
+  releaseDate?: string; // e.g. "31 Aug 2026"
   status: 'Final' | 'Revised' | 'Provisional';
   note?: string;
 }
@@ -54,6 +59,25 @@ export interface OfficialCpiMetadata {
   historicalBaseYearNote: string;
   mospiPortalUrl: string;
   esankhyikiCatalogueUrl: string;
+  lastUpdatedTimestamp: string;
+}
+
+export interface OfficialGdpMetadata {
+  isOfficialData: boolean;
+  dataOrigin: 'official_mospi_csv' | 'user_uploaded_csv' | 'demonstration_fallback';
+  financialYear: string;
+  quarter: string;
+  referencePeriod: string;
+  periodLabel: string;
+  releaseDate: string;
+  estimateStatus: string;
+  activeBaseYear: string;
+  priceValuation: string;
+  realGdpLevelLakhCr?: number;
+  seriesCompatibilityNote: string;
+  mospiGdpPortalUrl: string;
+  esankhyikiNasCatalogueUrl: string;
+  mospiFaqUrl: string;
   lastUpdatedTimestamp: string;
 }
 
@@ -77,6 +101,7 @@ export interface EconomicIndicator {
   semanticPolarity: SemanticPolarity;
   isOfficialData?: boolean;
   officialCpiMeta?: OfficialCpiMetadata;
+  officialGdpMeta?: OfficialGdpMetadata;
   targetBand?: {
     min: number;
     max: number;

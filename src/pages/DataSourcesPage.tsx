@@ -76,10 +76,10 @@ export const DataSourcesPage: React.FC<DataSourcesPageProps> = ({ sources, theme
           <FileText className="w-5 h-5 text-emerald-400 shrink-0 mt-0.5" />
           <div className="space-y-1 text-xs leading-relaxed">
             <div className="font-semibold text-sm text-emerald-400">
-              Data Provenance Disclosure — Official MoSPI GDP, CPI &amp; PLFS + Official RBI Repo Rate
+              Data Provenance Disclosure — 5 Official Indicators (MoSPI GDP, CPI &amp; PLFS + RBI Repo + FBIL/RBI USD/INR)
             </div>
             <p>
-              <strong>Real GDP Growth (MoSPI Base 2022–23)</strong>, <strong>All-India Combined CPI Inflation (MoSPI Base 2024 = 100)</strong>, <strong>All-India Unemployment Rate (MoSPI Monthly PLFS, CWS Age 15+: 5.0% in Sep 2026)</strong>, and the <strong>RBI Policy Repo Rate (Official MPC: 5.50%, effective 07 Oct 2026)</strong> are powered by verified official datasets (<code className="font-mono-tabular">/data/mospi_gdp_official.csv</code>, <code className="font-mono-tabular">/data/mospi_cpi_official.csv</code>, <code className="font-mono-tabular">/data/mospi_plfs_official.csv</code>, and <code className="font-mono-tabular">/data/rbi_repo_official.csv</code>) with zero-code browser CSV updaters. The remaining 3 indicators use clearly labelled illustrative series.
+              <strong>Real GDP Growth (MoSPI Base 2022–23)</strong>, <strong>All-India Combined CPI Inflation (MoSPI Base 2024 = 100)</strong>, <strong>All-India Unemployment Rate (MoSPI Monthly PLFS, CWS Age 15+: 5.0%)</strong>, <strong>USD/INR Official Reference Rate (FBIL / RBI DBIE: ₹94.6986 per 1 USD on 22 Oct 2026)</strong>, and the <strong>RBI Policy Repo Rate (Official MPC: 5.50%)</strong> are powered by verified official datasets (<code className="font-mono-tabular">/data/mospi_gdp_official.csv</code>, <code className="font-mono-tabular">/data/mospi_cpi_official.csv</code>, <code className="font-mono-tabular">/data/mospi_plfs_official.csv</code>, <code className="font-mono-tabular">/data/rbi_fbil_usdinr_official.csv</code>, and <code className="font-mono-tabular">/data/rbi_repo_official.csv</code>) with zero-code browser CSV updaters.
             </p>
           </div>
         </div>
@@ -162,15 +162,26 @@ export const DataSourcesPage: React.FC<DataSourcesPageProps> = ({ sources, theme
                   </a>
                 )}
                 {src.id === 'rbi-dbie' && (
-                  <a
-                    href="https://www.rbi.org.in/Scripts/MPView.aspx"
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="inline-flex items-center gap-1.5 text-xs font-mono-tabular text-cyan-400 hover:text-cyan-300"
-                  >
-                    <span>RBI MPC Statements</span>
-                    <ExternalLink className="w-3.5 h-3.5" />
-                  </a>
+                  <>
+                    <a
+                      href="https://www.fbil.org.in/"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="inline-flex items-center gap-1.5 text-xs font-mono-tabular text-emerald-400 hover:text-emerald-300"
+                    >
+                      <span>FBIL Official (fbil.org.in)</span>
+                      <ExternalLink className="w-3.5 h-3.5" />
+                    </a>
+                    <a
+                      href="https://www.rbi.org.in/Scripts/MPView.aspx"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="inline-flex items-center gap-1.5 text-xs font-mono-tabular text-cyan-400 hover:text-cyan-300"
+                    >
+                      <span>RBI MPC Statements</span>
+                      <ExternalLink className="w-3.5 h-3.5" />
+                    </a>
+                  </>
                 )}
                 {src.id === 'plfs-mospi' && (
                   <a

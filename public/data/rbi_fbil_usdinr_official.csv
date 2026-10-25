@@ -1,0 +1,31 @@
+# Official USD/INR Reference Rate Dataset (INR per 1 USD)
+# Historical Archive: RBI Database on Indian Economy (DBIE) Table r691_daily_interbank_forex_rates_usd_vis_a_vis_inr (https://dbie.rbihub.in/tables?table=financial_markets.r691_daily_interbank_forex_rates_usd_vis_a_vis_inr)
+# Current Benchmark Administrator (since 10 July 2018): Financial Benchmarks India Pvt. Ltd. (FBIL) (https://www.fbil.org.in/)
+# RBI Official Website: https://www.rbi.org.in/
+# Disclaimer: Official daily benchmark reference rate (computed from 11:30 AM - 12:30 PM IST interbank spot window, published ~13:30 IST). Not a live tradable retail/interbank market quote.
+Observation_Date,Period_Label,USD_INR_Reference_Rate,Observation_Time_IST,Benchmark_Publisher,Archive_Source,Series_Type,Status,Note
+2017-03-31,31 Mar 2017,64.8386,13:30 IST,RBI (Pre-Jul 2018),RBI DBIE Archive,Reference Rate (INR per 1 USD),Final,FY 2016-17 End Official RBI Reference Rate
+2018-03-28,28 Mar 2018,65.0441,13:30 IST,RBI (Pre-Jul 2018),RBI DBIE Archive,Reference Rate (INR per 1 USD),Final,FY 2017-18 Last Working Day Official RBI Reference Rate (pre-FBIL transition)
+2018-07-10,10 Jul 2018,68.7905,13:30 IST,FBIL (Post-Jul 2018),FBIL / RBI DBIE,Reference Rate (INR per 1 USD),Final,FBIL formally assumed computation and dissemination of daily USD/INR reference rates from RBI
+2019-03-29,29 Mar 2019,69.1713,13:30 IST,FBIL (Post-Jul 2018),FBIL / RBI DBIE,Reference Rate (INR per 1 USD),Final,FY 2018-19 Last Working Day Official FBIL Reference Rate
+2020-03-31,31 Mar 2020,75.3911,13:30 IST,FBIL (Post-Jul 2018),FBIL / RBI DBIE,Reference Rate (INR per 1 USD),Final,FY 2019-20 End Official FBIL Reference Rate
+2021-03-31,31 Mar 2021,73.5047,13:30 IST,FBIL (Post-Jul 2018),FBIL / RBI DBIE,Reference Rate (INR per 1 USD),Final,FY 2020-21 End Official FBIL Reference Rate
+2022-03-31,31 Mar 2022,75.8071,13:30 IST,FBIL (Post-Jul 2018),FBIL / RBI DBIE,Reference Rate (INR per 1 USD),Final,FY 2021-22 End Official FBIL Reference Rate
+2023-03-31,31 Mar 2023,82.2169,13:30 IST,FBIL (Post-Jul 2018),FBIL / RBI DBIE,Reference Rate (INR per 1 USD),Final,FY 2022-23 End Official FBIL Reference Rate
+2024-03-28,28 Mar 2024,83.3739,13:30 IST,FBIL (Post-Jul 2018),FBIL / RBI DBIE,Reference Rate (INR per 1 USD),Final,FY 2023-24 Last Working Day Official FBIL Reference Rate
+2025-03-28,28 Mar 2025,85.5814,13:30 IST,FBIL (Post-Jul 2018),FBIL / RBI DBIE,Reference Rate (INR per 1 USD),Final,FY 2024-25 Last Working Day Official FBIL Reference Rate
+2025-10-31,31 Oct 2025,88.9250,13:30 IST,FBIL (Post-Jul 2018),FBIL / RBI DBIE,Reference Rate (INR per 1 USD),Final,Oct 2025 Month-End Official FBIL Reference Rate
+2026-03-30,30 Mar 2026,94.6543,13:30 IST,FBIL (Post-Jul 2018),FBIL / RBI DBIE,Reference Rate (INR per 1 USD),Final,FY 2025-26 Last Working Day Official FBIL Reference Rate (31 Mar 2026 Holiday)
+2026-08-17,17 Aug 2026,95.6019,13:30 IST,FBIL (Post-Jul 2018),FBIL / RBI DBIE,Reference Rate (INR per 1 USD),Final,Mid-Aug 2026 Official FBIL Reference Rate
+2026-08-31,31 Aug 2026,95.1100,13:30 IST,FBIL (Post-Jul 2018),FBIL / RBI DBIE,Reference Rate (INR per 1 USD),Final,Aug 2026 Month-End Official FBIL Reference Rate
+2026-09-22,22 Sep 2026,95.8179,13:30 IST,FBIL (Post-Jul 2018),FBIL / RBI DBIE,Reference Rate (INR per 1 USD),Final,Daily Official FBIL Reference Rate
+2026-09-25,25 Sep 2026,95.8918,13:30 IST,FBIL (Post-Jul 2018),FBIL / RBI DBIE,Reference Rate (INR per 1 USD),Final,Daily Official FBIL Reference Rate
+2026-09-29,29 Sep 2026,96.0321,13:30 IST,FBIL (Post-Jul 2018),FBIL / RBI DBIE,Reference Rate (INR per 1 USD),Final,Daily Official FBIL Reference Rate
+2026-09-30,30 Sep 2026,95.9832,13:30 IST,FBIL (Post-Jul 2018),FBIL / RBI DBIE,Reference Rate (INR per 1 USD),Final,Sep 2026 Month-End Official FBIL Reference Rate
+2026-10-01,01 Oct 2026,95.9927,13:30 IST,FBIL (Post-Jul 2018),FBIL / RBI DBIE,Reference Rate (INR per 1 USD),Final,Daily Official FBIL Reference Rate
+2026-10-12,12 Oct 2026,95.7485,13:30 IST,FBIL (Post-Jul 2018),FBIL / RBI DBIE,Reference Rate (INR per 1 USD),Final,Daily Official FBIL Reference Rate
+2026-10-15,15 Oct 2026,95.0691,13:30 IST,FBIL (Post-Jul 2018),FBIL / RBI DBIE,Reference Rate (INR per 1 USD),Final,Daily Official FBIL Reference Rate
+2026-10-16,16 Oct 2026,95.0194,13:30 IST,FBIL (Post-Jul 2018),FBIL / RBI DBIE,Reference Rate (INR per 1 USD),Final,Daily Official FBIL Reference Rate
+2026-10-19,19 Oct 2026,94.7691,13:30 IST,FBIL (Post-Jul 2018),FBIL / RBI DBIE,Reference Rate (INR per 1 USD),Final,Daily Official FBIL Reference Rate
+2026-10-21,21 Oct 2026,94.7145,13:30 IST,FBIL (Post-Jul 2018),FBIL / RBI DBIE,Reference Rate (INR per 1 USD),Final,Previous Verified Daily Official FBIL Reference Rate
+2026-10-22,22 Oct 2026,94.6986,13:30 IST,FBIL (Post-Jul 2018),FBIL / RBI DBIE,Reference Rate (INR per 1 USD),Final,Latest Verified Daily Official FBIL Reference Rate

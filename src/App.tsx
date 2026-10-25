@@ -32,6 +32,11 @@ import {
   loadOfficialPlfsData,
   saveUserUploadedPlfsCsv,
 } from './services/plfsDataService';
+import {
+  clearUserUploadedUsdInrCsv,
+  loadOfficialUsdInrData,
+  saveUserUploadedUsdInrCsv,
+} from './services/usdInrDataService';
 import { EconomicIndicator, PageId } from './types/economy';
 import { Sidebar } from './components/navigation/Sidebar';
 import { TopBar } from './components/navigation/TopBar';
@@ -88,6 +93,18 @@ export default function App() {
   const [plfsDataOrigin, setPlfsDataOrigin] = useState<
     'official_mospi_csv' | 'user_uploaded_csv' | 'demonstration_fallback'
   >('official_mospi_csv');
+
+  // Official FBIL / RBI DBIE USD/INR Reference Rate State (kept separate from UI components via usdInrDataService)
+  const [officialUsdInrIndicator, setOfficialUsdInrIndicator] = useState<EconomicIndicator | null>(
+    null
+  );
+  const [usdInrLoading, setUsdInrLoading] = useState<boolean>(true);
+  const [usdInrError, setUsdInrError] = useState<string | null>(null);
+  const [usdInrEmpty, setUsdInrEmpty] = useState<boolean>(false);
+  const [usdInrRetrievalTimestamp, setUsdInrRetrievalTimestamp] = useState<string>('Verifying...');
+  const [usdInrDataOrigin, setUsdInrDataOrigin] = useState<
+    'official_rbi_fbil_csv' | 'user_uploaded_csv' | 'demonstration_fallback'
+  >('official_rbi_fbil_csv');
 
   const baseIndicators = useMemo(() => getIndicatorsSync(), []);
   const sources = useMemo(() => getDataSourcesSync(), []);
@@ -162,16 +179,44 @@ export default function App() {
     setPlfsLoading(false);
   }, []);
 
+  const handleFetchOfficialUsdInr = useCallback(
+    async (options?: { simulateError?: boolean; simulateEmpty?: boolean }) => {
+      setUsdInrLoading(true);
+      setUsdInrError(null);
+      setUsdInrEmpty(false);
+      const result = await loadOfficialUsdInrData(options);
+      setUsdInrRetrievalTimestamp(result.retrievalTimestamp);
+      setUsdInrDataOrigin(result.dataOrigin);
+      if (result.status === 'success' && result.indicator) {
+        setOfficialUsdInrIndicator(result.indicator);
+        setUsdInrError(null);
+        setUsdInrEmpty(false);
+      } else if (result.status === 'empty') {
+        setUsdInrEmpty(true);
+        setUsdInrError(null);
+      } else {
+        setUsdInrError(
+          result.errorMessage ||
+            'Failed to load official RBI DBIE / FBIL USD/INR Reference Rate dataset.'
+        );
+      }
+      setUsdInrLoading(false);
+    },
+    []
+  );
+
   useEffect(() => {
     handleFetchOfficialCpi(false);
     handleFetchOfficialGdp(false);
     handleFetchOfficialRepo(false);
     handleFetchOfficialPlfs(false);
+    handleFetchOfficialUsdInr({ simulateError: false, simulateEmpty: false });
   }, [
     handleFetchOfficialCpi,
     handleFetchOfficialGdp,
     handleFetchOfficialRepo,
     handleFetchOfficialPlfs,
+    handleFetchOfficialUsdInr,
   ]);
 
   const handleUploadCustomCsv = useCallback((csvText: string) => {
@@ -362,13 +407,66 @@ export default function App() {
     );
   }, [baseIndicators]);
 
-  // Merge official MoSPI GDP, CPI, PLFS Unemployment, and RBI Repo Rate indicators into the global indicator list
+  const handleUploadCustomUsdInrCsv = useCallback((csvText: string) => {
+    try {
+      const updated = saveUserUploadedUsdInrCsv(csvText);
+      setOfficialUsdInrIndicator(updated);
+      setUsdInrError(null);
+      setUsdInrEmpty(false);
+      setUsdInrDataOrigin('user_uploaded_csv');
+      setUsdInrRetrievalTimestamp(
+        new Date().toLocaleString('en-IN', {
+          day: '2-digit',
+          month: 'short',
+          year: 'numeric',
+          hour: '2-digit',
+          minute: '2-digit',
+          second: '2-digit',
+        })
+      );
+      return { ok: true };
+    } catch (err: any) {
+      return {
+        ok: false,
+        error: err?.message || 'Invalid RBI/FBIL USD/INR CSV format.',
+      };
+    }
+  }, []);
+
+  const handleResetCustomUsdInrCsv = useCallback(() => {
+    clearUserUploadedUsdInrCsv();
+    handleFetchOfficialUsdInr({ simulateError: false, simulateEmpty: false });
+  }, [handleFetchOfficialUsdInr]);
+
+  const handleActivateUsdInrDemoFallback = useCallback(() => {
+    const demoFallback =
+      baseIndicators.find((i) => i.id === 'usd-inr') || baseIndicators[3];
+    setOfficialUsdInrIndicator({
+      ...demoFallback,
+      name: 'USD / INR Exchange Rate (Labelled Demonstration Fallback)',
+      shortName: 'USD / INR (Demo Fallback)',
+      sourceShortName: 'RBI / FBIL (Demo Fallback)',
+      isOfficialData: false,
+    });
+    setUsdInrError(null);
+    setUsdInrEmpty(false);
+    setUsdInrDataOrigin('demonstration_fallback');
+    setUsdInrRetrievalTimestamp(
+      `${new Date().toLocaleTimeString('en-IN', {
+        hour: '2-digit',
+        minute: '2-digit',
+      })} (Demo State)`
+    );
+  }, [baseIndicators]);
+
+  // Merge official MoSPI GDP, CPI, PLFS Unemployment, FBIL/RBI USD/INR, and RBI Repo Rate indicators into the global indicator list
   const indicators = useMemo(() => {
     return baseIndicators.map((ind) => {
       if (ind.id === 'gdp-growth' && officialGdpIndicator) return officialGdpIndicator;
       if (ind.id === 'cpi-inflation' && officialCpiIndicator) return officialCpiIndicator;
       if (ind.id === 'rbi-repo-rate' && officialRepoIndicator) return officialRepoIndicator;
       if (ind.id === 'unemployment-rate' && officialPlfsIndicator) return officialPlfsIndicator;
+      if (ind.id === 'usd-inr' && officialUsdInrIndicator) return officialUsdInrIndicator;
       return ind;
     });
   }, [
@@ -377,6 +475,7 @@ export default function App() {
     officialCpiIndicator,
     officialRepoIndicator,
     officialPlfsIndicator,
+    officialUsdInrIndicator,
   ]);
 
   useEffect(() => {
@@ -454,6 +553,11 @@ export default function App() {
             plfsLoading={plfsLoading}
             plfsError={plfsError}
             onRetryPlfs={() => handleFetchOfficialPlfs(false)}
+            usdInrLoading={usdInrLoading}
+            usdInrError={usdInrError}
+            onRetryUsdInr={() =>
+              handleFetchOfficialUsdInr({ simulateError: false, simulateEmpty: false })
+            }
           />
         );
       case 'gdp-growth':
@@ -508,6 +612,15 @@ export default function App() {
             inrIndicator={inrIndicator}
             crudeIndicator={crudeIndicator}
             allIndicators={indicators}
+            usdInrLoading={usdInrLoading}
+            usdInrError={usdInrError}
+            usdInrEmpty={usdInrEmpty}
+            usdInrRetrievalTimestamp={usdInrRetrievalTimestamp}
+            usdInrDataOrigin={usdInrDataOrigin}
+            onRefreshOfficialUsdInr={handleFetchOfficialUsdInr}
+            onUploadCustomUsdInrCsv={handleUploadCustomUsdInrCsv}
+            onResetCustomUsdInrCsv={handleResetCustomUsdInrCsv}
+            onActivateUsdInrDemoFallback={handleActivateUsdInrDemoFallback}
             theme={theme}
           />
         );
@@ -585,7 +698,7 @@ export default function App() {
           <div>
             <span className="font-semibold text-emerald-400">Data Provenance: </span>
             <span>
-              <strong>Real GDP</strong> (Q1 FY27: <strong className="font-mono-tabular text-emerald-400">7.8%</strong>), <strong>CPI Inflation</strong> (Sep 2026: <strong className="font-mono-tabular text-emerald-400">5.54%</strong>), <strong>PLFS Unemployment</strong> (Sep 2026 CWS 15+: <strong className="font-mono-tabular text-emerald-400">5.0%</strong>), &amp; <strong>RBI Repo Rate</strong> (<strong className="font-mono-tabular text-emerald-400">5.50%</strong>) use official data.
+              <strong>Real GDP</strong> (<strong className="font-mono-tabular text-emerald-400">7.8%</strong>), <strong>CPI</strong> (<strong className="font-mono-tabular text-emerald-400">5.54%</strong>), <strong>PLFS UR</strong> (<strong className="font-mono-tabular text-emerald-400">5.0%</strong>), <strong>USD/INR Ref</strong> (<strong className="font-mono-tabular text-emerald-400">₹94.6986</strong>), &amp; <strong>RBI Repo</strong> (<strong className="font-mono-tabular text-emerald-400">5.50%</strong>) use official data.
             </span>
           </div>
           <div className="flex flex-wrap items-center gap-3 self-start sm:self-auto shrink-0">
@@ -609,6 +722,13 @@ export default function App() {
               className="text-emerald-300 hover:underline font-medium cursor-pointer whitespace-nowrap"
             >
               MoSPI PLFS →
+            </button>
+            <button
+              type="button"
+              onClick={() => handleSelectPage('currency-oil', 'usd-inr')}
+              className="text-amber-300 hover:underline font-medium cursor-pointer whitespace-nowrap"
+            >
+              FBIL USD/INR →
             </button>
             <button
               type="button"

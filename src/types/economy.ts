@@ -53,6 +53,10 @@ export interface ObservationPoint {
   lfprCwsPct?: number; // e.g. 55.5 (Labour Force Participation Rate CWS %, kept distinct from UR)
   wprCwsPct?: number; // e.g. 52.7 (Worker Population Ratio CWS %, kept distinct from UR)
   surveyMeasure?: string; // e.g. "Current Weekly Status (CWS) · Age 15+"
+  observationTimeIst?: string; // e.g. "13:30 IST"
+  benchmarkPublisher?: string; // e.g. "FBIL (Post-Jul 2018)" or "RBI (Pre-Jul 2018)"
+  archiveSource?: string; // e.g. "FBIL / RBI DBIE"
+  exactRate4Dec?: number; // e.g. 94.6986
   status: 'Final' | 'Revised' | 'Provisional';
   note?: string;
 }
@@ -127,6 +131,30 @@ export interface OfficialPlfsMetadata {
   lastVerifiedTimestamp: string;
 }
 
+export interface OfficialUsdInrMetadata {
+  isOfficialData: boolean;
+  dataOrigin: 'official_rbi_fbil_csv' | 'user_uploaded_csv' | 'demonstration_fallback';
+  latestRateInrPerUsd: number;
+  previousRateInrPerUsd: number;
+  absoluteChangeInr: number;
+  percentageChangePct: number;
+  observationDate: string;
+  observationDateIso: string;
+  observationTimeIst: string;
+  previousObservationDate: string;
+  retrievalTimestamp: string;
+  isStaleOrLagging: boolean;
+  stalenessAgeDays: number;
+  stalenessMessage: string;
+  currentBenchmarkPublisher: string;
+  historicalDatabaseName: string;
+  july2018TransitionNote: string;
+  nonTradableQuoteDisclaimer: string;
+  rbiDbieTableUrl: string;
+  fbilOfficialUrl: string;
+  rbiOfficialUrl: string;
+}
+
 export interface EconomicIndicator {
   id: string;
   name: string;
@@ -150,6 +178,7 @@ export interface EconomicIndicator {
   officialGdpMeta?: OfficialGdpMetadata;
   officialRepoMeta?: OfficialRepoMetadata;
   officialPlfsMeta?: OfficialPlfsMetadata;
+  officialUsdInrMeta?: OfficialUsdInrMetadata;
   targetBand?: {
     min: number;
     max: number;

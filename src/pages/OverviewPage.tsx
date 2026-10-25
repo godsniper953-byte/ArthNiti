@@ -45,6 +45,9 @@ interface OverviewPageProps {
   plfsLoading?: boolean;
   plfsError?: string | null;
   onRetryPlfs?: () => void;
+  usdInrLoading?: boolean;
+  usdInrError?: string | null;
+  onRetryUsdInr?: () => void;
 }
 
 export const OverviewPage: React.FC<OverviewPageProps> = ({
@@ -65,6 +68,9 @@ export const OverviewPage: React.FC<OverviewPageProps> = ({
   plfsLoading = false,
   plfsError = null,
   onRetryPlfs,
+  usdInrLoading = false,
+  usdInrError = null,
+  onRetryUsdInr,
 }) => {
   const kpiSectionRef = useRef<HTMLDivElement | null>(null);
 
@@ -168,19 +174,19 @@ export const OverviewPage: React.FC<OverviewPageProps> = ({
                 <div>
                   <div className="text-slate-400 text-[11px]">Primary Sources</div>
                   <div className="font-mono-tabular font-semibold mt-0.5">
-                    MoSPI · RBI · PPAC
+                    MoSPI · RBI · FBIL
                   </div>
                 </div>
                 <div>
-                  <div className="text-slate-400 text-[11px]">Official Series</div>
+                  <div className="text-slate-400 text-[11px]">Official Series (5)</div>
                   <div className="font-mono-tabular font-semibold text-emerald-400 mt-0.5">
-                    GDP · CPI · PLFS · Repo
+                    GDP · CPI · PLFS · Repo · INR
                   </div>
                 </div>
                 <div>
                   <div className="text-slate-400 text-[11px]">Latest Official Releases</div>
                   <div className="font-mono-tabular font-semibold mt-0.5">
-                    15 Oct · 12 Oct · 07 Oct
+                    22 Oct · 15 Oct · 12 Oct
                   </div>
                 </div>
               </div>
@@ -221,7 +227,7 @@ export const OverviewPage: React.FC<OverviewPageProps> = ({
             </h2>
           </div>
           <p className="text-xs text-slate-400">
-            Real GDP Growth, CPI Inflation, Unemployment Rate (PLFS), and RBI Repo Rate display official data; remaining 2 cards show labelled illustrative series.
+            Real GDP Growth, CPI Inflation, Unemployment Rate (PLFS), USD/INR Reference Rate (FBIL/RBI), and RBI Repo Rate display official data; Crude Oil shows a labelled illustrative series.
           </p>
         </div>
 
@@ -246,6 +252,8 @@ export const OverviewPage: React.FC<OverviewPageProps> = ({
                     ? repoLoading
                     : ind.id === 'unemployment-rate'
                     ? plfsLoading
+                    : ind.id === 'usd-inr'
+                    ? usdInrLoading
                     : false
                 }
                 errorMessage={
@@ -257,6 +265,8 @@ export const OverviewPage: React.FC<OverviewPageProps> = ({
                     ? repoError
                     : ind.id === 'unemployment-rate'
                     ? plfsError
+                    : ind.id === 'usd-inr'
+                    ? usdInrError
                     : null
                 }
                 onRetryFetch={
@@ -268,6 +278,8 @@ export const OverviewPage: React.FC<OverviewPageProps> = ({
                     ? onRetryRepo
                     : ind.id === 'unemployment-rate'
                     ? onRetryPlfs
+                    : ind.id === 'usd-inr'
+                    ? onRetryUsdInr
                     : undefined
                 }
               />

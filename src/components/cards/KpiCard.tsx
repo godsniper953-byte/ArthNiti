@@ -220,6 +220,9 @@ export const KpiCard: React.FC<KpiCardProps> = ({
     if (indicator.unitGroup === 'equity_index') {
       return Math.round(displayedValue).toLocaleString('en-IN');
     }
+    if (indicator.id === 'usd-inr' && indicator.isOfficialData) {
+      return displayedValue.toFixed(4);
+    }
     if (
       indicator.id === 'usd-inr' ||
       indicator.id === 'cpi-inflation' ||
@@ -267,6 +270,8 @@ export const KpiCard: React.FC<KpiCardProps> = ({
                 ? `Base ${indicator.officialGdpMeta.activeBaseYear}`
                 : indicator.officialPlfsMeta
                 ? 'CWS · Age 15+'
+                : indicator.officialUsdInrMeta
+                ? 'FBIL Ref Rate (Not Live Quote)'
                 : `Base ${indicator.officialCpiMeta?.activeBaseYear || '2024=100'}`
               : indicator.frequency}
           </span>
@@ -343,6 +348,8 @@ export const KpiCard: React.FC<KpiCardProps> = ({
             ? ` · SDF ${indicator.officialRepoMeta.sdfRate.toFixed(2)}%`
             : indicator.isOfficialData && indicator.officialPlfsMeta
             ? ` · R:${indicator.officialPlfsMeta.ruralUrPct.toFixed(1)}% U:${indicator.officialPlfsMeta.urbanUrPct.toFixed(1)}%`
+            : indicator.isOfficialData && indicator.officialUsdInrMeta
+            ? ` · Prev ₹${indicator.officialUsdInrMeta.previousRateInrPerUsd.toFixed(4)}`
             : ''}
         </span>
         <span className={semantic.colorClass}>{semantic.label}</span>

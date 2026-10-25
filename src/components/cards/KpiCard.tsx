@@ -104,7 +104,7 @@ export const KpiCard: React.FC<KpiCardProps> = ({
             onClick={() => onSelectPage(indicator.pageId, indicator.id)}
             className="text-xs text-amber-400 hover:underline cursor-pointer"
           >
-            Open Inflation Page →
+            Inspect Indicator Page →
           </button>
           {onRetryFetch && (
             <button
@@ -261,7 +261,11 @@ export const KpiCard: React.FC<KpiCardProps> = ({
           <span aria-hidden="true">·</span>
           <span>
             {indicator.isOfficialData
-              ? `Base ${indicator.officialCpiMeta?.activeBaseYear || '2024=100'}`
+              ? indicator.officialRepoMeta
+                ? `MPC (${indicator.officialRepoMeta.policyStance})`
+                : indicator.officialGdpMeta
+                ? `Base ${indicator.officialGdpMeta.activeBaseYear}`
+                : `Base ${indicator.officialCpiMeta?.activeBaseYear || '2024=100'}`
               : indicator.frequency}
           </span>
         </div>
@@ -333,6 +337,8 @@ export const KpiCard: React.FC<KpiCardProps> = ({
           {indicator.reportingPeriod}
           {indicator.isOfficialData && indicator.officialCpiMeta
             ? ` · Idx ${indicator.officialCpiMeta.latestGeneralIndex}`
+            : indicator.isOfficialData && indicator.officialRepoMeta
+            ? ` · SDF ${indicator.officialRepoMeta.sdfRate.toFixed(2)}%`
             : ''}
         </span>
         <span className={semantic.colorClass}>{semantic.label}</span>

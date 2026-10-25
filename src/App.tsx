@@ -22,6 +22,11 @@ import {
   loadOfficialGdpData,
   saveUserUploadedGdpCsv,
 } from './services/gdpDataService';
+import {
+  clearUserUploadedRepoCsv,
+  loadOfficialRepoData,
+  saveUserUploadedRepoCsv,
+} from './services/repoDataService';
 import { EconomicIndicator, PageId } from './types/economy';
 import { Sidebar } from './components/navigation/Sidebar';
 import { TopBar } from './components/navigation/TopBar';
@@ -60,6 +65,15 @@ export default function App() {
   const [gdpDataOrigin, setGdpDataOrigin] = useState<
     'official_mospi_csv' | 'user_uploaded_csv' | 'demonstration_fallback'
   >('official_mospi_csv');
+
+  // Official RBI Policy Repo Rate State (kept separate from UI components via repoDataService)
+  const [officialRepoIndicator, setOfficialRepoIndicator] = useState<EconomicIndicator | null>(null);
+  const [repoLoading, setRepoLoading] = useState<boolean>(true);
+  const [repoError, setRepoError] = useState<string | null>(null);
+  const [repoLastVerified, setRepoLastVerified] = useState<string>('Verifying...');
+  const [repoDataOrigin, setRepoDataOrigin] = useState<
+    'official_rbi_csv' | 'user_uploaded_csv' | 'demonstration_fallback'
+  >('official_rbi_csv');
 
   const baseIndicators = useMemo(() => getIndicatorsSync(), []);
   const sources = useMemo(() => getDataSourcesSync(), []);
@@ -100,10 +114,28 @@ export default function App() {
     setGdpLoading(false);
   }, []);
 
+  const handleFetchOfficialRepo = useCallback(async (simulateError = false) => {
+    setRepoLoading(true);
+    setRepoError(null);
+    const result = await loadOfficialRepoData({ simulateError });
+    setRepoLastVerified(result.lastVerified);
+    setRepoDataOrigin(result.dataOrigin);
+    if (result.status === 'success' && result.indicator) {
+      setOfficialRepoIndicator(result.indicator);
+      setRepoError(null);
+    } else {
+      setRepoError(
+        result.errorMessage || 'Failed to load official RBI Policy Repo Rate dataset.'
+      );
+    }
+    setRepoLoading(false);
+  }, []);
+
   useEffect(() => {
     handleFetchOfficialCpi(false);
     handleFetchOfficialGdp(false);
-  }, [handleFetchOfficialCpi, handleFetchOfficialGdp]);
+    handleFetchOfficialRepo(false);
+  }, [handleFetchOfficialCpi, handleFetchOfficialGdp, handleFetchOfficialRepo]);
 
   const handleUploadCustomCsv = useCallback((csvText: string) => {
     try {
@@ -199,14 +231,62 @@ export default function App() {
     );
   }, [baseIndicators]);
 
-  // Merge official MoSPI GDP and CPI indicators into the global indicator list
+  const handleUploadCustomRepoCsv = useCallback((csvText: string) => {
+    try {
+      const updated = saveUserUploadedRepoCsv(csvText);
+      setOfficialRepoIndicator(updated);
+      setRepoError(null);
+      setRepoDataOrigin('user_uploaded_csv');
+      setRepoLastVerified(
+        new Date().toLocaleTimeString('en-IN', {
+          hour: '2-digit',
+          minute: '2-digit',
+          second: '2-digit',
+        })
+      );
+      return { ok: true };
+    } catch (err: any) {
+      return {
+        ok: false,
+        error: err?.message || 'Invalid RBI Repo CSV format.',
+      };
+    }
+  }, []);
+
+  const handleResetCustomRepoCsv = useCallback(() => {
+    clearUserUploadedRepoCsv();
+    handleFetchOfficialRepo(false);
+  }, [handleFetchOfficialRepo]);
+
+  const handleActivateRepoDemoFallback = useCallback(() => {
+    const demoFallback =
+      baseIndicators.find((i) => i.id === 'rbi-repo-rate') || baseIndicators[5];
+    setOfficialRepoIndicator({
+      ...demoFallback,
+      name: 'RBI Policy Repo Rate (Labelled Demonstration Fallback)',
+      shortName: 'RBI Repo Rate (Demo Fallback)',
+      sourceShortName: 'RBI (Demo Fallback)',
+      isOfficialData: false,
+    });
+    setRepoError(null);
+    setRepoDataOrigin('demonstration_fallback');
+    setRepoLastVerified(
+      `${new Date().toLocaleTimeString('en-IN', {
+        hour: '2-digit',
+        minute: '2-digit',
+      })} (Demo State)`
+    );
+  }, [baseIndicators]);
+
+  // Merge official MoSPI GDP, CPI, and RBI Repo Rate indicators into the global indicator list
   const indicators = useMemo(() => {
     return baseIndicators.map((ind) => {
       if (ind.id === 'gdp-growth' && officialGdpIndicator) return officialGdpIndicator;
       if (ind.id === 'cpi-inflation' && officialCpiIndicator) return officialCpiIndicator;
+      if (ind.id === 'rbi-repo-rate' && officialRepoIndicator) return officialRepoIndicator;
       return ind;
     });
-  }, [baseIndicators, officialGdpIndicator, officialCpiIndicator]);
+  }, [baseIndicators, officialGdpIndicator, officialCpiIndicator, officialRepoIndicator]);
 
   useEffect(() => {
     const htmlEl = document.documentElement;
@@ -277,6 +357,9 @@ export default function App() {
             gdpLoading={gdpLoading}
             gdpError={gdpError}
             onRetryGdp={() => handleFetchOfficialGdp(false)}
+            repoLoading={repoLoading}
+            repoError={repoError}
+            onRetryRepo={() => handleFetchOfficialRepo(false)}
           />
         );
       case 'gdp-growth':
@@ -326,6 +409,14 @@ export default function App() {
           <FinancialMarketsPage
             marketIndicator={niftyIndicator}
             repoIndicator={repoIndicator}
+            repoLoading={repoLoading}
+            repoError={repoError}
+            repoLastVerified={repoLastVerified}
+            repoDataOrigin={repoDataOrigin}
+            onRefreshOfficialRepo={(simErr) => handleFetchOfficialRepo(Boolean(simErr))}
+            onUploadCustomRepoCsv={handleUploadCustomRepoCsv}
+            onResetCustomRepoCsv={handleResetCustomRepoCsv}
+            onActivateRepoDemoFallback={handleActivateRepoDemoFallback}
             theme={theme}
           />
         );
@@ -387,23 +478,30 @@ export default function App() {
           <div>
             <span className="font-semibold text-emerald-400">Data Provenance: </span>
             <span>
-              <strong>Real GDP Growth</strong> (<code className="font-mono-tabular">Base 2022–23</code>, Q1 FY27: <strong className="font-mono-tabular text-emerald-400">7.8% YoY</strong>) &amp; <strong>CPI Inflation</strong> (<code className="font-mono-tabular">Base 2024=100</code>, Sep 2026: <strong className="font-mono-tabular text-emerald-400">5.54% YoY</strong>) use official MoSPI data. Other indicators display clearly labelled illustrative series.
+              <strong>Real GDP Growth</strong> (<code className="font-mono-tabular">Base 2022–23</code>, Q1 FY27: <strong className="font-mono-tabular text-emerald-400">7.8% YoY</strong>), <strong>CPI Inflation</strong> (<code className="font-mono-tabular">Base 2024=100</code>, Sep 2026: <strong className="font-mono-tabular text-emerald-400">5.54% YoY</strong>), &amp; <strong>RBI Repo Rate</strong> (07 Oct 2026 MPC: <strong className="font-mono-tabular text-emerald-400">5.50%</strong>) use official data.
             </span>
           </div>
-          <div className="flex items-center gap-3 self-start sm:self-auto shrink-0">
+          <div className="flex flex-wrap items-center gap-3 self-start sm:self-auto shrink-0">
             <button
               type="button"
               onClick={() => handleSelectPage('gdp-growth', 'gdp-growth')}
               className="text-emerald-400 hover:underline font-medium cursor-pointer whitespace-nowrap"
             >
-              Inspect MoSPI GDP →
+              MoSPI GDP →
             </button>
             <button
               type="button"
               onClick={() => handleSelectPage('inflation', 'cpi-inflation')}
               className="text-amber-400 hover:underline font-medium cursor-pointer whitespace-nowrap"
             >
-              Inspect MoSPI CPI →
+              MoSPI CPI →
+            </button>
+            <button
+              type="button"
+              onClick={() => handleSelectPage('financial-markets', 'rbi-repo-rate')}
+              className="text-cyan-400 hover:underline font-medium cursor-pointer whitespace-nowrap"
+            >
+              RBI Repo →
             </button>
           </div>
         </div>

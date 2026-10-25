@@ -76,10 +76,10 @@ export const DataSourcesPage: React.FC<DataSourcesPageProps> = ({ sources, theme
           <FileText className="w-5 h-5 text-emerald-400 shrink-0 mt-0.5" />
           <div className="space-y-1 text-xs leading-relaxed">
             <div className="font-semibold text-sm text-emerald-400">
-              Data Provenance Disclosure — Official MoSPI GDP &amp; CPI + Illustrative Macro Series
+              Data Provenance Disclosure — Official MoSPI GDP &amp; CPI + Official RBI Repo Rate
             </div>
             <p>
-              <strong>Real GDP Growth (Base Year 2022–23, Constant Prices)</strong> and <strong>All-India Combined CPI Inflation (Base Year 2024 = 100)</strong> are powered by official MoSPI National Statistical Office (NSO) datasets (<code className="font-mono-tabular">/data/mospi_gdp_official.csv</code> and <code className="font-mono-tabular">/data/mospi_cpi_official.csv</code>) with zero-code browser CSV updaters. The remaining 5 indicators use clearly labelled illustrative series modeled on RBI DBIE, PLFS, PPAC, and NSE historical data.
+              <strong>Real GDP Growth (MoSPI Base 2022–23)</strong>, <strong>All-India Combined CPI Inflation (MoSPI Base 2024 = 100)</strong>, and the <strong>RBI Policy Repo Rate (Official MPC: 5.50%, effective 07 Oct 2026)</strong> are powered by verified official datasets (<code className="font-mono-tabular">/data/mospi_gdp_official.csv</code>, <code className="font-mono-tabular">/data/mospi_cpi_official.csv</code>, and <code className="font-mono-tabular">/data/rbi_repo_official.csv</code>) with zero-code browser CSV updaters. The remaining 4 indicators use clearly labelled illustrative series.
             </p>
           </div>
         </div>
@@ -146,7 +146,7 @@ export const DataSourcesPage: React.FC<DataSourcesPageProps> = ({ sources, theme
                     rel="noopener noreferrer"
                     className="inline-flex items-center gap-1.5 text-xs font-mono-tabular text-emerald-500 hover:text-emerald-400"
                   >
-                    <span>eSankhyiki Catalogue</span>
+                    <span>{src.id === 'rbi-dbie' ? 'RBI DBIE Portal' : 'eSankhyiki Catalogue'}</span>
                     <ExternalLink className="w-3.5 h-3.5" />
                   </a>
                 )}
@@ -158,6 +158,17 @@ export const DataSourcesPage: React.FC<DataSourcesPageProps> = ({ sources, theme
                     className="inline-flex items-center gap-1.5 text-xs font-mono-tabular text-cyan-400 hover:text-cyan-300"
                   >
                     <span>MoSPI Methodology FAQ</span>
+                    <ExternalLink className="w-3.5 h-3.5" />
+                  </a>
+                )}
+                {src.id === 'rbi-dbie' && (
+                  <a
+                    href="https://www.rbi.org.in/Scripts/MPView.aspx"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex items-center gap-1.5 text-xs font-mono-tabular text-cyan-400 hover:text-cyan-300"
+                  >
+                    <span>RBI MPC Statements</span>
                     <ExternalLink className="w-3.5 h-3.5" />
                   </a>
                 )}

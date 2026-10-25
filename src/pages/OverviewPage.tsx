@@ -39,6 +39,9 @@ interface OverviewPageProps {
   gdpLoading?: boolean;
   gdpError?: string | null;
   onRetryGdp?: () => void;
+  repoLoading?: boolean;
+  repoError?: string | null;
+  onRetryRepo?: () => void;
 }
 
 export const OverviewPage: React.FC<OverviewPageProps> = ({
@@ -53,6 +56,9 @@ export const OverviewPage: React.FC<OverviewPageProps> = ({
   gdpLoading = false,
   gdpError = null,
   onRetryGdp,
+  repoLoading = false,
+  repoError = null,
+  onRetryRepo,
 }) => {
   const kpiSectionRef = useRef<HTMLDivElement | null>(null);
 
@@ -95,7 +101,7 @@ export const OverviewPage: React.FC<OverviewPageProps> = ({
                   ARTHNITI — INDIAN ECONOMIC INTELLIGENCE
                 </span>
                 <span aria-hidden="true">·</span>
-                <span>Official MoSPI GDP &amp; CPI + Macro Series</span>
+                <span>Official MoSPI GDP &amp; CPI + Official RBI Repo Rate</span>
               </div>
 
               {/* Large ARTHNITI Wordmark & Tagline */}
@@ -160,15 +166,15 @@ export const OverviewPage: React.FC<OverviewPageProps> = ({
                   </div>
                 </div>
                 <div>
-                  <div className="text-slate-400 text-[11px]">Official MoSPI Series</div>
+                  <div className="text-slate-400 text-[11px]">Official Series</div>
                   <div className="font-mono-tabular font-semibold text-emerald-400 mt-0.5">
-                    GDP (2022–23) · CPI (2024=100)
+                    GDP · CPI · RBI Repo
                   </div>
                 </div>
                 <div>
                   <div className="text-slate-400 text-[11px]">Latest Official Releases</div>
                   <div className="font-mono-tabular font-semibold mt-0.5">
-                    Q1 FY27 GDP · Sep 2026 CPI
+                    Q1 FY27 · Sep 26 · 07 Oct 26
                   </div>
                 </div>
               </div>
@@ -209,7 +215,7 @@ export const OverviewPage: React.FC<OverviewPageProps> = ({
             </h2>
           </div>
           <p className="text-xs text-slate-400">
-            Real GDP Growth and CPI Inflation display official MoSPI data; remaining 4 cards show clearly labelled illustrative series.
+            Real GDP Growth, CPI Inflation, and RBI Repo Rate display official data; remaining 3 cards show labelled illustrative series.
           </p>
         </div>
 
@@ -230,6 +236,8 @@ export const OverviewPage: React.FC<OverviewPageProps> = ({
                     ? cpiLoading
                     : ind.id === 'gdp-growth'
                     ? gdpLoading
+                    : ind.id === 'rbi-repo-rate'
+                    ? repoLoading
                     : false
                 }
                 errorMessage={
@@ -237,6 +245,8 @@ export const OverviewPage: React.FC<OverviewPageProps> = ({
                     ? cpiError
                     : ind.id === 'gdp-growth'
                     ? gdpError
+                    : ind.id === 'rbi-repo-rate'
+                    ? repoError
                     : null
                 }
                 onRetryFetch={
@@ -244,6 +254,8 @@ export const OverviewPage: React.FC<OverviewPageProps> = ({
                     ? onRetryCpi
                     : ind.id === 'gdp-growth'
                     ? onRetryGdp
+                    : ind.id === 'rbi-repo-rate'
+                    ? onRetryRepo
                     : undefined
                 }
               />
@@ -333,7 +345,7 @@ export const OverviewPage: React.FC<OverviewPageProps> = ({
                   <strong className={theme === 'dark' ? 'text-slate-100' : 'text-slate-900'}>
                     3. Monetary-Inflation Alignment:
                   </strong>{' '}
-                  With official All-India Combined CPI at {cpiIndicator.currentValue}% YoY (Base 2024=100)—inside the RBI&apos;s 2%–6% mandate—the policy repo rate at 5.75% maintains positive real interest rates.
+                  With official All-India Combined CPI at {cpiIndicator.currentValue}% YoY (Base 2024=100), the RBI MPC increased the policy repo rate by 25 bps to 5.50% on October 7, 2026 under a &ldquo;Calibrated Tightening&rdquo; stance.
                 </p>
               </div>
             </div>

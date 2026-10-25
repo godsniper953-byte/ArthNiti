@@ -44,6 +44,10 @@ export interface ObservationPoint {
   estimateStatusLabel?: string; // e.g. "Quarterly Estimate (Q1)" or "Provisional Estimate"
   baseYear?: string; // e.g. "2022-23=100" or "2024=100"
   releaseDate?: string; // e.g. "31 Aug 2026"
+  announcementDate?: string; // e.g. "07 Oct 2026"
+  effectiveDate?: string; // e.g. "07 Oct 2026"
+  changeBps?: number; // e.g. 25 or -25 or 0
+  policyStance?: string; // e.g. "Calibrated Tightening" or "Neutral"
   status: 'Final' | 'Revised' | 'Provisional';
   note?: string;
 }
@@ -81,6 +85,24 @@ export interface OfficialGdpMetadata {
   lastUpdatedTimestamp: string;
 }
 
+export interface OfficialRepoMetadata {
+  isOfficialData: boolean;
+  dataOrigin: 'official_rbi_csv' | 'user_uploaded_csv' | 'demonstration_fallback';
+  currentRepoRate: number;
+  previousRepoRate: number;
+  changeBps: number;
+  sdfRate: number;
+  msfAndBankRate: number;
+  effectiveDate: string;
+  announcementDate: string;
+  mpcMeetingLabel: string;
+  policyStance: string;
+  rbiOfficialWebsiteUrl: string;
+  rbiMonetaryPolicyUrl: string;
+  rbiDbiePortalUrl: string;
+  lastVerifiedTimestamp: string;
+}
+
 export interface EconomicIndicator {
   id: string;
   name: string;
@@ -102,6 +124,7 @@ export interface EconomicIndicator {
   isOfficialData?: boolean;
   officialCpiMeta?: OfficialCpiMetadata;
   officialGdpMeta?: OfficialGdpMetadata;
+  officialRepoMeta?: OfficialRepoMetadata;
   targetBand?: {
     min: number;
     max: number;

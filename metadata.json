@@ -1,0 +1,6 @@
+{
+  "name": "ArthNiti — Indian Economic Intelligence",
+  "description": "Understand the Economy. Discover the Data. A premium interactive macroeconomic research terminal and data storytelling platform for Indian economic indicators.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

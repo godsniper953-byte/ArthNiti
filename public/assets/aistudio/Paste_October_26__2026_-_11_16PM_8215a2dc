@@ -1,0 +1,743 @@
+# ARTHNITI — FINAL COMPREHENSIVE PRODUCTION AUDIT, TESTING, REPAIR & DEPLOYMENT READINESS
+
+## ROLE AND MISSION
+
+Act as a complete senior engineering, quality assurance, cybersecurity, data engineering, and performance optimisation team consisting of:
+
+- Senior full-stack engineer
+- Frontend and responsive UI/UX engineer
+- Backend and API integration engineer
+- Financial and economic data integrity specialist
+- Automated testing and quality assurance engineer
+- Site reliability and scalability engineer
+- Web security specialist
+- Accessibility and cross-browser testing specialist
+- DevOps and production deployment engineer
+
+You are working on my existing live project:
+
+**Project:** ArthNiti  
+**Website:** https://arthniti-six.vercel.app/  
+**Purpose:** Digital Economics and Economic Intelligence Platform  
+**Academic destination:** Department of Economics, Aligarh Muslim University
+
+Your task is to perform the most comprehensive practical audit possible of the existing project, discover defects, verify data credibility, execute available tests, repair confirmed issues, and prepare the website for a formal academic demonstration and public use.
+
+This is the final pre-submission quality gate.
+
+Do not merely give me a checklist, a report of hypothetical problems, or suggestions for future work. Inspect the available project files, execute the tests supported by the environment, fix verified problems directly in the code, rerun the relevant tests, and report the results honestly.
+
+**Important:** You must not claim to have tested anything that you did not actually execute. If a test requires external infrastructure, credentials, a paid service, a browser automation environment, or load-testing access that you do not have, clearly identify the limitation and provide the exact steps needed to complete it.
+
+---
+
+# PHASE 1 — PRESERVE AND UNDERSTAND THE EXISTING PROJECT
+
+Before making changes:
+
+1. Inspect the complete existing project structure.
+2. Identify the frontend framework, backend architecture, dependencies, build tooling, deployment configuration, database, API integrations, authentication mechanisms, scheduled jobs, and environment variables where applicable.
+3. Identify the existing design system, page structure, routes, charts, animations, visualisations, and responsive layouts.
+4. Identify every data provider, API endpoint, data transformation, cache, fallback, and refresh mechanism.
+5. Identify existing tests, deployment workflows, monitoring, error logging, and performance controls.
+6. Record the current build status and existing failures.
+7. Create a recoverable checkpoint or branch before making substantial modifications, if the environment supports it.
+8. Establish a baseline for page loading, API reliability, console errors, and existing functionality wherever tools are available.
+
+Do not assume the application has a conventional backend. Determine whether it uses serverless functions, a third-party backend, a static frontend, or another architecture.
+
+Do not replace functioning architecture simply because you prefer another technology.
+
+Do not delete features, historical data, configurations, or working components without a demonstrated technical reason.
+
+Preserve the ArthNiti identity, existing content, useful animations, visualisations, navigation, and overall design wherever possible.
+
+# PHASE 2 — COMPREHENSIVE CODE AND BUILD AUDIT
+
+Inspect the project for:
+
+- Syntax errors and compilation failures.
+- Missing dependencies and incompatible package versions.
+- Broken imports, unresolved modules, and circular dependencies.
+- Incorrect environment variable references.
+- Incorrect API paths and HTTP methods.
+- Invalid types and unsafe type conversions.
+- Missing error boundaries.
+- Unhandled promises and asynchronous race conditions.
+- Memory leaks, duplicate event listeners, and improperly cleaned-up subscriptions.
+- React rendering issues or framework-specific hydration errors, where applicable.
+- Incorrect state management and stale UI data.
+- Broken navigation and routing.
+- Dead code and unnecessary duplicate requests.
+- Excessive rendering and expensive calculations.
+- Large bundles and unnecessary dependencies.
+- Incorrect production configuration.
+- Build and deployment configuration errors.
+
+Run the available commands appropriate to the detected framework, including:
+
+- Dependency installation or lockfile validation.
+- Production build.
+- Type checking.
+- Linting and static analysis.
+- Unit tests.
+- Integration tests.
+- Existing end-to-end tests.
+
+Use the actual package scripts and project tooling rather than inventing commands that do not apply.
+
+Repair confirmed problems and rerun the affected tests.
+
+Do not suppress errors merely to obtain a passing build. Document any remaining warnings that materially affect reliability.
+
+# PHASE 3 — COMPLETE FRONTEND FUNCTIONAL AUDIT
+
+Inspect every page, component, menu, button, link, filter, search field, chart, modal, dropdown, interactive globe, and navigation element.
+
+Test:
+
+1. Homepage rendering and initial loading.
+2. All navigation destinations and internal routes.
+3. Economic indicator cards and charts.
+4. Crude oil and commodity sections.
+5. International trade visualisations.
+6. India-to-BRICS, EU, ASEAN, and other displayed economic connections.
+7. National and international economic news.
+8. Search, filters, date selection, and any sorting controls.
+9. Tooltips, legends, chart interactions, and responsive controls.
+10. External links and source attribution.
+11. Loading states, empty states, stale-data warnings, and error states.
+12. Refreshing the page and opening a deep link directly.
+13. Browser back and forward navigation.
+14. Offline and intermittent network behaviour.
+15. Long titles, missing values, large numbers, and unusually long news headlines.
+
+Remove dead buttons, broken links, misleading controls, placeholder content presented as real data, and visible development artefacts.
+
+Every interactive element must either perform its advertised action or be clearly identified as unavailable.
+
+Provide appropriate loading indicators without blocking the entire application unnecessarily.
+
+Prevent a failed chart, news request, or individual API from crashing the complete dashboard.
+
+Use graceful error boundaries and component-level recovery where appropriate.
+
+Do not invent economic values to fill empty states.
+
+# PHASE 4 — RESPONSIVE DESIGN AND CROSS-DEVICE TESTING
+
+The website must work smoothly on desktop, laptop, tablet, and mobile screens.
+
+Test at practical viewport sizes, including:
+
+- 320 × 568
+- 360 × 800
+- 390 × 844
+- 430 × 932
+- 768 × 1024
+- 1024 × 768
+- 1280 × 800
+- 1440 × 900
+- 1920 × 1080
+
+Use real browser automation or device emulation when available.
+
+Check:
+
+- Horizontal overflow.
+- Clipped text and overlapping components.
+- Broken grid and flex layouts.
+- Navigation menus and mobile navigation.
+- Chart labels and legends.
+- Table overflow and scrolling.
+- Touch target sizes.
+- Readability, spacing, and typography.
+- Modal positioning.
+- Sticky elements and fixed headers.
+- Large interactive globe behaviour.
+- Keyboard navigation.
+- Orientation changes.
+- Reduced-motion preferences.
+- Mobile scrolling performance.
+- Desktop resizing.
+
+Ensure the site uses the available viewport correctly and does not force desktop layouts onto mobile devices.
+
+On mobile, prioritise readable economic information, responsive charts, efficient navigation, and smooth scrolling.
+
+On desktop, preserve the intended analytical dashboard experience without excessive empty space or unnecessary scaling.
+
+Do not remove meaningful information just to make a page fit.
+
+# PHASE 5 — ECONOMIC DATA SOURCE CREDIBILITY AUDIT
+
+This phase is critical because ArthNiti is intended for academic evaluation by an Economics department.
+
+Discover every source used for:
+
+- Indian GDP and GDP growth.
+- Consumer Price Index and inflation.
+- RBI policy repo rate.
+- India's unemployment rate.
+- USD/INR exchange rate.
+- Crude oil prices.
+- Stock market indices, if displayed.
+- International economic indicators.
+- Trade relationships and country-level comparisons.
+- National and international economic news.
+
+For every displayed indicator, determine:
+
+1. The actual source provider.
+2. The actual API endpoint or retrieval mechanism, where applicable.
+3. Whether the source is official, reputable secondary reporting, derived data, simulated data, or manually entered information.
+4. Whether the provider permits the intended use.
+5. The indicator's unit and definition.
+6. Its geographical coverage.
+7. Its reference period.
+8. Its publication date and last successful retrieval time, where available.
+9. Its expected publication and update frequency.
+10. Whether historical observations are revised.
+11. Whether the displayed number matches the source.
+12. Whether the source's timestamp and the displayed value correspond to the same observation.
+
+Prefer authoritative sources where appropriate, including:
+
+- Ministry of Statistics and Programme Implementation (MoSPI): https://www.mospi.gov.in/
+- Reserve Bank of India (RBI): https://www.rbi.org.in/
+- Ministry of Commerce and Industry: https://commerce.gov.in/
+- Petroleum Planning & Analysis Cell (PPAC): https://ppac.gov.in/
+- World Bank: https://www.worldbank.org/
+- International Monetary Fund (IMF): https://www.imf.org/
+- World Trade Organization (WTO): https://www.wto.org/
+- Other appropriate national statistical offices, official exchanges, and recognised data providers.
+
+These are candidate reference sources, not proof that the current website uses them.
+
+Do not assume an official source has a publicly accessible API. Verify the actual endpoint, access method, licensing, rate limits, and availability before integrating it.
+
+For market prices, determine whether data comes from a licensed market-data provider, an official exchange, an aggregator, or another source. Respect licensing and redistribution restrictions.
+
+For each indicator, create a structured source registry with fields such as:
+
+- Indicator identifier.
+- Display name.
+- Provider.
+- Source URL.
+- API endpoint or retrieval method.
+- Unit.
+- Reference period.
+- Publication timestamp.
+- Last successful retrieval timestamp.
+- Expected update frequency.
+- Freshness threshold.
+- Data status.
+- Relevant methodological notes.
+
+Where the project cannot retrieve verified data, show an explicit unavailable state instead of inventing a number.
+
+Never fabricate API responses, timestamps, historical records, market prices, or source citations.
+
+# PHASE 6 — VERIFY ECONOMIC ACCURACY AND STATISTICAL MEANING
+
+Check the economic definitions and calculations used by the application.
+
+Examples:
+
+- Distinguish GDP growth from GDP level.
+- Distinguish CPI inflation from the CPI index level.
+- Display the correct RBI policy rate and its effective date.
+- Distinguish unemployment estimates by methodology and reporting period.
+- Identify whether USD/INR is quoted as INR per USD or USD per INR.
+- Identify whether crude oil prices are per barrel, per litre, or another unit.
+- Identify the specific crude oil benchmark, currency, and observation timestamp.
+- Distinguish market trading prices from delayed or end-of-day observations.
+- Distinguish calendar-year, financial-year, monthly, and quarterly periods.
+- Distinguish nominal and real values where relevant.
+- Correctly label percentages, percentage-point changes, and absolute changes.
+
+Check all calculations for unit conversions, rounding errors, incorrect percentage changes, division by zero, null values, and invalid numeric inputs.
+
+For each derived indicator, document the calculation and its inputs.
+
+Do not compare values from incompatible periods, definitions, units, or geographical coverage without explaining the difference.
+
+For international trade visualisations, verify whether connections represent actual trade volumes, formal membership, diplomatic relationships, or a conceptual illustration.
+
+Do not imply that all members of a regional grouping have the same trade relationship with India.
+
+# PHASE 7 — AUTOMATIC DATA REFRESH AND STALE-DATA PROTECTION
+
+Determine exactly how each indicator and news item is updated.
+
+Do not confuse:
+
+- Re-rendering a component.
+- Refreshing the browser.
+- Refetching a cached API response.
+- Successfully retrieving a new observation.
+- Receiving a newly published economic value.
+
+These are different events.
+
+Implement a reliable refresh strategy appropriate to each source and its permitted rate limits.
+
+Requirements:
+
+1. Refresh data at a frequency suitable for the indicator.
+2. Respect the provider's rate limits, caching directives, and usage terms.
+3. Use server-side scheduled jobs or revalidation where appropriate and supported.
+4. Avoid polling every second for data that is only published daily, monthly, or quarterly.
+5. Avoid multiple duplicate refresh timers.
+6. Prevent overlapping requests from causing stale responses to overwrite newer results.
+7. Handle browser tab visibility and reconnecting networks efficiently.
+8. Use bounded exponential backoff with jitter for retryable failures.
+9. Do not retry permanent errors indefinitely.
+10. Use timeouts and cancellation where appropriate.
+11. Retain the last known good value when safe and clearly mark it as stale if the source becomes unavailable.
+12. Never present an old value as a newly updated observation.
+13. Expose a meaningful last-updated timestamp.
+14. Distinguish source publication time from retrieval time.
+15. Display source-specific freshness warnings.
+16. Handle missing timestamps and invalid source data safely.
+
+Use sensible per-provider caching and refresh intervals rather than one universal interval.
+
+For data that is updated infrequently, show the latest available published observation and its reference period.
+
+For live or intraday market data, use only a provider that supports the required frequency and licensing.
+
+Test automatic refresh using mocked responses or controlled test data where real source updates cannot be triggered.
+
+Confirm that refreshed values actually change the interface when a newer valid observation is returned.
+
+# PHASE 8 — MARKET OPENING, CLOSING AND VOLATILITY RESILIENCE
+
+ArthNiti must remain stable during high activity, including when financial markets open, prices change rapidly, APIs slow down, and many users refresh the dashboard.
+
+Test the following failure scenarios:
+
+- Market-data provider unavailable.
+- API timeout.
+- HTTP 429 rate limiting.
+- HTTP 500, 502, 503, and 504 errors.
+- Invalid JSON.
+- Malformed numeric values.
+- Missing timestamps.
+- Delayed market data.
+- Repeated identical observations.
+- Sudden large price changes.
+- Market closed or public holiday.
+- Stale cache.
+- Partial provider outage.
+- Slow news feed.
+- Network interruption during refresh.
+- Large numbers of simultaneous data requests.
+
+Ensure the interface never freezes or crashes simply because a provider is unavailable.
+
+Use appropriate request deduplication, caching, backoff, stale-data protection, and graceful degradation.
+
+Avoid unlimited retries and unbounded queues.
+
+Do not assume every market is open at the same time or that every source provides real-time prices.
+
+Label delayed data accurately.
+
+For extreme market moves, validate the response format and timestamp, but do not silently discard genuine market movements merely because they are large. Flag suspicious data for verification without suppressing legitimate observations.
+
+Do not introduce artificial market prices to make the charts appear active.
+
+# PHASE 9 — BACKEND, API AND DATABASE RELIABILITY
+
+If a backend exists, inspect it thoroughly.
+
+Test:
+
+- API request and response schemas.
+- Input validation.
+- Error handling.
+- Authentication and authorisation, if applicable.
+- Database connection failures.
+- Connection pool limits.
+- Query efficiency.
+- Slow requests.
+- Duplicate writes.
+- Race conditions.
+- Data consistency.
+- Cache invalidation.
+- Serverless cold starts, where applicable.
+- Scheduled jobs.
+- Background processing.
+- Rate limiting.
+- Request timeouts.
+- Health checks.
+- Logging and observability.
+
+If the project is primarily a static frontend, do not invent a backend merely to satisfy this audit. Instead, audit the actual client-side architecture, external APIs, serverless functions, and deployment platform.
+
+Never expose private API keys in frontend code, public repositories, client-side bundles, or browser-visible requests.
+
+Move secrets to protected server-side environment variables or an appropriate secret-management system.
+
+If a required secret is missing, report the exact variable name and setup requirement without printing its value.
+
+Use least-privilege credentials and avoid unnecessary database permissions.
+
+Do not modify production databases destructively. Back up relevant data before any migration or schema change.
+
+# PHASE 10 — PERFORMANCE AND PAGE LOADING
+
+Optimise the application for fast initial loading, smooth interaction, and low memory consumption.
+
+Audit:
+
+- JavaScript bundle size.
+- CSS and font loading.
+- Image dimensions and formats.
+- Unnecessary third-party scripts.
+- Unused dependencies.
+- Large chart libraries.
+- Globe and animation rendering.
+- Network waterfall.
+- API request count.
+- Repeated fetching.
+- Layout shifts.
+- Main-thread blocking.
+- Expensive rendering loops.
+- Excessive DOM nodes.
+- Mobile memory usage.
+- Long tasks.
+- Unnecessary client-side hydration.
+- Cache headers and static asset caching.
+
+Implement improvements only where they are compatible with the existing application.
+
+Where appropriate:
+
+- Split routes and defer nonessential components.
+- Lazy-load below-the-fold content.
+- Optimise and compress images.
+- Avoid blocking the first render on noncritical API calls.
+- Reserve space for charts and images to reduce layout shifts.
+- Use efficient chart rendering and sampling for large datasets.
+- Reduce unnecessary animations on mobile.
+- Respect reduced-motion preferences.
+- Use appropriate CDN and caching features available on the current host.
+- Avoid fetching the same resource separately for multiple components.
+- Keep the initial dashboard useful even while secondary content loads.
+
+Measure performance with available tools such as Lighthouse, browser performance traces, or equivalent automated audits.
+
+Use Core Web Vitals as targets, not as guaranteed outcomes:
+
+- Largest Contentful Paint (LCP): 2.5 seconds or less.
+- Interaction to Next Paint (INP): 200 milliseconds or less.
+- Cumulative Layout Shift (CLS): 0.1 or less.
+
+Aim to meet these targets at the 75th percentile under appropriate real-world measurement conditions. A single local test cannot establish that the 75th percentile has been achieved.
+
+Do not claim a performance improvement without measuring it.
+
+# PHASE 11 — HIGH-TRAFFIC AND LOAD-TESTING READINESS
+
+Assess whether the existing hosting architecture can handle increasing traffic.
+
+Inspect:
+
+- Hosting and serverless limits.
+- Concurrent request capacity.
+- API provider quotas.
+- Database connection limits.
+- Cache effectiveness.
+- Request fan-out.
+- Rate limiting.
+- Static asset delivery.
+- Cold-start behaviour.
+- Scheduled-job concurrency.
+- External provider bottlenecks.
+- Failure isolation.
+
+Where an authorised load-testing environment is available, use a controlled tool such as k6, Artillery, or an equivalent framework.
+
+Run staged tests at progressively higher loads, beginning with a low baseline and increasing gradually within authorised limits.
+
+Test:
+
+1. Normal expected traffic.
+2. A short traffic spike.
+3. Sustained concurrent visitors.
+4. Concurrent dashboard refreshes.
+5. Slow or unavailable upstream providers.
+6. Recovery after the load subsides.
+
+Measure:
+
+- Request throughput.
+- Error rate.
+- p50, p95, and p99 response latency.
+- Timeout frequency.
+- CPU and memory where observable.
+- Database connections and saturation where applicable.
+- API quota consumption.
+- Cache hit rate where available.
+
+Do not perform destructive or uncontrolled load tests against the public production website, third-party data providers, or shared infrastructure.
+
+Do not claim the site supports a particular number of concurrent users unless the test environment and measured results justify that claim.
+
+If the environment does not support load testing, produce a runnable test configuration and exact instructions for executing it safely against a staging deployment.
+
+Optimise verified bottlenecks, rerun the tests, and document the before-and-after measurements.
+
+# PHASE 12 — SECURITY AUDIT
+
+Perform a defensive security review of the actual application.
+
+Check:
+
+- Exposed secrets and API keys.
+- Unsafe dependency versions.
+- Dependency vulnerabilities.
+- Cross-site scripting risks.
+- Injection vulnerabilities.
+- Unsafe HTML rendering.
+- Insecure URL handling.
+- CORS configuration.
+- Content Security Policy where appropriate.
+- Authentication and authorisation weaknesses.
+- Excessive permissions.
+- Missing security headers.
+- Sensitive information in logs.
+- Unprotected administrative routes.
+- Insecure environment variable handling.
+- Unnecessary public endpoints.
+- Abuse of expensive API endpoints.
+- Rate-limit weaknesses.
+- Dependency and software supply-chain risks.
+
+Use available dependency audit tools, static analysis, and safe dynamic testing.
+
+Do not attack unrelated systems or third-party services.
+
+Do not expose private credentials in the report.
+
+Fix confirmed vulnerabilities without disabling legitimate functionality.
+
+If security testing requires credentials, a staging environment, or authorisation, identify that requirement explicitly.
+
+# PHASE 13 — ACCESSIBILITY AND CROSS-BROWSER COMPATIBILITY
+
+Test the website against practical accessibility expectations, including WCAG 2.2 AA where applicable.
+
+Check:
+
+- Semantic page structure.
+- Heading hierarchy.
+- Keyboard accessibility.
+- Visible focus indicators.
+- Contrast.
+- Accessible names for buttons.
+- Form labels.
+- Alternative text for meaningful images.
+- Screen-reader handling of status updates.
+- Chart descriptions or accessible data alternatives.
+- Reduced motion.
+- Zoom and text scaling.
+- Touch targets.
+- Error-message clarity.
+
+Test supported versions of Chrome, Edge, Firefox, and Safari where the required environments are available.
+
+If Safari or another browser cannot be tested directly, distinguish actual test results from compatibility assumptions.
+
+Do not claim full accessibility compliance solely because an automated checker reports no violations.
+
+# PHASE 14 — NEWS, SOURCES AND CONTENT INTEGRITY
+
+For the news section:
+
+- Verify article links and source attribution.
+- Check publication timestamps.
+- Identify duplicate headlines.
+- Handle removed or unavailable articles.
+- Prevent stale articles from appearing as new.
+- Respect provider terms and content licensing.
+- Avoid scraping or redistributing content in violation of applicable terms.
+- Validate external URLs before displaying them.
+- Make it clear when an item is an opinion, forecast, official announcement, or statistical release.
+
+For economic indicators:
+
+- Never fabricate sources or citations.
+- Do not use a source name merely to make an unverified value look credible.
+- Clearly label estimates and forecasts.
+- Avoid unsupported causal conclusions.
+- Distinguish economic data from market data.
+- Make the data's reference period visible where relevant.
+
+# PHASE 15 — AUTOMATED REGRESSION AND FAILURE TESTS
+
+Create or improve automated tests for the most important user journeys.
+
+At minimum, cover:
+
+1. Homepage loads.
+2. Main navigation works.
+3. Every major route renders.
+4. Economic indicators load or show a clear fallback.
+5. Invalid API responses do not crash the page.
+6. Source links work.
+7. News loading failures are isolated.
+8. Charts handle empty and malformed data.
+9. Mobile navigation works.
+10. Page refresh and direct-route navigation work.
+11. Automatic refresh updates the UI with newer valid data.
+12. Stale-data warnings appear correctly.
+13. API failures do not trigger infinite retry loops.
+14. The dashboard remains usable during partial outages.
+15. Production build succeeds.
+
+Use the testing framework already installed when possible. Add suitable tools only when necessary and compatible.
+
+Use mocked APIs for deterministic tests. Do not rely on a live market moving at the exact moment a test runs.
+
+Ensure tests clean up timers, event listeners, test records, and temporary resources.
+
+Rerun all relevant tests after repairs.
+
+# PHASE 16 — FINAL DEPLOYMENT AND RELEASE VERIFICATION
+
+Before publishing any changes:
+
+1. Review the full code diff.
+2. Confirm no secrets or temporary debugging code were added.
+3. Confirm the production build succeeds.
+4. Confirm critical tests pass.
+5. Confirm no major routes or features were removed accidentally.
+6. Confirm environment variables are documented without exposing their values.
+7. Confirm database migrations, if any, are safe and reversible.
+8. Deploy to a preview or staging environment if available.
+9. Run smoke tests against the preview deployment.
+10. Verify production configuration and health checks.
+11. Publish only through the existing authorised deployment workflow.
+12. Verify the deployed site after publication.
+13. Confirm that the deployed code matches the tested version.
+14. Preserve a rollback path if the platform supports it.
+
+Do not claim that a deployment succeeded unless the deployment system confirms success and the deployed URL has been checked.
+
+Do not overwrite or remove the existing production deployment without a recoverable path where feasible.
+
+If you cannot deploy directly, prepare the changes and provide exact deployment instructions.
+
+# PHASE 17 — FINAL ACCEPTANCE CRITERIA
+
+Treat these as release requirements:
+
+- Production build passes.
+- Critical user journeys work.
+- No known critical or high-severity security issues remain unresolved.
+- No known critical functional defects remain unresolved.
+- All displayed economic values have traceable provenance or are clearly labelled unavailable.
+- Data timestamps and freshness labels are truthful.
+- Market-data failures do not crash the dashboard.
+- API failures have bounded retries and sensible fallbacks.
+- No major mobile or desktop layout defects remain.
+- No known severe performance bottleneck remains unaddressed.
+- Main navigation and external links work.
+- Important regression tests pass.
+- Deployment has been verified, if deployment access is available.
+- Remaining limitations are documented honestly.
+
+Do not mark the project as fully ready if a critical criterion has not been tested or remains unresolved. Report it as blocked or conditionally ready.
+
+---
+
+# EXECUTION RULES
+
+Follow these rules throughout the audit:
+
+1. Start by inspecting the existing files and available tools.
+2. Execute real tests instead of merely describing them.
+3. Fix confirmed bugs directly where you have permission and capability.
+4. Preserve working features and the existing visual identity.
+5. Prefer small, reversible, evidence-based changes over unnecessary rewrites.
+6. Never fabricate test results, API sources, market values, uptime, or performance measurements.
+7. Never insert dummy values into production to disguise an API failure.
+8. Never expose API keys, credentials, personal data, or secret environment variables.
+9. Never run uncontrolled production load tests.
+10. Never silently change the meaning of an economic indicator.
+11. Do not spend time redesigning features that already work correctly.
+12. If access to an external resource is blocked, record the limitation and test what is possible locally.
+13. If user approval, credentials, or deployment permissions are needed, explain the exact requirement.
+14. Rerun the relevant tests after every significant repair.
+15. Continue through all phases that the environment can support without stopping after the first successful build.
+
+If the environment provides browser automation, use it to inspect the rendered site and test real interactions. If it provides terminal access, use it to run builds, tests, and appropriate diagnostics. If it provides repository access, inspect and modify the actual project files.
+
+Do not assume you can access the live website's backend or the Vercel deployment configuration simply because its URL is known.
+
+# REQUIRED FINAL REPORT
+
+At completion, provide a concise but evidence-based report containing:
+
+## A. Executive verdict
+Choose one:
+
+- READY FOR DEPARTMENTAL DEMONSTRATION
+- CONDITIONALLY READY — SPECIFIC ITEMS REMAIN
+- NOT READY — CRITICAL ISSUES REMAIN
+
+This verdict refers to the tests actually completed, not hypothetical tests.
+
+## B. Audit coverage
+For each phase, state:
+
+- Tested and passed.
+- Tested and failed.
+- Partially tested.
+- Not tested, with the reason.
+
+## C. Defects discovered and fixed
+For every significant issue, explain:
+
+- What was wrong.
+- Why it mattered.
+- What changed.
+- Which test verifies the repair.
+
+## D. Economic data integrity report
+Provide a table containing:
+
+- Indicator.
+- Actual source.
+- Source verification status.
+- Refresh mechanism.
+- Observed freshness.
+- Result.
+- Remaining limitations.
+
+Do not label a source verified if you did not verify it.
+
+## E. Test results
+List actual commands, test suites, browser checks, build results, security checks, and performance measurements that were executed.
+
+Distinguish successful tests from skipped tests and unavailable tests.
+
+## F. Performance and scalability
+Report measured page-loading performance, response latency, error rates, and load-test results where available. State explicitly when high-traffic capacity has not been tested.
+
+## G. Security and accessibility
+Report confirmed issues, repairs, and outstanding limitations.
+
+## H. Deployment status
+State whether changes were saved, tested in preview, deployed, and verified in production.
+
+## I. Remaining actions
+List only outstanding tasks that genuinely require further work, access, credentials, approval, or testing.
+
+## J. Final submission recommendation
+Explain whether the website is suitable for a live academic demonstration and whether its economic data and methodology are sufficiently documented for departmental scrutiny.
+
+Begin the audit now. Inspect the actual project, establish the baseline, test, repair, and retest. Do not stop at giving me advice. The objective is to make ArthNiti as reliable, accurate, secure, responsive, and production-ready as the available environment permits.

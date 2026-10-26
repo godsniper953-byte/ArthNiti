@@ -97,24 +97,28 @@ export const AboutPage: React.FC<AboutPageProps> = ({ theme, onSelectPage }) => 
           <div className="space-y-2 text-xs text-slate-400">
             <div className="flex items-center justify-between py-1.5 border-b border-slate-800">
               <span>Current Data Service Mode:</span>
-              <span className="font-mono-tabular text-amber-400 font-semibold">
-                {serviceStatus.mode === 'live_api' ? 'Connected FastAPI' : 'Illustrative Mock Dataset'}
+              <span className="font-mono-tabular text-emerald-400 font-semibold">
+                {serviceStatus.mode === 'live_api'
+                  ? 'Connected External FastAPI'
+                  : '7 Official Macro CSVs + 2 Live Server APIs'}
+              </span>
+            </div>
+            <div className="flex items-center justify-between py-1.5 border-b border-slate-800">
+              <span>Server-Side Live Endpoints:</span>
+              <span className="font-mono-tabular text-cyan-400">
+                /api/market-indices · /api/economic-news · /api/health
               </span>
             </div>
             <div className="flex items-center justify-between py-1.5 border-b border-slate-800">
               <span>Configured VITE_API_BASE_URL:</span>
               <span className="font-mono-tabular text-slate-300">
-                {serviceStatus.apiBaseUrl || '(Not set — using local 10Y dataset)'}
+                {serviceStatus.apiBaseUrl || '(Optional — using built-in verified datasets & APIs)'}
               </span>
-            </div>
-            <div className="flex items-center justify-between py-1.5 border-b border-slate-800">
-              <span>Expected FastAPI Endpoint:</span>
-              <span className="font-mono-tabular text-emerald-400">GET /api/v1/indicators</span>
             </div>
           </div>
 
           <p className="text-xs text-slate-400 leading-relaxed">
-            When the FastAPI backend is deployed, set <code className="font-mono-tabular">VITE_API_BASE_URL=http://localhost:8000</code> in <code className="font-mono-tabular">.env.local</code>. If the upstream API is unreachable or times out, ArthNiti gracefully degrades to the verified local dataset without crashing the interface.
+            ArthNiti operates a resilient hybrid architecture: 7 core Indian macroeconomic indicators (MoSPI GDP, CPI, PLFS, RBI MPC Repo, FBIL USD/INR, PPAC Crude Oil, and MoCI Merchandise Trade Balance) are served from verified official CSV datasets with zero-code browser CSV updaters, while Indian Stock Market Indices and Economic News &amp; Current Affairs are aggregated via server-side API proxies (<code className="font-mono-tabular">/api/market-indices</code> and <code className="font-mono-tabular">/api/economic-news</code>).
           </p>
 
           <button

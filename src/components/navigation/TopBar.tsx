@@ -454,8 +454,12 @@ export const TopBar: React.FC<TopBarProps> = ({
                                 ? `₹${ind.currentValue}`
                                 : ind.id === 'crude-oil'
                                 ? `$${ind.currentValue}`
+                                : ind.id === 'merchandise-trade'
+                                ? `${ind.currentValue < 0 ? '-$' : '+$'}${Math.abs(ind.currentValue).toFixed(2)}B`
                                 : ind.currentValue.toLocaleString('en-IN')}{' '}
-                              <span className="text-[10px] font-normal text-slate-400">{ind.unit}</span>
+                              <span className="text-[10px] font-normal text-slate-400">
+                                {ind.id === 'merchandise-trade' ? 'Signed Balance' : ind.unit}
+                              </span>
                             </div>
                             <div className="text-[10px] text-slate-400 flex items-center justify-end gap-0.5">
                               {ind.changeValue > 0 ? (
@@ -527,17 +531,17 @@ export const TopBar: React.FC<TopBarProps> = ({
         )}
       </div>
 
-      {/* Zone 3: Sample Data Status + Theme Switcher */}
+      {/* Zone 3: Official Data Provenance Status + Theme Switcher */}
       <div className="flex items-center gap-3 shrink-0">
         <button
           type="button"
           onClick={() => onSelectPage('data-sources')}
-          title="View data source transparency and sample dataset documentation"
+          title="Inspect official indicator provenance registry and methodology"
           className="hidden md:flex items-center gap-1.5 text-xs text-slate-400 hover:text-slate-200 transition-colors font-mono-tabular cursor-pointer whitespace-nowrap shrink-0"
         >
-          <span>Dataset: Illustrative (10Y)</span>
+          <span>7 Official Macro Series</span>
           <span aria-hidden="true">·</span>
-          <span className="text-emerald-400">MoSPI / RBI</span>
+          <span className="text-emerald-400">MoSPI · RBI · MoCI · Live</span>
         </button>
 
         <button

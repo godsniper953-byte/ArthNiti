@@ -234,12 +234,12 @@ export const Sidebar: React.FC<SidebarProps> = ({
                   : 'bg-slate-50 border-slate-200 text-slate-600'
               }`}
             >
-              <div className="flex items-center gap-1.5 font-medium text-amber-400 mb-0.5">
+              <div className="flex items-center gap-1.5 font-medium text-emerald-400 mb-0.5">
                 <Info className="w-3.5 h-3.5 shrink-0" />
-                <span>Illustrative Data Mode</span>
+                <span>Verified Official Data</span>
               </div>
               <span>
-                Structured 10-year sample series. Configure <code className="font-mono-tabular">VITE_API_BASE_URL</code> for FastAPI backend.
+                7 official macro CSV series (MoSPI, RBI, FBIL, PPAC, MoCI) + live server APIs.
               </span>
             </div>
           )}

@@ -5,6 +5,7 @@ import dotenv from 'dotenv';
 import { createServer as createViteServer } from 'vite';
 import marketIndicesHandler from './api/market-indices.ts';
 import economicNewsHandler from './api/economic-news.ts';
+import healthHandler from './api/health.ts';
 
 dotenv.config();
 
@@ -15,15 +16,33 @@ async function startServer() {
   const app = express();
   const PORT = Number(process.env.PORT) || 3000;
 
-  app.use(express.json());
+  app.disable('x-powered-by');
+  app.use(express.json({ limit: '256kb' }));
+
+  // Defensive HTTP security headers across all responses
+  app.use((_req, res, next) => {
+    res.setHeader('X-Content-Type-Options', 'nosniff');
+    res.setHeader('X-Frame-Options', 'SAMEORIGIN');
+    res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
+    res.setHeader(
+      'Permissions-Policy',
+      'camera=(), microphone=(), geolocation=(), payment=()'
+    );
+    next();
+  });
+
+  // Mount server-side Health & Readiness API route
+  app.all('/api/health', async (req, res) => {
+    await healthHandler(req, res);
+  });
 
   // Mount server-side Indian Stock Market Indices API route
-  app.get('/api/market-indices', async (req, res) => {
+  app.all('/api/market-indices', async (req, res) => {
     await marketIndicesHandler(req, res);
   });
 
   // Mount server-side Economic News & Current Affairs Intelligence API route
-  app.get('/api/economic-news', async (req, res) => {
+  app.all('/api/economic-news', async (req, res) => {
     await economicNewsHandler(req, res);
   });
 
@@ -35,7 +54,16 @@ async function startServer() {
     app.use(vite.middlewares);
   } else {
     const distPath = path.join(__dirname, 'dist');
-    app.use(express.static(distPath));
+    app.use(
+      express.static(distPath, {
+        maxAge: '1h',
+        setHeaders: (res, filePath) => {
+          if (filePath.endsWith('.html') || filePath.endsWith('.csv')) {
+            res.setHeader('Cache-Control', 'no-cache');
+          }
+        },
+      })
+    );
     app.get('*', (_req, res) => {
       res.sendFile(path.join(distPath, 'index.html'));
     });

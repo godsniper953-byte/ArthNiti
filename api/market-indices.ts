@@ -493,6 +493,8 @@ async function fetchSingleIndexQuote(
   }
 }
 
+const MIN_FORCE_REFRESH_COOLDOWN_MS = 5000;
+
 export async function fetchIndianMarketIndicesPayload(options?: {
   forceRefresh?: boolean;
 }): Promise<IndianMarketIndicesResponse> {
@@ -503,8 +505,12 @@ export async function fetchIndianMarketIndicesPayload(options?: {
   );
   const ttlMs = ttlSeconds * 1000;
 
-  // Return fresh cached response if within TTL and not forced
-  if (!options?.forceRefresh && cachedPayload && nowMs - cachedAtMs < ttlMs) {
+  // Protect upstream providers against rapid forceRefresh abuse (minimum 5s cooldown between forced refreshes)
+  const canHonorForceRefresh =
+    Boolean(options?.forceRefresh) && nowMs - cachedAtMs >= MIN_FORCE_REFRESH_COOLDOWN_MS;
+
+  // Return fresh cached response if within TTL and not forced (or within force-refresh cooldown)
+  if (!canHonorForceRefresh && cachedPayload && nowMs - cachedAtMs < ttlMs) {
     return {
       ...cachedPayload,
       cacheStatus: 'HIT',
@@ -573,13 +579,24 @@ export async function fetchIndianMarketIndicesPayload(options?: {
 
 // Default export for Vercel Serverless Functions (/api/market-indices)
 export default async function handler(req: any, res: any) {
-  // Allow CORS for Vercel preview deployments
+  // Allow CORS for Vercel preview deployments & set security headers
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'GET, OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+  res.setHeader('X-Content-Type-Options', 'nosniff');
+  res.setHeader('X-Frame-Options', 'SAMEORIGIN');
+  res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
 
   if (req.method === 'OPTIONS') {
     res.status(200).end();
+    return;
+  }
+
+  if (req.method && req.method !== 'GET') {
+    res.status(405).json({
+      ok: false,
+      error: `Method ${req.method} Not Allowed. Use GET.`,
+    });
     return;
   }
 

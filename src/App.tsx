@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { AnimatePresence, motion, useReducedMotion } from 'motion/react';
 import { ArrowUpRight, Compass, X } from 'lucide-react';
 import {
@@ -11,6 +11,7 @@ import {
   getIndicatorsSync,
   getLatestReleasesSync,
   getSectorGvaSync,
+  resolvePageFromLocation,
 } from './services/economyService';
 import {
   clearUserUploadedCpiCsv,
@@ -60,23 +61,56 @@ import { Sidebar } from './components/navigation/Sidebar';
 import { TopBar } from './components/navigation/TopBar';
 import { LiveMarketTickerStrip } from './components/visualizations/LiveMarketTickerStrip';
 import { OverviewPage } from './pages/OverviewPage';
-import { GdpGrowthPage } from './pages/GdpGrowthPage';
-import { InflationPage } from './pages/InflationPage';
-import { LabourMarketPage } from './pages/LabourMarketPage';
-import { CurrencyOilPage } from './pages/CurrencyOilPage';
-import { FinancialMarketsPage } from './pages/FinancialMarketsPage';
-import { EconomicNewsPage } from './pages/EconomicNewsPage';
-import { ComparisonsPage } from './pages/ComparisonsPage';
-import { DataSourcesPage } from './pages/DataSourcesPage';
-import { AboutPage } from './pages/AboutPage';
+import { ErrorBoundary } from './components/common/ErrorBoundary';
+
+const GdpGrowthPage = React.lazy(() =>
+  import('./pages/GdpGrowthPage').then((m) => ({ default: m.GdpGrowthPage }))
+);
+const InflationPage = React.lazy(() =>
+  import('./pages/InflationPage').then((m) => ({ default: m.InflationPage }))
+);
+const LabourMarketPage = React.lazy(() =>
+  import('./pages/LabourMarketPage').then((m) => ({ default: m.LabourMarketPage }))
+);
+const CurrencyOilPage = React.lazy(() =>
+  import('./pages/CurrencyOilPage').then((m) => ({ default: m.CurrencyOilPage }))
+);
+const FinancialMarketsPage = React.lazy(() =>
+  import('./pages/FinancialMarketsPage').then((m) => ({ default: m.FinancialMarketsPage }))
+);
+const EconomicNewsPage = React.lazy(() =>
+  import('./pages/EconomicNewsPage').then((m) => ({ default: m.EconomicNewsPage }))
+);
+const ComparisonsPage = React.lazy(() =>
+  import('./pages/ComparisonsPage').then((m) => ({ default: m.ComparisonsPage }))
+);
+const DataSourcesPage = React.lazy(() =>
+  import('./pages/DataSourcesPage').then((m) => ({ default: m.DataSourcesPage }))
+);
+const AboutPage = React.lazy(() =>
+  import('./pages/AboutPage').then((m) => ({ default: m.AboutPage }))
+);
 
 export default function App() {
-  const [activePage, setActivePage] = useState<PageId>('overview');
-  const [focusedIndicatorId, setFocusedIndicatorId] = useState<string | null>(null);
+  const initialRoute = useMemo(() => {
+    if (typeof window === 'undefined') {
+      return { pageId: 'overview' as PageId, indicatorId: null };
+    }
+    return resolvePageFromLocation(window.location.hash, window.location.search);
+  }, []);
+
+  const [activePage, setActivePage] = useState<PageId>(initialRoute.pageId);
+  const [focusedIndicatorId, setFocusedIndicatorId] = useState<string | null>(
+    initialRoute.indicatorId
+  );
   const [sidebarCollapsed, setSidebarCollapsed] = useState<boolean>(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState<boolean>(false);
   const [theme, setTheme] = useState<'dark' | 'light'>('dark');
   const shouldReduceMotion = useReducedMotion();
+
+  // Monotonic sequence counters to prevent stale overlapping responses from overwriting newer state
+  const marketRequestSeqRef = useRef<number>(0);
+  const newsRequestSeqRef = useRef<number>(0);
 
   // Official MoSPI CPI Data State (kept separate from UI components via cpiDataService)
   const [officialCpiIndicator, setOfficialCpiIndicator] = useState<EconomicIndicator | null>(null);
@@ -177,6 +211,7 @@ export default function App() {
       simulateError?: boolean;
       simulateSingleIndexUnavailableId?: string | null;
     }) => {
+      const reqSeq = ++marketRequestSeqRef.current;
       setMarketLoading(true);
       if (options?.simulateError === false) {
         setMarketError(null);
@@ -191,6 +226,9 @@ export default function App() {
         simulateError: options?.simulateError,
         simulateSingleIndexUnavailableId: singleUnavailableId,
       });
+
+      // Discard out-of-order stale response if a newer request was initiated
+      if (reqSeq !== marketRequestSeqRef.current) return;
 
       if (res.status === 'success' && res.data) {
         setMarketData(res.data);
@@ -220,6 +258,7 @@ export default function App() {
 
   const handleFetchEconomicNews = useCallback(
     async (options?: { forceRefresh?: boolean; simulateError?: boolean }) => {
+      const reqSeq = ++newsRequestSeqRef.current;
       setNewsLoading(true);
       if (options?.simulateError === false) {
         setNewsError(null);
@@ -228,6 +267,10 @@ export default function App() {
         forceRefresh: options?.forceRefresh,
         simulateError: options?.simulateError,
       });
+
+      // Discard out-of-order stale response if a newer request was initiated
+      if (reqSeq !== newsRequestSeqRef.current) return;
+
       if (res.status === 'success' && res.data) {
         setNewsData(res.data);
         setNewsStaleCache(res.isStaleClientCache);
@@ -818,11 +861,39 @@ export default function App() {
     }
   }, [theme]);
 
-  const handleSelectPage = (pageId: PageId, indicatorId?: string) => {
+  // Synchronize browser Back/Forward (popstate) and hashchange events with activePage & focusedIndicatorId
+  useEffect(() => {
+    const syncFromUrl = () => {
+      const resolved = resolvePageFromLocation(
+        window.location.hash,
+        window.location.search
+      );
+      setActivePage(resolved.pageId);
+      setFocusedIndicatorId(resolved.indicatorId);
+    };
+    window.addEventListener('popstate', syncFromUrl);
+    window.addEventListener('hashchange', syncFromUrl);
+    return () => {
+      window.removeEventListener('popstate', syncFromUrl);
+      window.removeEventListener('hashchange', syncFromUrl);
+    };
+  }, []);
+
+  const handleSelectPage = useCallback((pageId: PageId, indicatorId?: string) => {
     setActivePage(pageId);
     setFocusedIndicatorId(indicatorId || null);
-    window.scrollTo({ top: 0, behavior: 'smooth' });
-  };
+    if (typeof window !== 'undefined') {
+      const targetHash = indicatorId
+        ? `#${pageId}?indicator=${encodeURIComponent(indicatorId)}`
+        : pageId === 'overview'
+        ? window.location.pathname
+        : `#${pageId}`;
+      if (window.location.hash !== targetHash) {
+        window.history.pushState({ pageId, indicatorId: indicatorId || null }, '', targetHash);
+      }
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    }
+  }, []);
 
   const focusedIndicator = useMemo(
     () => (focusedIndicatorId ? indicators.find((i) => i.id === focusedIndicatorId) || null : null),
@@ -1100,6 +1171,14 @@ export default function App() {
           : 'bg-[#F8FAFC] text-[#0F172A]'
       }`}
     >
+      {/* WCAG 2.2 AA Skip to Main Content Keyboard Link */}
+      <a
+        href="#main-content"
+        className="sr-only focus:not-sr-only focus:fixed focus:top-3 focus:left-3 focus:z-50 focus:px-4 focus:py-2 focus:rounded-lg focus:bg-emerald-600 focus:text-white focus:text-xs focus:font-semibold focus:shadow-lg"
+      >
+        Skip to main content
+      </a>
+
       {/* Collapsible Sidebar Navigation */}
       <Sidebar
         activePage={activePage}
@@ -1189,7 +1268,11 @@ export default function App() {
         </div>
 
         {/* Main Content Viewport with Motion Page Transition */}
-        <main className="flex-1 w-full max-w-[1440px] mx-auto px-4 sm:px-6 lg:px-8 py-6 sm:py-8">
+        <main
+          id="main-content"
+          tabIndex={-1}
+          className="flex-1 w-full max-w-[1440px] mx-auto px-4 sm:px-6 lg:px-8 py-6 sm:py-8 focus:outline-none"
+        >
           {/* Quick-Jump Indicator Spotlight Banner when navigated from Search or KPI Card */}
           {focusedIndicator && (
             <motion.div
@@ -1257,7 +1340,25 @@ export default function App() {
               exit={shouldReduceMotion ? { opacity: 1 } : { opacity: 0, y: -6 }}
               transition={{ duration: shouldReduceMotion ? 0 : 0.18, ease: [0.16, 1, 0.3, 1] }}
             >
-              {renderActivePage()}
+              <ErrorBoundary
+                key={activePage}
+                sectionName={`Module (${activePage})`}
+                theme={theme}
+              >
+                <React.Suspense
+                  fallback={
+                    <div
+                      role="status"
+                      aria-live="polite"
+                      className="rounded-xl border border-slate-800/80 bg-[#0D1527]/70 p-8 text-center text-sm text-slate-400"
+                    >
+                      Loading module…
+                    </div>
+                  }
+                >
+                  {renderActivePage()}
+                </React.Suspense>
+              </ErrorBoundary>
             </motion.div>
           </AnimatePresence>
         </main>

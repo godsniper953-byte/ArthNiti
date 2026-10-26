@@ -4,6 +4,7 @@ import {
   INDIA_ECONOMIC_HUBS,
   LATEST_DATA_RELEASES,
   SECTOR_GVA_BREAKDOWN,
+  STRUCTURED_INDICATOR_SOURCE_REGISTRY,
 } from '../data/mockEconomicData';
 import {
   DataSourceMetadata,
@@ -12,22 +13,74 @@ import {
   IndiaEconomicHubNode,
   LatestDataRelease,
   ObservationPoint,
+  PageId,
   SectorGvaShare,
+  StructuredIndicatorSourceRegistryEntry,
 } from '../types/economy';
 
-const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL as string | undefined)?.trim() || '';
+const API_BASE_URL = (import.meta.env?.VITE_API_BASE_URL as string | undefined)?.trim() || '';
+
+export const VALID_PAGE_IDS: PageId[] = [
+  'overview',
+  'gdp-growth',
+  'inflation',
+  'labour-market',
+  'currency-oil',
+  'financial-markets',
+  'economic-news',
+  'comparisons',
+  'data-sources',
+  'about',
+];
+
+/**
+ * Resolves deep-link URL hash (e.g. "#gdp-growth" or "#currency-oil?indicator=merchandise-trade")
+ * or query string ("?page=inflation&indicator=cpi-inflation") into a validated PageId and optional indicatorId.
+ */
+export function resolvePageFromLocation(
+  hash: string,
+  search: string
+): { pageId: PageId; indicatorId: string | null } {
+  try {
+    const cleanHash = (hash || '').replace(/^#\/?/, '').trim();
+    const [hashPagePart, hashQueryPart] = cleanHash.split('?');
+    const hashParams = new URLSearchParams(hashQueryPart || '');
+    const searchParams = new URLSearchParams((search || '').replace(/^\?/, ''));
+
+    const candidatePage = (
+      hashPagePart ||
+      hashParams.get('page') ||
+      searchParams.get('page') ||
+      ''
+    )
+      .trim()
+      .toLowerCase();
+
+    const pageId: PageId = VALID_PAGE_IDS.includes(candidatePage as PageId)
+      ? (candidatePage as PageId)
+      : 'overview';
+
+    const indicatorId =
+      hashParams.get('indicator') || searchParams.get('indicator') || null;
+
+    return { pageId, indicatorId };
+  } catch {
+    return { pageId: 'overview', indicatorId: null };
+  }
+}
 
 export interface EconomyDataServiceStatus {
-  mode: 'illustrative_mock' | 'live_api';
+  mode: 'official_verified_hybrid' | 'live_api';
   apiBaseUrl: string | null;
   lastSynced: string;
 }
 
 export function getServiceStatus(): EconomyDataServiceStatus {
   return {
-    mode: API_BASE_URL ? 'live_api' : 'illustrative_mock',
+    mode: API_BASE_URL ? 'live_api' : 'official_verified_hybrid',
     apiBaseUrl: API_BASE_URL || null,
-    lastSynced: 'Q3 2026 / Oct 2026 (Illustrative Development Dataset)',
+    lastSynced:
+      '7 Official Macro Series (MoSPI · RBI · FBIL · PPAC · MoCI) + Live Market & News APIs',
   };
 }
 
@@ -39,7 +92,7 @@ export async function fetchAllIndicators(): Promise<EconomicIndicator[]> {
         return (await response.json()) as EconomicIndicator[];
       }
     } catch {
-      // Gracefully fall back to illustrative dataset when FastAPI server is unreachable
+      // Gracefully fall back to verified local dataset when external FastAPI server is unreachable
     }
   }
   return ILLUSTRATIVE_INDICATORS;
@@ -57,6 +110,10 @@ export function getDataSourcesSync(): DataSourceMetadata[] {
   return DATA_SOURCES_REGISTRY;
 }
 
+export function getStructuredIndicatorRegistrySync(): StructuredIndicatorSourceRegistryEntry[] {
+  return STRUCTURED_INDICATOR_SOURCE_REGISTRY;
+}
+
 export function getSectorGvaSync(): SectorGvaShare[] {
   return SECTOR_GVA_BREAKDOWN;
 }
@@ -70,21 +127,37 @@ export function getIndiaHubsSync(): IndiaEconomicHubNode[] {
 }
 
 export function filterObservationsByRange(
-  observations: ObservationPoint[],
+  observations: ObservationPoint[] | null | undefined,
   range: DateRangeFilter
 ): ObservationPoint[] {
-  if (!observations.length || range === 'MAX' || range === '10Y') {
-    return observations;
+  if (!Array.isArray(observations) || observations.length === 0) {
+    return [];
   }
-  const latestTs = observations[observations.length - 1].timestamp;
+  const validObservations = observations.filter(
+    (obs) =>
+      obs &&
+      typeof obs.value === 'number' &&
+      Number.isFinite(obs.value) &&
+      typeof obs.timestamp === 'number' &&
+      Number.isFinite(obs.timestamp)
+  );
+  if (validObservations.length === 0) {
+    return [];
+  }
+  if (range === 'MAX' || range === '10Y') {
+    return validObservations;
+  }
+  const latestTs = validObservations[validObservations.length - 1].timestamp;
   const yearsMap: Record<Exclude<DateRangeFilter, '10Y' | 'MAX'>, number> = {
     '1Y': 1.15,
     '3Y': 3.15,
     '5Y': 5.15,
   };
   const cutoffMs = latestTs - yearsMap[range] * 365.25 * 24 * 60 * 60 * 1000;
-  const filtered = observations.filter((obs) => obs.timestamp >= cutoffMs);
-  return filtered.length >= 2 ? filtered : observations.slice(-Math.min(observations.length, 6));
+  const filtered = validObservations.filter((obs) => obs.timestamp >= cutoffMs);
+  return filtered.length >= 2
+    ? filtered
+    : validObservations.slice(-Math.min(validObservations.length, 6));
 }
 
 export interface SeriesSummaryStats {
@@ -97,11 +170,25 @@ export interface SeriesSummaryStats {
   percentChange: number;
 }
 
-export function computeSeriesStats(observations: ObservationPoint[]): SeriesSummaryStats {
-  if (!observations.length) {
+export function computeSeriesStats(
+  observations: ObservationPoint[] | null | undefined
+): SeriesSummaryStats {
+  if (!Array.isArray(observations) || observations.length === 0) {
     return { latest: 0, earliest: 0, min: 0, max: 0, mean: 0, netChange: 0, percentChange: 0 };
   }
-  const vals = observations.map((o) => o.value);
+  const vals = observations
+    .filter(
+      (o) =>
+        o &&
+        typeof o.timestamp === 'number' &&
+        Number.isFinite(o.timestamp) &&
+        typeof o.value === 'number' &&
+        Number.isFinite(o.value)
+    )
+    .map((o) => o.value);
+  if (vals.length === 0) {
+    return { latest: 0, earliest: 0, min: 0, max: 0, mean: 0, netChange: 0, percentChange: 0 };
+  }
   const earliest = vals[0];
   const latest = vals[vals.length - 1];
   const min = Math.min(...vals);

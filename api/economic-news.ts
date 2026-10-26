@@ -389,7 +389,27 @@ const UPSTREAM_FEEDS: FeedConfig[] = [
 // In-memory server cache (5 minutes fresh TTL, up to 30 minutes stale fallback)
 let cachedNewsPayload: EconomicNewsResponse | null = null;
 let cachedAtTimestampMs = 0;
+let inFlightNewsPromise: Promise<EconomicNewsResponse> | null = null;
 const CACHE_TTL_MS = 5 * 60 * 1000;
+const MIN_FORCE_REFRESH_COOLDOWN_MS = 5000;
+
+/**
+ * Validates and sanitizes external URLs before displaying them in the UI.
+ * Rejects javascript:, data:, vbscript:, or malformed non-HTTP(S) links.
+ */
+export function sanitizeExternalHttpUrl(rawUrl: string, fallbackUrl: string): string {
+  const candidate = (rawUrl || '').trim();
+  if (!candidate) return fallbackUrl;
+  try {
+    const parsed = new URL(candidate);
+    if (parsed.protocol !== 'https:' && parsed.protocol !== 'http:') {
+      return fallbackUrl;
+    }
+    return parsed.toString();
+  } catch {
+    return fallbackUrl;
+  }
+}
 
 function formatIstTimestamp(date: Date): string {
   try {
@@ -455,7 +475,7 @@ const NON_ECONOMIC_EXCLUSION_REGEX =
 const ECONOMIC_SIGNAL_REGEX =
   /\b(economy|economic|gdp|gva|inflation|cpi|wpi|rbi|repo rate|monetary|central bank|fed|federal reserve|ecb|imf|world bank|wto|trade|export|import|deficit|surplus|tariff|customs|sanction|rupee|inr|usd|forex|fx|reserves|crude|oil|brent|opec|natural gas|energy|commodity|gold|silver|bond|yield|g-sec|treasury|fiscal|budget|tax|gst|customs|subsidy|capex|infrastructure|manufacturing|pli|msme|agriculture|monsoon|kharif|rabi|unemployment|employment|jobs|labour|plfs|wage|market|nifty|sensex|equity|stock|fii|fpi|fdi|investment|bank|credit|lending|liquidity|auction|recession|growth|supply chain|shipping|freight|red sea|geopolitic|climate|power|coal|solar|renewable|upi|digital payment|sebi|regulatory|ministry|mospi|commerce|finance|industrial|iip|pmi)\b/i;
 
-function isEconomicallyRelevant(
+export function isEconomicallyRelevant(
   title: string,
   description: string,
   sourceType: FeedConfig['type']
@@ -471,7 +491,7 @@ function isEconomicallyRelevant(
   return ECONOMIC_SIGNAL_REGEX.test(combined);
 }
 
-function normalizeHeadlineForDedup(headline: string): string {
+export function normalizeHeadlineForDedup(headline: string): string {
   return headline
     .toLowerCase()
     .replace(/[^a-z0-9\s]/g, ' ')
@@ -484,7 +504,7 @@ function normalizeHeadlineForDedup(headline: string): string {
     .join(' ');
 }
 
-function areHeadlinesDuplicate(a: string, b: string): boolean {
+export function areHeadlinesDuplicate(a: string, b: string): boolean {
   const normA = normalizeHeadlineForDedup(a);
   const normB = normalizeHeadlineForDedup(b);
   if (!normA || !normB) return false;
@@ -1254,7 +1274,8 @@ async function fetchSingleFeed(
             ? doc.descr
             : doc.descr?.['cdata!'] || '';
         const headline = decodeHtmlEntities(rawTitle);
-        const link = (doc.url || feed.officialUrl).replace(/^http:\/\//i, 'https://');
+        const rawLink = (doc.url || feed.officialUrl).replace(/^http:\/\//i, 'https://');
+        const link = sanitizeExternalHttpUrl(rawLink, feed.officialUrl);
         if (!headline || !isEconomicallyRelevant(headline, rawDesc, feed.type)) {
           continue;
         }
@@ -1271,7 +1292,7 @@ async function fetchSingleFeed(
           sourceName: feed.name,
           sourceShortName: feed.shortName,
           sourceType: feed.type,
-          sourceHomepageUrl: feed.officialUrl,
+          sourceHomepageUrl: sanitizeExternalHttpUrl(feed.officialUrl, 'https://www.worldbank.org/'),
           originalUrl: link,
           publishedAtIso: validDate.toISOString(),
           publishedAtIst: formatIstTimestamp(validDate),
@@ -1299,10 +1320,11 @@ async function fetchSingleFeed(
       for (let i = 0; i < itemMatches.length; i++) {
         const itemXml = itemMatches[i];
         const headline = extractXmlTag(itemXml, 'title');
-        const link =
+        const rawLink =
           extractXmlTag(itemXml, 'link') ||
           extractXmlTag(itemXml, 'guid') ||
           feed.officialUrl;
+        const link = sanitizeExternalHttpUrl(rawLink, feed.officialUrl);
         const rawDesc = extractXmlTag(itemXml, 'description');
         const rawPubDate =
           extractXmlTag(itemXml, 'pubDate') ||
@@ -1438,9 +1460,14 @@ export async function getEconomicNewsPayload(options?: {
     );
   }
 
-  // Return fresh cache if within TTL and not forced
+  // Protect upstream RSS/JSON providers against rapid force-refresh abuse (5s cooldown)
+  const canHonorForceRefresh =
+    Boolean(options?.forceRefresh) &&
+    nowMs - cachedAtTimestampMs >= MIN_FORCE_REFRESH_COOLDOWN_MS;
+
+  // Return fresh cache if within TTL and not forced (or within force-refresh cooldown)
   if (
-    !options?.forceRefresh &&
+    !canHonorForceRefresh &&
     cachedNewsPayload &&
     nowMs - cachedAtTimestampMs < CACHE_TTL_MS
   ) {
@@ -1451,82 +1478,111 @@ export async function getEconomicNewsPayload(options?: {
     };
   }
 
-  // Fetch all upstream feeds in parallel
-  const feedResults = await Promise.all(
-    UPSTREAM_FEEDS.map((feed) => fetchSingleFeed(feed, nowMs))
-  );
-
-  const sourcesStatus = feedResults.map((r) => r.status);
-  const rawLiveArticles = feedResults.flatMap((r) => r.articles);
-
-  // Deduplicate stories across feeds
-  const deduplicated: EconomicNewsArticle[] = [];
-  const seenUrls = new Set<string>();
-
-  for (const art of rawLiveArticles) {
-    const cleanUrl = art.originalUrl.split('?')[0].toLowerCase();
-    if (seenUrls.has(cleanUrl)) continue;
-    if (deduplicated.some((existing) => areHeadlinesDuplicate(existing.headline, art.headline))) {
-      continue;
-    }
-    seenUrls.add(cleanUrl);
-    deduplicated.push(art);
+  // Deduplicate concurrent cache-miss requests so parallel users share one upstream batch
+  if (inFlightNewsPromise) {
+    return inFlightNewsPromise;
   }
 
-  // If all live feeds failed, try stale cache before throwing error
-  if (deduplicated.length === 0) {
-    if (cachedNewsPayload) {
-      return {
-        ...cachedNewsPayload,
-        cacheStatus: 'STALE_FALLBACK',
-        cacheAgeSeconds: Math.floor((nowMs - cachedAtTimestampMs) / 1000),
+  inFlightNewsPromise = (async () => {
+    try {
+      const fetchStartMs = Date.now();
+      // Fetch all upstream feeds in parallel
+      const feedResults = await Promise.all(
+        UPSTREAM_FEEDS.map((feed) => fetchSingleFeed(feed, fetchStartMs))
+      );
+
+      const sourcesStatus = feedResults.map((r) => r.status);
+      const rawLiveArticles = feedResults.flatMap((r) => r.articles);
+
+      // Deduplicate stories across feeds
+      const deduplicated: EconomicNewsArticle[] = [];
+      const seenUrls = new Set<string>();
+
+      for (const art of rawLiveArticles) {
+        const cleanUrl = art.originalUrl.split('?')[0].toLowerCase();
+        if (seenUrls.has(cleanUrl)) continue;
+        if (
+          deduplicated.some((existing) =>
+            areHeadlinesDuplicate(existing.headline, art.headline)
+          )
+        ) {
+          continue;
+        }
+        seenUrls.add(cleanUrl);
+        deduplicated.push(art);
+      }
+
+      // If all live feeds failed, try stale cache before throwing error
+      if (deduplicated.length === 0) {
+        if (cachedNewsPayload) {
+          return {
+            ...cachedNewsPayload,
+            cacheStatus: 'STALE_FALLBACK',
+            cacheAgeSeconds: Math.floor((fetchStartMs - cachedAtTimestampMs) / 1000),
+          };
+        }
+        throw new Error(
+          'Unable to retrieve live economic news feeds from RBI, Federal Reserve, ECB, World Bank, and financial press endpoints.'
+        );
+      }
+
+      // Combine live deduplicated RSS/API articles with verified official MoSPI/MoCI/RBI statistical release milestones
+      const officialMilestones = getOfficialStatisticalMilestones(fetchStartMs);
+      for (const milestone of officialMilestones) {
+        if (
+          !deduplicated.some((existing) =>
+            areHeadlinesDuplicate(existing.headline, milestone.headline)
+          )
+        ) {
+          deduplicated.push(milestone);
+        }
+      }
+
+      const finalArticles = assignDashboardSections(deduplicated);
+      const activeSourcesCount = sourcesStatus.filter((s) => s.status === 'ok').length;
+
+      const responsePayload: EconomicNewsResponse = {
+        ok: true,
+        fetchedAtMs: fetchStartMs,
+        fetchedAtIst: formatIstTimestamp(new Date(fetchStartMs)),
+        cacheStatus: 'MISS',
+        cacheAgeSeconds: 0,
+        recommendedPollIntervalSeconds: 300,
+        totalArticles: finalArticles.length,
+        activeSourcesCount,
+        sourcesStatus,
+        articles: finalArticles,
       };
+
+      cachedNewsPayload = responsePayload;
+      cachedAtTimestampMs = fetchStartMs;
+
+      return responsePayload;
+    } finally {
+      inFlightNewsPromise = null;
     }
-    throw new Error(
-      'Unable to retrieve live economic news feeds from RBI, Federal Reserve, ECB, World Bank, and financial press endpoints.'
-    );
-  }
+  })();
 
-  // Combine live deduplicated RSS/API articles with verified official MoSPI/MoCI/RBI statistical release milestones
-  const officialMilestones = getOfficialStatisticalMilestones(nowMs);
-  for (const milestone of officialMilestones) {
-    if (
-      !deduplicated.some((existing) =>
-        areHeadlinesDuplicate(existing.headline, milestone.headline)
-      )
-    ) {
-      deduplicated.push(milestone);
-    }
-  }
-
-  const finalArticles = assignDashboardSections(deduplicated);
-  const activeSourcesCount = sourcesStatus.filter((s) => s.status === 'ok').length;
-
-  const responsePayload: EconomicNewsResponse = {
-    ok: true,
-    fetchedAtMs: nowMs,
-    fetchedAtIst: formatIstTimestamp(new Date(nowMs)),
-    cacheStatus: 'MISS',
-    cacheAgeSeconds: 0,
-    recommendedPollIntervalSeconds: 300,
-    totalArticles: finalArticles.length,
-    activeSourcesCount,
-    sourcesStatus,
-    articles: finalArticles,
-  };
-
-  cachedNewsPayload = responsePayload;
-  cachedAtTimestampMs = nowMs;
-
-  return responsePayload;
+  return inFlightNewsPromise;
 }
 
 export default async function handler(req: any, res: any) {
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'GET, OPTIONS');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+  res.setHeader('X-Content-Type-Options', 'nosniff');
+  res.setHeader('X-Frame-Options', 'SAMEORIGIN');
+  res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
 
   if (req.method === 'OPTIONS') {
     return res.status(200).end();
+  }
+
+  if (req.method && req.method !== 'GET') {
+    return res.status(405).json({
+      ok: false,
+      error: `Method ${req.method} Not Allowed. Use GET.`,
+    });
   }
 
   const forceRefresh = req.query?.force === '1' || req.query?.force === 'true';

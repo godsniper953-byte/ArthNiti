@@ -24,6 +24,7 @@ import { LiveIndianMarketsSection } from '../components/visualizations/LiveIndia
 import { IndianMarketIndicesResponse } from '../services/indianMarketService';
 import { EconomicNewsSection } from '../components/news/EconomicNewsSection';
 import { EconomicNewsResponse } from '../services/economicNewsService';
+import { ErrorBoundary } from '../components/common/ErrorBoundary';
 
 const LazyIndiaEconomicGlobe = React.lazy(() =>
   import('../components/visualizations/IndiaEconomicGlobe').then((m) => ({
@@ -228,42 +229,46 @@ export const OverviewPage: React.FC<OverviewPageProps> = ({
 
         {/* Full-Width 3D Global Trade Network Visualization */}
         <div ref={globeSectionRef} className="scroll-mt-20">
-          <Suspense
-            fallback={
-              <div className="w-full h-[560px] rounded-xl border border-slate-800 bg-[#070E1E] flex flex-col items-center justify-center p-6 text-center">
-                <Compass className="w-8 h-8 text-emerald-400 animate-spin mb-2" />
-                <p className="text-xs text-slate-300 font-mono-tabular">
-                  Initializing Interactive 3D Global Trade Network...
-                </p>
-              </div>
-            }
-          >
-            <LazyIndiaEconomicGlobe
-              theme={theme}
-              onOpenMerchandiseTradePage={() =>
-                onSelectPage('currency-oil', 'merchandise-trade')
+          <ErrorBoundary sectionName="3D Global Trade Network" theme={theme}>
+            <Suspense
+              fallback={
+                <div className="w-full h-[560px] rounded-xl border border-slate-800 bg-[#070E1E] flex flex-col items-center justify-center p-6 text-center">
+                  <Compass className="w-8 h-8 text-emerald-400 animate-spin mb-2" />
+                  <p className="text-xs text-slate-300 font-mono-tabular">
+                    Initializing Interactive 3D Global Trade Network...
+                  </p>
+                </div>
               }
-            />
-          </Suspense>
+            >
+              <LazyIndiaEconomicGlobe
+                theme={theme}
+                onOpenMerchandiseTradePage={() =>
+                  onSelectPage('currency-oil', 'merchandise-trade')
+                }
+              />
+            </Suspense>
+          </ErrorBoundary>
         </div>
       </section>
 
       {/* 1B. Live Indian Stock Market Indices Section (NIFTY 50, SENSEX, BANK NIFTY, NIFTY IT, MIDCAP 100) */}
-      <LiveIndianMarketsSection
-        marketData={marketData}
-        isLoading={marketLoading}
-        errorMessage={marketError}
-        isStaleCache={marketStaleCache}
-        autoRefreshEnabled={marketAutoRefresh}
-        onToggleAutoRefresh={onToggleMarketAutoRefresh}
-        onRefreshNow={onRefreshMarketNow}
-        onSimulateError={onSimulateMarketError}
-        simulatedUnavailableIndexId={simulatedUnavailableIndexId}
-        onSimulateSingleIndexUnavailable={onSimulateSingleIndexUnavailable}
-        selectedIndexId={selectedMarketIndexId}
-        onSelectIndexId={onSelectMarketIndexId}
-        theme={theme}
-      />
+      <ErrorBoundary sectionName="Live Indian Stock Market Indices" theme={theme}>
+        <LiveIndianMarketsSection
+          marketData={marketData}
+          isLoading={marketLoading}
+          errorMessage={marketError}
+          isStaleCache={marketStaleCache}
+          autoRefreshEnabled={marketAutoRefresh}
+          onToggleAutoRefresh={onToggleMarketAutoRefresh}
+          onRefreshNow={onRefreshMarketNow}
+          onSimulateError={onSimulateMarketError}
+          simulatedUnavailableIndexId={simulatedUnavailableIndexId}
+          onSimulateSingleIndexUnavailable={onSimulateSingleIndexUnavailable}
+          selectedIndexId={selectedMarketIndexId}
+          onSelectIndexId={onSelectMarketIndexId}
+          theme={theme}
+        />
+      </ErrorBoundary>
 
       {/* 2. Headline KPI Cards Section */}
       <section ref={kpiSectionRef} className="space-y-4 scroll-mt-20">
@@ -563,19 +568,21 @@ export const OverviewPage: React.FC<OverviewPageProps> = ({
       </section>
 
       {/* 4B. Economic News & Current Affairs Intelligence Preview Section */}
-      <EconomicNewsSection
-        newsData={newsData}
-        isLoading={newsLoading}
-        errorMessage={newsError}
-        isStaleCache={newsStaleCache}
-        autoRefreshEnabled={newsAutoRefresh}
-        onToggleAutoRefresh={onToggleNewsAutoRefresh}
-        onRefreshNow={onRefreshNewsNow}
-        onSimulateError={onSimulateNewsError}
-        onSelectPage={onSelectPage}
-        theme={theme}
-        mode="overview-preview"
-      />
+      <ErrorBoundary sectionName="Economic News & Current Affairs Preview" theme={theme}>
+        <EconomicNewsSection
+          newsData={newsData}
+          isLoading={newsLoading}
+          errorMessage={newsError}
+          isStaleCache={newsStaleCache}
+          autoRefreshEnabled={newsAutoRefresh}
+          onToggleAutoRefresh={onToggleNewsAutoRefresh}
+          onRefreshNow={onRefreshNewsNow}
+          onSimulateError={onSimulateNewsError}
+          onSelectPage={onSelectPage}
+          theme={theme}
+          mode="overview-preview"
+        />
+      </ErrorBoundary>
 
       {/* 5. Latest Data Updates & Source Transparency Grid */}
       <section className="grid grid-cols-1 lg:grid-cols-12 gap-6">
@@ -595,7 +602,9 @@ export const OverviewPage: React.FC<OverviewPageProps> = ({
               </div>
               <h3 className="text-base font-semibold mt-0.5">Latest Macroeconomic Releases</h3>
             </div>
-            <span className="text-xs font-mono-tabular text-slate-400">Illustrative Cycle</span>
+            <span className="text-xs font-mono-tabular text-emerald-400">
+              Verified Official Releases
+            </span>
           </div>
 
           <div className="divide-y divide-slate-800/60 mt-2">
@@ -679,7 +688,7 @@ export const OverviewPage: React.FC<OverviewPageProps> = ({
           <div className="mt-5 pt-3 border-t border-slate-800/60 flex items-center justify-between text-xs">
             <span className="text-slate-400 flex items-center gap-1.5">
               <Info className="w-3.5 h-3.5 text-cyan-400" />
-              <span>5 Institutional Repositories Documented</span>
+              <span>{sources.length} Institutional Repositories Documented</span>
             </span>
             <button
               type="button"

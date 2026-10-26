@@ -372,3 +372,23 @@ export interface GlobalTradeNetworkDataset {
   errorMessage?: string;
 }
 
+export interface StructuredIndicatorSourceRegistryEntry {
+  indicatorId: string;
+  displayName: string;
+  provider: string;
+  sourceUrl: string;
+  retrievalMethod: string;
+  unit: string;
+  referencePeriod: string;
+  publicationTimestamp: string;
+  lastSuccessfulRetrievalNote: string;
+  expectedUpdateFrequency: string;
+  freshnessThreshold: string;
+  dataStatus:
+    | 'verified_official_csv'
+    | 'live_exchange_api_proxy'
+    | 'live_rss_json_aggregation';
+  methodologicalNotes: string;
+}
+
+

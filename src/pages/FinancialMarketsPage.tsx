@@ -14,6 +14,8 @@ import {
 } from 'lucide-react';
 import { EconomicIndicator } from '../types/economy';
 import { AnalyticalChartPanel } from '../components/charts/AnalyticalChartPanel';
+import { LiveIndianMarketsSection } from '../components/visualizations/LiveIndianMarketsSection';
+import { IndianMarketIndicesResponse } from '../services/indianMarketService';
 
 interface FinancialMarketsPageProps {
   marketIndicator: EconomicIndicator;
@@ -27,6 +29,18 @@ interface FinancialMarketsPageProps {
   onResetCustomRepoCsv: () => void;
   onActivateRepoDemoFallback: () => void;
   theme: 'dark' | 'light';
+  marketData?: IndianMarketIndicesResponse | null;
+  marketLoading?: boolean;
+  marketError?: string | null;
+  marketStaleCache?: boolean;
+  marketAutoRefresh?: boolean;
+  onToggleMarketAutoRefresh?: () => void;
+  onRefreshMarketNow?: () => void;
+  onSimulateMarketError?: (simulate: boolean) => void;
+  simulatedUnavailableIndexId?: string | null;
+  onSimulateSingleIndexUnavailable?: (indexId: string | null) => void;
+  selectedMarketIndexId?: string;
+  onSelectMarketIndexId?: (indexId: string) => void;
 }
 
 export const FinancialMarketsPage: React.FC<FinancialMarketsPageProps> = ({
@@ -41,6 +55,18 @@ export const FinancialMarketsPage: React.FC<FinancialMarketsPageProps> = ({
   onResetCustomRepoCsv,
   onActivateRepoDemoFallback,
   theme,
+  marketData = null,
+  marketLoading = false,
+  marketError = null,
+  marketStaleCache = false,
+  marketAutoRefresh = true,
+  onToggleMarketAutoRefresh = () => {},
+  onRefreshMarketNow = () => {},
+  onSimulateMarketError = () => {},
+  simulatedUnavailableIndexId = null,
+  onSimulateSingleIndexUnavailable = () => {},
+  selectedMarketIndexId = 'nifty-50',
+  onSelectMarketIndexId = () => {},
 }) => {
   const [selectedBenchmark, setSelectedBenchmark] = useState<'nifty' | 'sensex' | 'gsec'>('nifty');
   const [showRepoUpdater, setShowRepoUpdater] = useState<boolean>(false);
@@ -656,6 +682,23 @@ export const FinancialMarketsPage: React.FC<FinancialMarketsPageProps> = ({
           </div>
         </div>
       )}
+
+      {/* 7B. Live Indian Stock Market Indices Section (NIFTY 50, SENSEX, BANK NIFTY, NIFTY IT, MIDCAP 100) */}
+      <LiveIndianMarketsSection
+        marketData={marketData}
+        isLoading={marketLoading}
+        errorMessage={marketError}
+        isStaleCache={marketStaleCache}
+        autoRefreshEnabled={marketAutoRefresh}
+        onToggleAutoRefresh={onToggleMarketAutoRefresh}
+        onRefreshNow={onRefreshMarketNow}
+        onSimulateError={onSimulateMarketError}
+        simulatedUnavailableIndexId={simulatedUnavailableIndexId}
+        onSimulateSingleIndexUnavailable={onSimulateSingleIndexUnavailable}
+        selectedIndexId={selectedMarketIndexId}
+        onSelectIndexId={onSelectMarketIndexId}
+        theme={theme}
+      />
 
       {/* 8. Explicit Delayed / Archival Equity Market Data Disclosure Banner */}
       <div

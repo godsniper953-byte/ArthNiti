@@ -20,6 +20,8 @@ import {
 import { KpiCard } from '../components/cards/KpiCard';
 import { AnalyticalChartPanel } from '../components/charts/AnalyticalChartPanel';
 import { RelationshipExplorer } from '../components/dashboard/RelationshipExplorer';
+import { LiveIndianMarketsSection } from '../components/visualizations/LiveIndianMarketsSection';
+import { IndianMarketIndicesResponse } from '../services/indianMarketService';
 
 const LazyIndiaEconomicGlobe = React.lazy(() =>
   import('../components/visualizations/IndiaEconomicGlobe').then((m) => ({
@@ -54,6 +56,18 @@ interface OverviewPageProps {
   tradeLoading?: boolean;
   tradeError?: string | null;
   onRetryTrade?: () => void;
+  marketData?: IndianMarketIndicesResponse | null;
+  marketLoading?: boolean;
+  marketError?: string | null;
+  marketStaleCache?: boolean;
+  marketAutoRefresh?: boolean;
+  onToggleMarketAutoRefresh?: () => void;
+  onRefreshMarketNow?: () => void;
+  onSimulateMarketError?: (simulate: boolean) => void;
+  simulatedUnavailableIndexId?: string | null;
+  onSimulateSingleIndexUnavailable?: (indexId: string | null) => void;
+  selectedMarketIndexId?: string;
+  onSelectMarketIndexId?: (indexId: string) => void;
 }
 
 export const OverviewPage: React.FC<OverviewPageProps> = ({
@@ -83,6 +97,18 @@ export const OverviewPage: React.FC<OverviewPageProps> = ({
   tradeLoading = false,
   tradeError = null,
   onRetryTrade,
+  marketData = null,
+  marketLoading = false,
+  marketError = null,
+  marketStaleCache = false,
+  marketAutoRefresh = true,
+  onToggleMarketAutoRefresh = () => {},
+  onRefreshMarketNow = () => {},
+  onSimulateMarketError = () => {},
+  simulatedUnavailableIndexId = null,
+  onSimulateSingleIndexUnavailable = () => {},
+  selectedMarketIndexId = 'nifty-50',
+  onSelectMarketIndexId = () => {},
 }) => {
   const kpiSectionRef = useRef<HTMLDivElement | null>(null);
 
@@ -203,6 +229,23 @@ export const OverviewPage: React.FC<OverviewPageProps> = ({
           </Suspense>
         </div>
       </section>
+
+      {/* 1B. Live Indian Stock Market Indices Section (NIFTY 50, SENSEX, BANK NIFTY, NIFTY IT, MIDCAP 100) */}
+      <LiveIndianMarketsSection
+        marketData={marketData}
+        isLoading={marketLoading}
+        errorMessage={marketError}
+        isStaleCache={marketStaleCache}
+        autoRefreshEnabled={marketAutoRefresh}
+        onToggleAutoRefresh={onToggleMarketAutoRefresh}
+        onRefreshNow={onRefreshMarketNow}
+        onSimulateError={onSimulateMarketError}
+        simulatedUnavailableIndexId={simulatedUnavailableIndexId}
+        onSimulateSingleIndexUnavailable={onSimulateSingleIndexUnavailable}
+        selectedIndexId={selectedMarketIndexId}
+        onSelectIndexId={onSelectMarketIndexId}
+        theme={theme}
+      />
 
       {/* 2. Headline KPI Cards Section */}
       <section ref={kpiSectionRef} className="space-y-4 scroll-mt-20">

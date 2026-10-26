@@ -47,9 +47,14 @@ import {
   loadOfficialMerchandiseTradeData,
   saveUserUploadedTradeCsv,
 } from './services/tradeBalanceDataService';
+import {
+  fetchIndianMarketIndices,
+  IndianMarketIndicesResponse,
+} from './services/indianMarketService';
 import { EconomicIndicator, PageId } from './types/economy';
 import { Sidebar } from './components/navigation/Sidebar';
 import { TopBar } from './components/navigation/TopBar';
+import { LiveMarketTickerStrip } from './components/visualizations/LiveMarketTickerStrip';
 import { OverviewPage } from './pages/OverviewPage';
 import { GdpGrowthPage } from './pages/GdpGrowthPage';
 import { InflationPage } from './pages/InflationPage';
@@ -138,10 +143,68 @@ export default function App() {
     'official_moci_csv' | 'user_uploaded_csv' | 'demonstration_fallback'
   >('official_moci_csv');
 
+  // Live Indian Stock Market Indices State (NIFTY 50, BSE SENSEX, BANK NIFTY, NIFTY IT, NIFTY MIDCAP 100)
+  const [marketData, setMarketData] = useState<IndianMarketIndicesResponse | null>(null);
+  const [marketLoading, setMarketLoading] = useState<boolean>(true);
+  const [marketError, setMarketError] = useState<string | null>(null);
+  const [marketStaleCache, setMarketStaleCache] = useState<boolean>(false);
+  const [marketAutoRefresh, setMarketAutoRefresh] = useState<boolean>(true);
+  const [simulatedUnavailableIndexId, setSimulatedUnavailableIndexId] = useState<string | null>(
+    null
+  );
+  const [selectedMarketIndexId, setSelectedMarketIndexId] = useState<string>('nifty-50');
+
   const baseIndicators = useMemo(() => getIndicatorsSync(), []);
   const sources = useMemo(() => getDataSourcesSync(), []);
   const sectorGva = useMemo(() => getSectorGvaSync(), []);
   const latestReleases = useMemo(() => getLatestReleasesSync(), []);
+
+  const handleFetchMarketIndices = useCallback(
+    async (options?: {
+      forceRefresh?: boolean;
+      simulateError?: boolean;
+      simulateSingleIndexUnavailableId?: string | null;
+    }) => {
+      setMarketLoading(true);
+      if (options?.simulateError === false) {
+        setMarketError(null);
+      }
+      const singleUnavailableId =
+        options?.simulateSingleIndexUnavailableId !== undefined
+          ? options.simulateSingleIndexUnavailableId
+          : simulatedUnavailableIndexId;
+
+      const res = await fetchIndianMarketIndices({
+        forceRefresh: options?.forceRefresh,
+        simulateError: options?.simulateError,
+        simulateSingleIndexUnavailableId: singleUnavailableId,
+      });
+
+      if (res.status === 'success' && res.data) {
+        setMarketData(res.data);
+        setMarketStaleCache(res.isStaleClientCache);
+        setMarketError(null);
+      } else {
+        setMarketError(
+          res.errorMessage || 'Failed to retrieve live Indian stock market indices.'
+        );
+      }
+      setMarketLoading(false);
+    },
+    [simulatedUnavailableIndexId]
+  );
+
+  const handleSimulateSingleIndexUnavailable = useCallback(
+    (indexId: string | null) => {
+      setSimulatedUnavailableIndexId(indexId);
+      handleFetchMarketIndices({
+        forceRefresh: false,
+        simulateError: false,
+        simulateSingleIndexUnavailableId: indexId,
+      });
+    },
+    [handleFetchMarketIndices]
+  );
 
   const handleFetchOfficialCpi = useCallback(async (simulateError = false) => {
     setCpiLoading(true);
@@ -281,6 +344,7 @@ export default function App() {
     handleFetchOfficialUsdInr({ simulateError: false, simulateEmpty: false });
     handleFetchOfficialCrude(false);
     handleFetchOfficialTrade(false);
+    handleFetchMarketIndices({ forceRefresh: false, simulateError: false });
   }, [
     handleFetchOfficialCpi,
     handleFetchOfficialGdp,
@@ -289,7 +353,39 @@ export default function App() {
     handleFetchOfficialUsdInr,
     handleFetchOfficialCrude,
     handleFetchOfficialTrade,
+    handleFetchMarketIndices,
   ]);
+
+  // Safe automatic polling for Live Indian Market Indices (pauses when tab is hidden or market is closed)
+  useEffect(() => {
+    if (!marketAutoRefresh || marketError) return;
+
+    const sessionState = marketData?.marketStatus || 'CLOSED';
+    // Only poll actively when market is OPEN or PRE_OPEN (30s interval); when CLOSED, check once every 5 minutes in case session opens
+    const intervalMs =
+      sessionState === 'OPEN' || sessionState === 'PRE_OPEN' ? 30000 : 300000;
+
+    const timerId = window.setInterval(() => {
+      if (document.visibilityState === 'visible') {
+        handleFetchMarketIndices({ forceRefresh: false });
+      }
+    }, intervalMs);
+
+    const handleVisibilityChange = () => {
+      if (
+        document.visibilityState === 'visible' &&
+        (sessionState === 'OPEN' || sessionState === 'PRE_OPEN')
+      ) {
+        handleFetchMarketIndices({ forceRefresh: false });
+      }
+    };
+
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    return () => {
+      window.clearInterval(timerId);
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+    };
+  }, [marketAutoRefresh, marketError, marketData?.marketStatus, handleFetchMarketIndices]);
 
   const handleUploadCustomCsv = useCallback((csvText: string) => {
     try {
@@ -714,6 +810,22 @@ export default function App() {
     [indicators]
   );
 
+  const handleSelectTickerIndex = useCallback(
+    (indexId: string) => {
+      setSelectedMarketIndexId(indexId);
+      if (activePage !== 'overview' && activePage !== 'financial-markets') {
+        setActivePage('overview');
+      }
+      setTimeout(() => {
+        const el = document.getElementById('live-indian-markets-section');
+        if (el) {
+          el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        }
+      }, 80);
+    },
+    [activePage]
+  );
+
   const renderActivePage = () => {
     switch (activePage) {
       case 'overview':
@@ -747,6 +859,22 @@ export default function App() {
             tradeLoading={tradeLoading}
             tradeError={tradeError}
             onRetryTrade={() => handleFetchOfficialTrade(false)}
+            marketData={marketData}
+            marketLoading={marketLoading}
+            marketError={marketError}
+            marketStaleCache={marketStaleCache}
+            marketAutoRefresh={marketAutoRefresh}
+            onToggleMarketAutoRefresh={() => setMarketAutoRefresh((prev) => !prev)}
+            onRefreshMarketNow={() =>
+              handleFetchMarketIndices({ forceRefresh: true, simulateError: false })
+            }
+            onSimulateMarketError={(simErr) =>
+              handleFetchMarketIndices({ forceRefresh: false, simulateError: simErr })
+            }
+            simulatedUnavailableIndexId={simulatedUnavailableIndexId}
+            onSimulateSingleIndexUnavailable={handleSimulateSingleIndexUnavailable}
+            selectedMarketIndexId={selectedMarketIndexId}
+            onSelectMarketIndexId={setSelectedMarketIndexId}
           />
         );
       case 'gdp-growth':
@@ -844,6 +972,22 @@ export default function App() {
             onResetCustomRepoCsv={handleResetCustomRepoCsv}
             onActivateRepoDemoFallback={handleActivateRepoDemoFallback}
             theme={theme}
+            marketData={marketData}
+            marketLoading={marketLoading}
+            marketError={marketError}
+            marketStaleCache={marketStaleCache}
+            marketAutoRefresh={marketAutoRefresh}
+            onToggleMarketAutoRefresh={() => setMarketAutoRefresh((prev) => !prev)}
+            onRefreshMarketNow={() =>
+              handleFetchMarketIndices({ forceRefresh: true, simulateError: false })
+            }
+            onSimulateMarketError={(simErr) =>
+              handleFetchMarketIndices({ forceRefresh: false, simulateError: simErr })
+            }
+            simulatedUnavailableIndexId={simulatedUnavailableIndexId}
+            onSimulateSingleIndexUnavailable={handleSimulateSingleIndexUnavailable}
+            selectedMarketIndexId={selectedMarketIndexId}
+            onSelectMarketIndexId={setSelectedMarketIndexId}
           />
         );
       case 'comparisons':
@@ -891,6 +1035,19 @@ export default function App() {
           indicators={indicators}
           theme={theme}
           onToggleTheme={() => setTheme((prev) => (prev === 'dark' ? 'light' : 'dark'))}
+        />
+
+        {/* Compact Live Indian Market Indices Ticker at Top of Dashboard */}
+        <LiveMarketTickerStrip
+          marketData={marketData}
+          isLoading={marketLoading}
+          errorMessage={marketError}
+          isStaleCache={marketStaleCache}
+          onRefresh={() =>
+            handleFetchMarketIndices({ forceRefresh: true, simulateError: false })
+          }
+          onSelectIndexCard={handleSelectTickerIndex}
+          theme={theme}
         />
 
         {/* Data Provenance & Transparency Notice Strip */}

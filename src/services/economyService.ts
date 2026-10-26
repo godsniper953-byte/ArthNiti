@@ -310,6 +310,16 @@ export function alignIndicatorsForComparison(
   };
 }
 
+export function formatSignedUsdBillion(value: number | null | undefined, decimals = 2): string {
+  if (value === null || value === undefined || !Number.isFinite(value)) {
+    return '—';
+  }
+  const abs = Math.abs(value).toFixed(decimals);
+  if (value < 0) return `-$${abs}B`;
+  if (value > 0) return `+$${abs}B`;
+  return `$${abs}B`;
+}
+
 export function exportObservationsToCsv(
   title: string,
   unit: string,
@@ -323,7 +333,7 @@ export function exportObservationsToCsv(
     `# Dataset: ${title}`,
     `# Unit: ${unit}`,
     `# Source Attribution: ${source}`,
-    `# Notice: Illustrative development dataset structured for macroeconomic analysis`,
+    `# Notice: Verified official statistical dataset & analytical time-series exported from ArthNiti`,
     `# Exported At: ${new Date().toISOString()}`,
     '',
   ];

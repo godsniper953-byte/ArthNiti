@@ -626,7 +626,7 @@ export const CurrencyOilPage: React.FC<CurrencyOilPageProps> = ({
                 <div className="p-3 rounded-lg bg-[#060B16]/80 border border-slate-800 text-[11px] font-mono-tabular text-slate-300 space-y-1">
                   <div className="text-cyan-400 font-semibold">Example Monthly Row:</div>
                   <div className="break-all">
-                    2026-09,Sep 2026,2026-27,44.40,74.61,-30.21,30.21,23.04,8.00,16.91,-13.30,259.89,437.53,177.64,15 Oct 2026,Provisional
+                    2026-09,Sep 2026,2026-27,44.40,74.61,-30.21,30.21,23.06,8.01,16.91,-13.30,261.62,437.69,176.07,15 Oct 2026,Provisional
                   </div>
                 </div>
               </div>
@@ -638,7 +638,7 @@ export const CurrencyOilPage: React.FC<CurrencyOilPageProps> = ({
                     rows={4}
                     value={tradeCsvDraft}
                     onChange={(e) => setTradeCsvDraft(e.target.value)}
-                    placeholder="year_month,period_label,financial_year,merchandise_exports_usd_bn,merchandise_imports_usd_bn,exports_yoy_pct,imports_yoy_pct,release_date,status&#10;2026-08,Aug 2026,2026-27,43.81,70.67,26.11,14.06,15 Sep 2026,Provisional&#10;2026-09,Sep 2026,2026-27,44.40,74.61,23.04,8.00,15 Oct 2026,Provisional"
+                    placeholder="year_month,period_label,financial_year,merchandise_exports_usd_bn,merchandise_imports_usd_bn,exports_yoy_pct,imports_yoy_pct,release_date,status&#10;2026-08,Aug 2026,2026-27,43.81,70.67,26.11,14.06,15 Sep 2026,Provisional&#10;2026-09,Sep 2026,2026-27,44.40,74.61,23.06,8.01,15 Oct 2026,Provisional"
                     className="mt-1.5 w-full rounded-lg border border-slate-700 bg-[#060B16] p-2.5 text-xs font-mono-tabular text-slate-100 focus:outline-2 focus:outline-cyan-500"
                   />
                 </label>
@@ -886,14 +886,14 @@ export const CurrencyOilPage: React.FC<CurrencyOilPageProps> = ({
                   >
                     <span className="text-slate-400">Cumulative H1 FY27 (Apr–Sep):</span>
                     <span className="text-amber-400 font-semibold">
-                      -${(tradeMeta?.fyCumulativeDeficitUsdBn ?? 177.64).toFixed(2)}B
+                      -${(tradeMeta?.fyCumulativeDeficitUsdBn ?? 176.07).toFixed(2)}B
                     </span>
                   </div>
                 </div>
               </div>
 
               <div className="mt-2.5 pt-2 border-t border-slate-800/80 text-[10px] text-slate-400">
-                Cumulative FY27 (Apr–Sep): Exports ${(tradeMeta?.fyCumulativeExportsUsdBn ?? 259.89).toFixed(2)}B · Imports ${(tradeMeta?.fyCumulativeImportsUsdBn ?? 437.53).toFixed(2)}B
+                Cumulative FY27 (Apr–Sep): Exports ${(tradeMeta?.fyCumulativeExportsUsdBn ?? 261.62).toFixed(2)}B · Imports ${(tradeMeta?.fyCumulativeImportsUsdBn ?? 437.69).toFixed(2)}B
               </div>
             </div>
           </div>

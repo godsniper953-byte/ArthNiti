@@ -1,11 +1,13 @@
 /**
  * ArthNiti — Controlled Local Staged Load & Latency Benchmark (Phase 10 & Phase 11)
  *
- * Safely benchmarks the local ArthNiti Express/Serverless server on http://localhost:3000
- * across progressive concurrency stages (1, 10, 25, 50 concurrent requests) without
- * hammering external third-party APIs (protected by server-side caching & request deduplication).
+ * Explicitly separates:
+ *   - Cold-Cache / Upstream Fetch Latency (1 sequential cache-miss probe per live endpoint)
+ *   - Warm-Cache / In-Memory Cache Hit Capacity (progressive concurrency stages: c=5, c=25, c=50)
  *
- * Also includes a ready-to-run k6 configuration block in comments for external staging use.
+ * Note: Per-instance in-memory caches protect upstream providers (Yahoo Finance v8, RBI/Fed/ECB/World Bank RSS)
+ * from concurrent burst exhaustion. In serverless deployments (Vercel), each warm lambda instance maintains its own
+ * in-memory cache with 15s (market) and 300s (news) TTLs plus a 5s force-refresh cooldown.
  */
 
 const BASE_URL = process.env.LOAD_TEST_BASE_URL || 'http://localhost:3000';
@@ -19,11 +21,12 @@ function percentile(sortedArr, p) {
   return Number(sortedArr[idx].toFixed(2));
 }
 
-async function runStage({ name, path, totalRequests, concurrency }) {
+async function runStage({ name, mode, path, totalRequests, concurrency }) {
   const latencies = [];
   let successCount = 0;
   let errorCount = 0;
   let cacheHits = 0;
+  let cacheMisses = 0;
   const statusCounts = {};
 
   const startWallMs = performance.now();
@@ -37,7 +40,7 @@ async function runStage({ name, path, totalRequests, concurrency }) {
       try {
         const res = await fetch(`${BASE_URL}${path}`, {
           headers: { Accept: 'application/json, text/html' },
-          signal: AbortSignal.timeout(8000),
+          signal: AbortSignal.timeout(12000),
         });
         const elapsed = performance.now() - reqStart;
         latencies.push(elapsed);
@@ -50,6 +53,8 @@ async function runStage({ name, path, totalRequests, concurrency }) {
             const body = await res.json();
             if (body?.cacheStatus === 'HIT') {
               cacheHits++;
+            } else if (body?.cacheStatus === 'MISS') {
+              cacheMisses++;
             }
           } else {
             await res.text();
@@ -74,50 +79,70 @@ async function runStage({ name, path, totalRequests, concurrency }) {
   const rps = Number(((totalRequests / totalWallMs) * 1000).toFixed(1));
   return {
     stage: name,
+    cacheMode: mode,
     endpoint: path,
     totalRequests,
     concurrency,
     successRatePct: Number(((successCount / totalRequests) * 100).toFixed(2)),
     errorCount,
     cacheHits,
+    cacheMisses,
     throughputRps: rps,
     p50Ms: percentile(latencies, 50),
     p95Ms: percentile(latencies, 95),
     p99Ms: percentile(latencies, 99),
-    statusCounts,
   };
 }
 
 async function main() {
   console.log(`=== ArthNiti Staged Load & Latency Benchmark (${BASE_URL}) ===`);
 
-  // Warm up caches with 1 request each so concurrent stages test server capacity & cache protection
-  await fetch(`${BASE_URL}/api/health`).catch(() => null);
-  await fetch(`${BASE_URL}/api/market-indices`).catch(() => null);
-  await fetch(`${BASE_URL}/api/economic-news`).catch(() => null);
-
   const stages = [
-    { name: '1. Baseline Health Check', path: '/api/health', totalRequests: 50, concurrency: 5 },
     {
-      name: '2. Concurrent Market Indices Refresh (c=25)',
+      name: '0A. Cold-Cache Upstream Fetch (Market Indices)',
+      mode: 'COLD_UPSTREAM_MISS',
+      path: '/api/market-indices?refresh=true',
+      totalRequests: 1,
+      concurrency: 1,
+    },
+    {
+      name: '0B. Cold-Cache Upstream Fetch (Economic News 10-Feed)',
+      mode: 'COLD_UPSTREAM_MISS',
+      path: '/api/economic-news?force=1',
+      totalRequests: 1,
+      concurrency: 1,
+    },
+    {
+      name: '1. Baseline Health Check (c=5)',
+      mode: 'STATELESS_JSON',
+      path: '/api/health',
+      totalRequests: 50,
+      concurrency: 5,
+    },
+    {
+      name: '2. Warm-Cache Market Indices (c=25)',
+      mode: 'WARM_CACHE_HIT',
       path: '/api/market-indices',
       totalRequests: 100,
       concurrency: 25,
     },
     {
       name: '3. High-Concurrency Market Spike (c=50)',
+      mode: 'WARM_CACHE_HIT',
       path: '/api/market-indices',
       totalRequests: 150,
       concurrency: 50,
     },
     {
-      name: '4. Concurrent Economic News Feed (c=25)',
+      name: '4. Warm-Cache Economic News Feed (c=25)',
+      mode: 'WARM_CACHE_HIT',
       path: '/api/economic-news',
       totalRequests: 100,
       concurrency: 25,
     },
     {
-      name: '5. Official CSV Asset Delivery (MoSPI GDP)',
+      name: '5. Official CSV Asset Delivery (MoSPI GDP, c=25)',
+      mode: 'STATIC_ASSET',
       path: '/data/mospi_gdp_official.csv',
       totalRequests: 100,
       concurrency: 25,

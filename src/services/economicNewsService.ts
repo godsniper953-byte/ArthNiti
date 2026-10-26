@@ -20,6 +20,10 @@ import type {
   NewsSubTopicId,
 } from '../../api/economic-news';
 import { NEWS_SUBTOPICS_META } from '../../api/economic-news';
+import {
+  computeBackoffDelayMs,
+  isRetryableHttpStatus,
+} from './indianMarketService';
 
 export type {
   AffectedArthNitiIndicator,
@@ -33,7 +37,7 @@ export type {
   NewsSubTopicId,
 };
 
-export { NEWS_SUBTOPICS_META };
+export { NEWS_SUBTOPICS_META, computeBackoffDelayMs, isRetryableHttpStatus };
 
 const CLIENT_STORAGE_KEY = 'arthniti_economic_news_cache_v1';
 
@@ -81,6 +85,7 @@ let activeClientNewsRequest: Promise<FetchEconomicNewsResult> | null = null;
 export async function fetchEconomicNews(options?: {
   forceRefresh?: boolean;
   simulateError?: boolean;
+  maxRetries?: number;
 }): Promise<FetchEconomicNewsResult> {
   if (
     activeClientNewsRequest &&
@@ -89,6 +94,8 @@ export async function fetchEconomicNews(options?: {
   ) {
     return activeClientNewsRequest;
   }
+
+  const maxRetries = options?.simulateError ? 0 : (options?.maxRetries ?? 2);
 
   const requestTask = (async (): Promise<FetchEconomicNewsResult> => {
     const params = new URLSearchParams();
@@ -102,41 +109,74 @@ export async function fetchEconomicNews(options?: {
     const queryString = params.toString();
     const url = `/api/economic-news${queryString ? `?${queryString}` : ''}`;
 
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 10000);
+    let lastError: Error | null = null;
+
+    for (let attempt = 0; attempt <= maxRetries; attempt++) {
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 10000);
+
+      try {
+        const res = await fetch(url, {
+          headers: {
+            Accept: 'application/json',
+          },
+          signal: controller.signal,
+        });
+        clearTimeout(timeoutId);
+
+        const contentType = res.headers.get('content-type') || '';
+        if (!res.ok || !contentType.includes('application/json')) {
+          const errBody = await res.json().catch(() => ({}));
+          const statusErr = new Error(
+            errBody?.error ||
+              `Server returned HTTP ${res.status} when fetching live economic news.`
+          );
+          if (
+            options?.simulateError ||
+            !isRetryableHttpStatus(res.status) ||
+            attempt === maxRetries
+          ) {
+            throw statusErr;
+          }
+          lastError = statusErr;
+          const waitMs = computeBackoffDelayMs(attempt);
+          await new Promise((r) => setTimeout(r, waitMs));
+          continue;
+        }
+
+        const payload = (await res.json()) as EconomicNewsResponse;
+        if (!payload.ok || !Array.isArray(payload.articles)) {
+          throw new Error('Malformed response from /api/economic-news endpoint.');
+        }
+
+        saveClientCache(payload);
+        return {
+          status: 'success',
+          data: payload,
+          isStaleClientCache: payload.cacheStatus === 'STALE_FALLBACK',
+          errorMessage: null,
+        };
+      } catch (err: any) {
+        clearTimeout(timeoutId);
+        lastError = err instanceof Error ? err : new Error(String(err));
+        const isPermanentHttp =
+          lastError.message.includes('HTTP 400') ||
+          lastError.message.includes('HTTP 404') ||
+          lastError.message.includes('HTTP 405');
+        if (options?.simulateError || isPermanentHttp || attempt === maxRetries) {
+          break;
+        }
+        const waitMs = computeBackoffDelayMs(attempt);
+        await new Promise((r) => setTimeout(r, waitMs));
+      }
+    }
 
     try {
-      const res = await fetch(url, {
-        headers: {
-          Accept: 'application/json',
-        },
-        signal: controller.signal,
-      });
-      clearTimeout(timeoutId);
-
-      const contentType = res.headers.get('content-type') || '';
-      if (!res.ok || !contentType.includes('application/json')) {
-        const errBody = await res.json().catch(() => ({}));
-        throw new Error(
-          errBody?.error ||
-            `Server returned HTTP ${res.status} when fetching live economic news.`
-        );
-      }
-
-      const payload = (await res.json()) as EconomicNewsResponse;
-      if (!payload.ok || !Array.isArray(payload.articles)) {
-        throw new Error('Malformed response from /api/economic-news endpoint.');
-      }
-
-      saveClientCache(payload);
-      return {
-        status: 'success',
-        data: payload,
-        isStaleClientCache: payload.cacheStatus === 'STALE_FALLBACK',
-        errorMessage: null,
-      };
+      throw (
+        lastError ||
+        new Error('Unable to fetch live economic news from official and financial feeds.')
+      );
     } catch (err: any) {
-      clearTimeout(timeoutId);
       // If simulating error explicitly for verification, return the error state directly
       if (options?.simulateError) {
         return {

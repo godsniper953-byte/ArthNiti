@@ -582,7 +582,7 @@ const INDICATOR_CATALOG: Record<
   'crude-oil': {
     id: 'crude-oil',
     label: 'Indian Basket Crude Oil',
-    shortValueContext: '$116.09 / bbl (PPAC)',
+    shortValueContext: '$116.09 / bbl (PPAC · Sep 2026 Avg)',
     pageId: 'currency-oil',
     indicatorId: 'crude-oil',
   },
@@ -719,7 +719,7 @@ function classifyAndAnalyzeStory(
 
     addIndicator(
       'crude-oil',
-      'Directly moves India’s crude import basket benchmark ($116.09/bbl in Oct 2026) as India imports >85% of its crude requirements.'
+      'Directly moves India’s crude import basket benchmark ($116.09/bbl Sep 2026 completed monthly avg; $120.08/bbl Oct 2026 MTD) as India imports >85% of its crude requirements.'
     );
     addIndicator(
       'cpi-inflation',
@@ -1114,9 +1114,9 @@ function getOfficialStatisticalMilestones(nowMs: number): EconomicNewsArticle[] 
     {
       id: 'official-moci-trade-sep2026',
       headline:
-        'Ministry of Commerce Releases Provisional Merchandise Trade Data: Exports Rise 23.04% YoY to $44.40B; Trade Deficit at $30.21B',
+        'Ministry of Commerce Releases Provisional Merchandise Trade Data: Exports Rise 23.06% YoY to $44.40B; Trade Deficit at $30.21B',
       summary:
-        'Official Department of Commerce (TRADESTAT & DGCI&S) release reports India’s September 2026 merchandise exports at $44.40 billion (+23.04% YoY) and merchandise imports at $74.61 billion (+8.00% YoY), resulting in a merchandise trade balance of -$30.21 billion.',
+        'Official Department of Commerce (TRADESTAT & DGCI&S) release reports India’s September 2026 merchandise exports at $44.40 billion (+23.06% YoY) and merchandise imports at $74.61 billion (+8.01% YoY), resulting in a merchandise trade balance of -$30.21 billion.',
       sourceName: 'Ministry of Commerce & Industry (MoCI · TRADESTAT)',
       sourceShortName: 'MoCI Official',
       sourceType: 'official_india',

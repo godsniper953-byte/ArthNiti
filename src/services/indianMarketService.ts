@@ -120,9 +120,38 @@ export function computeBackoffDelayMs(
 }
 
 /**
+ * Prevents out-of-order (stale) responses from overwriting newer completed responses.
+ * Tracks monotonically increasing request IDs and the latest applied request ID.
+ */
+export function createOutOfOrderResponseGuard() {
+  let issuedSeq = 0;
+  let latestCompletedSeq = 0;
+
+  return {
+    nextRequestId(): number {
+      issuedSeq += 1;
+      return issuedSeq;
+    },
+    shouldApplyResponse(requestId: number): boolean {
+      if (requestId >= latestCompletedSeq) {
+        latestCompletedSeq = requestId;
+        return true;
+      }
+      return false;
+    },
+    getLatestCompletedId(): number {
+      return latestCompletedSeq;
+    },
+  };
+}
+
+const marketResponseGuard = createOutOfOrderResponseGuard();
+let latestAppliedMarketResult: ClientMarketDataResult | null = null;
+
+/**
  * Fetches live/delayed Indian stock market indices from the server-side proxy (/api/market-indices).
  * Deduplicates overlapping requests, applies bounded exponential backoff with jitter on retryable failures,
- * and never fabricates or simulates live prices.
+ * prevents out-of-order stale overwrites, and never fabricates or simulates live prices.
  */
 export async function fetchIndianMarketIndices(options?: {
   forceRefresh?: boolean;
@@ -146,6 +175,7 @@ export async function fetchIndianMarketIndices(options?: {
   }
 
   const maxRetries = options?.maxRetries ?? 2;
+  const requestId = marketResponseGuard.nextRequestId();
 
   const requestTask = (async (): Promise<ClientMarketDataResult> => {
     let lastError: Error | null = null;
@@ -205,14 +235,20 @@ export async function fetchIndianMarketIndices(options?: {
           );
         }
 
-        saveLastKnownMarketPayload(payload);
-
-        return {
+        const freshResult: ClientMarketDataResult = {
           status: 'success',
           data: payload,
           isStaleClientCache: payload.cacheStatus === 'STALE_FALLBACK',
           errorMessage: null,
         };
+
+        if (marketResponseGuard.shouldApplyResponse(requestId)) {
+          saveLastKnownMarketPayload(payload);
+          latestAppliedMarketResult = freshResult;
+          return freshResult;
+        }
+
+        return latestAppliedMarketResult || freshResult;
       } catch (err: any) {
         clearTimeout(timeoutId);
         lastError = err instanceof Error ? err : new Error(String(err));

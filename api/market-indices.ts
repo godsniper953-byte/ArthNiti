@@ -495,6 +495,16 @@ async function fetchSingleIndexQuote(
 
 const MIN_FORCE_REFRESH_COOLDOWN_MS = 5000;
 
+export function resetMarketIndicesCacheForTest(customCachedAtMs = 0): void {
+  if (customCachedAtMs === 0) {
+    cachedPayload = null;
+    cachedAtMs = 0;
+  } else {
+    cachedAtMs = customCachedAtMs;
+  }
+  inFlightPromise = null;
+}
+
 export async function fetchIndianMarketIndicesPayload(options?: {
   forceRefresh?: boolean;
 }): Promise<IndianMarketIndicesResponse> {

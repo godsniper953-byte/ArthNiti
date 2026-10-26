@@ -1224,6 +1224,82 @@ function getOfficialStatisticalMilestones(nowMs: number): EconomicNewsArticle[] 
   });
 }
 
+export function parseRssFeedXmlItems(
+  xml: string,
+  feed: FeedConfig,
+  nowMs: number = Date.now()
+): EconomicNewsArticle[] {
+  if (!xml || typeof xml !== 'string') return [];
+  const parsedArticles: EconomicNewsArticle[] = [];
+  const itemMatches = xml.match(/<item(?:\s[^>]*)?>[\s\S]*?<\/item>/gi) || [];
+
+  for (let i = 0; i < itemMatches.length; i++) {
+    const itemXml = itemMatches[i];
+    const headline = extractXmlTag(itemXml, 'title');
+    const rawLink =
+      extractXmlTag(itemXml, 'link') ||
+      extractXmlTag(itemXml, 'guid') ||
+      feed.officialUrl;
+    const link = sanitizeExternalHttpUrl(rawLink, feed.officialUrl);
+    const rawDesc = extractXmlTag(itemXml, 'description');
+    const rawPubDate =
+      extractXmlTag(itemXml, 'pubDate') ||
+      extractXmlTag(itemXml, 'dc:date') ||
+      extractXmlTag(itemXml, 'published');
+
+    if (!headline || !isEconomicallyRelevant(headline, rawDesc, feed.type)) {
+      continue;
+    }
+
+    const parsedDate = rawPubDate ? new Date(rawPubDate) : new Date(nowMs);
+    const validDate = Number.isNaN(parsedDate.getTime()) ? new Date(nowMs) : parsedDate;
+    const summary = rewriteConciseSummary(headline, rawDesc, feed.shortName);
+    const analysis = classifyAndAnalyzeStory(headline, summary, feed);
+    const subMeta = NEWS_SUBTOPICS_META[analysis.subTopicId];
+
+    parsedArticles.push({
+      id: `${feed.id}-${i}-${validDate.getTime()}`,
+      headline,
+      conciseSummary: summary,
+      sourceName: feed.name,
+      sourceShortName: feed.shortName,
+      sourceType: feed.type,
+      sourceHomepageUrl: feed.officialUrl,
+      originalUrl: link,
+      publishedAtIso: validDate.toISOString(),
+      publishedAtIst: formatIstTimestamp(validDate),
+      relativeTimeLabel: computeRelativeTimeLabel(validDate, nowMs),
+      category: analysis.category,
+      categoryLabel:
+        analysis.category === 'india'
+          ? 'India Economy'
+          : analysis.category === 'global'
+          ? 'Global Economy'
+          : 'Current Affairs & Policy',
+      subTopicId: analysis.subTopicId,
+      subTopicLabel: subMeta.label,
+      sections: [],
+      isPolicyAnnouncement: analysis.isPolicyAnnouncement,
+      isMarketMoving: analysis.isMarketMoving,
+      intelligence: analysis.intelligence,
+    });
+
+    if (parsedArticles.length >= feed.maxItems) break;
+  }
+
+  return parsedArticles;
+}
+
+export function resetEconomicNewsCacheForTest(customCachedAtMs = 0): void {
+  if (customCachedAtMs === 0) {
+    cachedNewsPayload = null;
+    cachedAtTimestampMs = 0;
+  } else {
+    cachedAtTimestampMs = customCachedAtMs;
+  }
+  inFlightNewsPromise = null;
+}
+
 async function fetchSingleFeed(
   feed: FeedConfig,
   nowMs: number
@@ -1258,7 +1334,7 @@ async function fetchSingleFeed(
       };
     }
 
-    const parsedArticles: EconomicNewsArticle[] = [];
+    let parsedArticles: EconomicNewsArticle[] = [];
 
     if (feed.format === 'worldbank_json') {
       const json = (await res.json()) as any;
@@ -1315,61 +1391,7 @@ async function fetchSingleFeed(
       }
     } else {
       const xml = await res.text();
-      const itemMatches = xml.match(/<item(?:\s[^>]*)?>[\s\S]*?<\/item>/gi) || [];
-
-      for (let i = 0; i < itemMatches.length; i++) {
-        const itemXml = itemMatches[i];
-        const headline = extractXmlTag(itemXml, 'title');
-        const rawLink =
-          extractXmlTag(itemXml, 'link') ||
-          extractXmlTag(itemXml, 'guid') ||
-          feed.officialUrl;
-        const link = sanitizeExternalHttpUrl(rawLink, feed.officialUrl);
-        const rawDesc = extractXmlTag(itemXml, 'description');
-        const rawPubDate =
-          extractXmlTag(itemXml, 'pubDate') ||
-          extractXmlTag(itemXml, 'dc:date') ||
-          extractXmlTag(itemXml, 'published');
-
-        if (!headline || !isEconomicallyRelevant(headline, rawDesc, feed.type)) {
-          continue;
-        }
-
-        const parsedDate = rawPubDate ? new Date(rawPubDate) : new Date(nowMs);
-        const validDate = Number.isNaN(parsedDate.getTime()) ? new Date(nowMs) : parsedDate;
-        const summary = rewriteConciseSummary(headline, rawDesc, feed.shortName);
-        const analysis = classifyAndAnalyzeStory(headline, summary, feed);
-        const subMeta = NEWS_SUBTOPICS_META[analysis.subTopicId];
-
-        parsedArticles.push({
-          id: `${feed.id}-${i}-${validDate.getTime()}`,
-          headline,
-          conciseSummary: summary,
-          sourceName: feed.name,
-          sourceShortName: feed.shortName,
-          sourceType: feed.type,
-          sourceHomepageUrl: feed.officialUrl,
-          originalUrl: link,
-          publishedAtIso: validDate.toISOString(),
-          publishedAtIst: formatIstTimestamp(validDate),
-          relativeTimeLabel: computeRelativeTimeLabel(validDate, nowMs),
-          category: analysis.category,
-          categoryLabel:
-            analysis.category === 'india'
-              ? 'India Economy'
-              : analysis.category === 'global'
-              ? 'Global Economy'
-              : 'Current Affairs & Policy',
-          subTopicId: analysis.subTopicId,
-          subTopicLabel: subMeta.label,
-          sections: [],
-          isPolicyAnnouncement: analysis.isPolicyAnnouncement,
-          isMarketMoving: analysis.isMarketMoving,
-          intelligence: analysis.intelligence,
-        });
-
-        if (parsedArticles.length >= feed.maxItems) break;
-      }
+      parsedArticles = parseRssFeedXmlItems(xml, feed, nowMs);
     }
 
     return {

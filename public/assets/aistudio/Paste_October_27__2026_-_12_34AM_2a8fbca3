@@ -1,0 +1,820 @@
+# ARTHNITI — FINAL MASTER EXECUTION PROMPT
+## Independent Economic Data Verification, Production Hardening, Regression Testing & Live Deployment Readiness
+
+**Project:** ArthNiti — Indian Economic Intelligence Platform  
+**Production URL:** https://arthniti-six.vercel.app/  
+**Academic destination:** Department of Economics, Aligarh Muslim University  
+**Execution mode:** Inspect → Verify → Repair → Test → Reverify → Prepare Release → Report
+
+You are acting as a senior full-stack engineer, economic data researcher, quantitative auditor, application security specialist, performance engineer, accessibility tester, and release manager.
+
+Your task is to complete the final verification and hardening of the existing ArthNiti project using its actual source code, datasets, configuration, tests, and available execution tools.
+
+The previous audit report claims:
+
+- All 8 regression test suites passed.
+- TypeScript checks and the production build passed.
+- The initial JavaScript bundle was reduced by approximately 71.3%.
+- A staged local benchmark recorded 502 successful requests with a 0% error rate.
+- An official-source provenance registry and Data Audit & Provenance page were added.
+- A cumulative merchandise trade accounting discrepancy was repaired.
+- Security headers, external URL sanitization, request cooldowns, and market/news resilience were implemented.
+- Production deployment to Vercel remains unverified.
+- Physical-device accessibility, external production load capacity, and some browser testing remain incomplete.
+
+**Treat these as claims in the previous report, not as automatically established facts.** Inspect the current workspace and reproduce the relevant results. If the actual repository differs from the report, the current repository and reproducible evidence take precedence.
+
+Your objective is to produce the strongest technically and academically defensible release possible without fabricating economic observations, test results, or deployment status.
+
+---
+
+# PHASE 1 — INSPECT THE ACTUAL PROJECT BEFORE MODIFYING IT
+
+Start by examining the current repository.
+
+Inspect at minimum:
+
+- `package.json` and the actual package manager configuration.
+- The existing dependency lockfile, if any.
+- `src/App.tsx` and all page components.
+- `src/services/`.
+- `src/utils/economicEngine.ts`.
+- `src/services/indicatorRegistry.ts`.
+- `src/components/ProvenanceAuditSection.tsx`.
+- `src/data/mockEconomicData.ts`.
+- `src/data/indiaTradeNetworkData.ts`.
+- All files under `public/data/`.
+- `api/health.ts`.
+- `api/market-indices.ts`.
+- `api/economic-news.ts`.
+- `server.ts`.
+- `vercel.json`.
+- `tests/production-audit-regression.test.ts`.
+- `scripts/load-test.mjs`.
+- Build configuration, environment-variable handling, and deployment documentation.
+
+First determine which files and features actually exist.
+
+Do not assume that a filename, endpoint, test, or source registry mentioned in the previous report is present or correct.
+
+Establish a baseline:
+1. Record the Git working-tree status.
+2. Identify existing user modifications and preserve them.
+3. Inspect the current build and test scripts.
+4. Identify every dataset consumed by the dashboard.
+5. Map each displayed indicator to its underlying data source, transformation, API, and UI component.
+6. Identify any duplicated datasets, stale metadata, contradictory values, obsolete labels, and undocumented fallbacks.
+
+Do not overwrite user changes or replace the existing application with a fresh template.
+
+---
+
+# PHASE 2 — INDEPENDENTLY VERIFY ECONOMIC DATA
+
+Use available web research and official publications to independently verify important economic claims. Prioritize primary sources over news articles, search snippets, or secondary aggregators.
+
+For every material claim, record the source URL, publication title, release date, observation period, units, retrieval date, and verification status.
+
+If a source is unavailable or a publication cannot be found, explicitly mark the claim as unverified. Do not convert an unverified claim into an official fact.
+
+## 2.1 GDP growth
+
+Verify the current dataset against official Ministry of Statistics and Programme Implementation (MoSPI) national accounts publications.
+
+Check:
+- GDP growth rate versus the GDP level.
+- Real GDP versus nominal GDP.
+- Financial year and quarter.
+- Base year and applicable statistical series.
+- Publication and revision dates.
+- Whether the dataset uses a consistent series throughout its historical period.
+
+Verify that the source registry and UI distinguish a growth percentage from a currency-denominated GDP level.
+
+Do not assume that the previous report's stated GDP figure or reference period is correct.
+
+## 2.2 CPI inflation
+
+Verify the CPI series against the relevant official MoSPI release.
+
+Check:
+- Headline CPI inflation versus the index level.
+- Rural, urban, and combined coverage.
+- Base year and series changes.
+- Year-on-year inflation versus month-on-month changes.
+- Food inflation and any core inflation estimate, including how core inflation is defined and calculated.
+- Publication date and observation period.
+
+Do not label a derived or independently calculated core inflation estimate as an official MoSPI headline series unless the source supports that attribution.
+
+## 2.3 RBI monetary policy
+
+Verify the repo rate and related corridor rates against official Reserve Bank of India Monetary Policy Committee resolutions.
+
+Check:
+- Repo rate.
+- Standing Deposit Facility rate.
+- Marginal Standing Facility rate.
+- Bank Rate.
+- Effective date.
+- Basis-point change from the preceding policy rate.
+- Whether the values are currently effective or merely historical.
+
+Do not infer a rate change from the difference between incorrectly ordered historical observations.
+
+## 2.4 PLFS unemployment
+
+Verify unemployment statistics against the relevant official Periodic Labour Force Survey bulletin.
+
+Check:
+- Current Weekly Status versus Usual Status.
+- Age coverage.
+- Rural, urban, and all-India estimates.
+- Labour Force Participation Rate and Worker Population Ratio, where displayed.
+- Reference period and release date.
+- Survey methodology and any series break.
+
+Do not compare incompatible methodologies as though they form a directly comparable continuous series.
+
+## 2.5 USD/INR exchange rate
+
+Verify the exchange-rate source and historical methodology against Financial Benchmarks India Ltd. and RBI publications.
+
+Check:
+- Currency quotation direction.
+- INR per USD versus USD per INR.
+- Reference date.
+- Historical benchmark transitions.
+- Whether the data represents an official reference rate, delayed market observation, or live interbank quote.
+
+Never label a reference rate as a live tradable spot quote.
+
+## 2.6 Indian Basket crude oil
+
+Verify the Indian Basket series against the Petroleum Planning & Analysis Cell under the Ministry of Petroleum and Natural Gas.
+
+Check:
+- Correct Indian Basket definition.
+- USD per barrel.
+- Completed-month averages.
+- Partial month-to-date averages.
+- Daily observations.
+- Publication date and reference date.
+- Whether the dataset accidentally mixes the Indian Basket with Brent or WTI.
+
+Keep these three concepts separate:
+
+1. Completed monthly average.
+2. Current month-to-date average.
+3. Individual daily observation.
+
+The interface must never substitute one for another without an explicit label.
+
+## 2.7 Merchandise trade
+
+Verify the merchandise trade dataset against official Ministry of Commerce and Industry or DGCI&S publications.
+
+The previous audit identifies an apparent historical cumulative accounting correction:
+
+Exports: USD 366.63 billion  
+Imports: USD 616.95 billion  
+Balance: USD −250.32 billion
+
+The identity is:
+
+Trade Balance = Exports − Imports.
+
+Recalculate the result using the underlying source data, not merely the previous audit text.
+
+Also inspect the previous report's January 2026 example:
+
+Exports: USD 36.56 billion  
+Imports: USD 71.24 billion  
+Balance: USD −34.68 billion
+
+Confirm that the figures and their reference periods are supported by the relevant official release.
+
+Check all monthly and cumulative observations for:
+- Correct signs.
+- Consistent units.
+- Rounding rules.
+- Period alignment.
+- Preliminary versus revised data.
+- Export and import definitions.
+- Correct financial-year labelling.
+
+Do not overwrite the underlying source figures simply to force the arithmetic identity to pass. First establish whether the discrepancy is due to incorrect source data, transcription, rounding, or a mismatched reporting period.
+
+Where rounding explains a discrepancy, document the precision rule and preserve the officially published figures.
+
+## 2.8 Bilateral trade network
+
+Verify the bundled bilateral merchandise trade data for FY2023–24 against official trade statistics where feasible.
+
+Check:
+- Partner identity.
+- Export values.
+- Import values.
+- Total bilateral trade.
+- Trade balance.
+- Units.
+- Financial-year coverage.
+- Whether the total denominator includes the same categories as the individual partner records.
+
+Use:
+
+Total Trade = Exports + Imports
+
+Trade Balance = Exports − Imports
+
+Do not invent values for countries whose records are missing. Preserve the existing unavailable-state messaging.
+
+Clearly distinguish merchandise trade from services trade.
+
+## 2.9 Live stock market indices
+
+Inspect the Yahoo Finance v8 integration and all related API transformations.
+
+Verify:
+- NIFTY 50.
+- BSE SENSEX.
+- NIFTY Bank.
+- NIFTY IT.
+- The configured mid-cap index, including the exact symbol and methodology.
+
+Check timestamps, timezone conversions, stale observations, market sessions, previous-close comparisons, percentage-change calculations, and missing index data.
+
+Clearly label third-party aggregator data as delayed or subject to upstream limitations where appropriate.
+
+Do not claim official NSE/BSE direct feeds or tick-by-tick real-time data without evidence of such a feed.
+
+## 2.10 Economic news
+
+Verify the configured RSS/Atom publishers and their current availability.
+
+Check:
+- Feed URL validity.
+- HTTP status and content type.
+- XML parsing.
+- Publication timestamps.
+- Duplicate headlines.
+- External URL protocols.
+- Publisher attribution.
+- Economic relevance classification.
+- Partial feed failures.
+- Stale-news handling.
+
+A successful HTTP request does not necessarily mean that a feed produced valid, current economic articles.
+
+Count a feed as healthy only when the relevant health criteria are actually satisfied.
+
+Do not report a successful 10/10 feed check unless ten configured feeds were actually checked and passed.
+
+---
+
+# PHASE 3 — CREATE A SINGLE SOURCE OF TRUTH
+
+Audit the data pipeline and source registry for every indicator.
+
+For each displayed indicator, identify:
+
+- Source dataset or API.
+- Official publisher.
+- Observation date.
+- Publication date, when known.
+- Unit.
+- Refresh mechanism.
+- Whether the source is static, manually updated, or automatically retrieved.
+- Whether the displayed observation is stale.
+- Source URL.
+- Verification status.
+- Any known methodological limitation.
+
+Repair inconsistencies between CSV files, TypeScript data objects, the source registry, API output, and UI components.
+
+Where practical, centralize indicator metadata instead of duplicating source names, units, dates, and status labels across multiple files.
+
+Do not make the architecture unnecessarily complex. Preserve functioning components and use a small, testable change where possible.
+
+The interface must distinguish these states clearly:
+
+- Official source independently verified.
+- Official source configured but latest value not independently verified.
+- Secondary aggregator feed.
+- Static historical dataset.
+- Cached observation.
+- Stale observation.
+- Data unavailable.
+- Official dataset not connected.
+
+Do not display a green verification status for an observation whose source has not actually been checked.
+
+Do not label a dataset “live” merely because the interface has a refresh button.
+
+If a refresh only reloads local CSV data, revalidates an existing value, or retrieves a cached response, state that accurately.
+
+---
+
+# PHASE 4 — TEST DATA VALIDATION AND NUMERICAL CORRECTNESS
+
+Inspect every parser, normalizer, statistical calculation, chart transformation, and formatting utility.
+
+Requirements:
+
+1. Reject malformed CSV structures.
+2. Validate required columns and data types.
+3. Handle missing values without fabricating replacements.
+4. Reject NaN and Infinity.
+5. Validate timestamps and dates.
+6. Preserve valid zero and negative economic values.
+7. Detect duplicate observations.
+8. Maintain consistent units across series.
+9. Prevent invalid chart domains and scales.
+10. Ensure comparisons use compatible reference periods and methodologies.
+11. Handle empty datasets and partially malformed datasets.
+12. Preserve valid rows when safe, while reporting rejected rows.
+13. Prevent rounding from introducing misleading economic claims.
+14. Keep all source-derived calculations traceable to their inputs.
+
+Create reusable validation functions where appropriate.
+
+Add regression tests for every material numerical correction.
+
+For monetary values, ensure negative currency formatting is consistent, for example:
+
+`−$30.21B`
+
+Never format the same value as `$-30.21B`.
+
+For any non-finite input, use an explicit unavailable representation rather than displaying NaN or Infinity.
+
+---
+
+# PHASE 5 — API RESILIENCE AND REFRESH RELIABILITY
+
+Inspect both the Express server and Vercel serverless handlers.
+
+Check:
+- `/api/health`
+- `/api/market-indices`
+- `/api/economic-news`
+- Any rewrites and SPA fallback behavior.
+
+Implement or repair the following where needed:
+
+1. Predictable API response schemas.
+2. GET/OPTIONS handling and appropriate HTTP 405 responses for unsupported methods.
+3. Safe HTTP status codes.
+4. Upstream request timeouts.
+5. Client request cancellation.
+6. In-flight request deduplication.
+7. Bounded exponential backoff with jitter.
+8. Stale-cache fallback.
+9. Correct cache-control headers.
+10. Tab-visibility-aware polling.
+11. Out-of-order response protection.
+12. Refresh cooldowns.
+13. Graceful partial feed failures.
+14. Appropriate handling of upstream HTTP 429 and 5xx responses.
+15. Safe error messages without secret or infrastructure leakage.
+
+Verify that cache and deduplication mechanisms behave correctly in the actual deployment architecture.
+
+In particular, do not assume in-memory cache state is shared globally between separate Vercel serverless instances.
+
+Ensure a force-refresh parameter cannot bypass upstream protection through trivial concurrent requests or repeated calls across multiple instances.
+
+If a globally shared rate limiter or distributed cache is unavailable, document the limitation and use an appropriate safe design within the existing infrastructure.
+
+Never fabricate market prices or news when an upstream request fails.
+
+---
+
+# PHASE 6 — SECURITY AND DEPENDENCY AUDIT
+
+Perform a real security review of the source code, configuration, dependency graph, API handlers, and production build.
+
+Inspect:
+- Exposed credentials.
+- API keys and environment variables.
+- XSS.
+- External URL validation.
+- SSRF risks in server-side fetches.
+- Unsafe HTML rendering.
+- CORS.
+- HTTP method handling.
+- Security headers.
+- Cache poisoning.
+- Refresh abuse.
+- Error leakage.
+- Dependency vulnerabilities.
+- Unsafe build or deployment configuration.
+
+Preserve all required working functionality.
+
+## Resolve the dependency lockfile issue
+
+If `npm audit` fails because no supported lockfile exists:
+
+1. Inspect the actual package manager and repository state.
+2. Preserve existing dependency choices wherever possible.
+3. Create or restore a suitable lockfile without indiscriminately upgrading packages.
+4. Perform a reproducible dependency installation.
+5. Run the appropriate vulnerability audit.
+6. Classify findings by severity and practical impact.
+7. Fix vulnerabilities when compatible and safe.
+8. Re-run the full regression suite and production build after dependency changes.
+
+Do not claim “zero vulnerabilities” merely because a package manager command failed.
+
+Do not introduce incompatible major-version upgrades solely to make an audit look cleaner.
+
+Check the actual security-header behavior on API responses and static assets. Ensure the headers do not conflict with existing application behavior.
+
+---
+
+# PHASE 7 — FRONTEND, ACCESSIBILITY, AND RESPONSIVENESS
+
+Preserve the existing ArthNiti design and navigation.
+
+Test all existing routes, deep links, modals, search controls, refresh controls, charts, and globe interactions.
+
+Verify:
+- Browser refresh on each supported route.
+- Back and Forward navigation.
+- Invalid route fallback.
+- Loading and error states.
+- Mobile navigation.
+- Search accessibility.
+- Error-boundary recovery.
+- Reduced-motion behavior.
+- Keyboard focus visibility.
+- Escape-key modal dismissal.
+- Accessible button names.
+- ARIA live announcements.
+- Chart labels and textual alternatives.
+- Useful HTML alternatives for information displayed in the WebGL globe.
+
+Test these viewport widths where browser tooling is available:
+
+320, 360, 390, 768, 1024, 1366, 1440, and 1920 pixels.
+
+Use the existing browser automation framework if one is available. Otherwise, use a suitable local browser-testing tool when installation and execution are supported.
+
+Inspect console errors, network failures, horizontal overflow, layout shift, and loading behavior.
+
+Do not claim real-device iOS Safari, Android, VoiceOver, or NVDA testing unless those tests were actually performed.
+
+Document any remaining accessibility limitations.
+
+---
+
+# PHASE 8 — PERFORMANCE AND BUNDLE VALIDATION
+
+Rebuild the application and inspect the actual generated bundle.
+
+Verify:
+- Main entry bundle size.
+- Gzip size, where measured.
+- Lazy-loaded route chunks.
+- Lazy-loaded 3D globe.
+- Chart-engine chunk.
+- Network request count.
+- Unnecessary rerenders.
+- Event-listener cleanup.
+- Polling cleanup.
+- Memory leaks.
+- Mobile CPU/GPU demands.
+- Graceful behavior without WebGL.
+
+Compare the current build against the previous report only if the prior artifacts or measurements are available and comparable.
+
+Do not report a 71.3% improvement unless the current and baseline bundle measurements can be substantiated.
+
+Use Lighthouse or an equivalent performance tool if available.
+
+Record actual scores and conditions, including device emulation and network throttling, where applicable.
+
+Do not fabricate Core Web Vitals, Lighthouse results, mobile-device measurements, or performance improvements.
+
+Avoid unnecessary redesigns or dependency additions that increase the project's complexity without a demonstrated benefit.
+
+---
+
+# PHASE 9 — COMPREHENSIVE REGRESSION TESTING
+
+Inspect and expand:
+
+`tests/production-audit-regression.test.ts`
+
+Preserve existing tests and add coverage for any genuine gaps.
+
+At minimum, test:
+
+1. CSV parsing and schema validation.
+2. GDP, CPI, repo rate, unemployment, exchange rate, and crude oil data handling.
+3. Merchandise trade accounting identities.
+4. Cumulative trade calculations and rounding.
+5. Bilateral trade identities.
+6. Source registry completeness.
+7. Source status and freshness labels.
+8. NaN and Infinity resilience.
+9. Deep links and browser navigation.
+10. API method validation.
+11. HTTP security headers.
+12. External URL sanitization.
+13. News headline deduplication.
+14. Malformed RSS/XML.
+15. Partial upstream failures.
+16. Market session boundaries and IST conversion.
+17. Stale-cache fallback.
+18. Concurrent request deduplication.
+19. Out-of-order response handling.
+20. Retry backoff and cooldowns.
+21. Error-boundary recovery.
+22. CSV upload validation.
+23. Vercel configuration.
+24. API secret non-leakage.
+
+Use deterministic fixtures and mocked upstream services for repeatable tests.
+
+Never make the test suite depend on live Yahoo Finance, news publishers, or official websites being available at test time.
+
+Never change a test solely to conceal a real failure.
+
+Run the actual project scripts, adapting to the package manager and scripts that really exist:
+
+`npm run lint`
+
+`npm test`
+
+`npm run build`
+
+`npm run load-test`
+
+Run the dependency audit and browser tests where available.
+
+If any command fails:
+- Capture the actual error.
+- Identify the root cause.
+- Fix it where feasible.
+- Rerun the affected test.
+- Rerun the complete regression suite after material changes.
+
+If a script is absent, report that fact and use a suitable alternative only when one can genuinely be executed.
+
+---
+
+# PHASE 10 — CONTROLLED LOCAL LOAD TESTING
+
+Inspect `scripts/load-test.mjs` and the existing benchmark configuration.
+
+Run controlled local tests against the local application, not against the public production site.
+
+Separate the following scenarios:
+
+- Cold-cache market API fetch.
+- Warm-cache market API requests.
+- Cold-cache economic news fetch.
+- Warm-cache economic news requests.
+- Health endpoint requests.
+- Static CSV asset delivery.
+- Concurrent refresh requests.
+- Upstream failure and timeout handling.
+
+Report:
+- Total requests.
+- Concurrency.
+- Successful responses.
+- Failed responses.
+- Error rate.
+- Cache hits and misses.
+- Throughput.
+- p50, p95, and p99 latency.
+- Test environment.
+- Whether requests were served from cache.
+- Whether an upstream provider was actually contacted.
+
+Do not count warm-cache hits as proof that an upstream provider can sustain the same throughput.
+
+Do not claim that local results establish global Vercel capacity.
+
+Do not run uncontrolled production load tests or overwhelm third-party data providers.
+
+---
+
+# PHASE 11 — VERIFY THE ACTUAL VERCEL DEPLOYMENT PATH
+
+Inspect `vercel.json`, API routing, serverless runtime compatibility, static assets, SPA fallback, environment-variable requirements, and build configuration.
+
+Ensure that the deployment design supports:
+
+- `/api/health`
+- `/api/market-indices`
+- `/api/economic-news`
+- `/data/` assets
+- Direct refresh of every supported frontend route.
+- Appropriate cache-control behavior.
+- Correct production build output.
+- Secure handling of environment variables.
+
+Determine whether the project uses Vercel serverless functions, an Express server, or both. Confirm that the configuration does not unintentionally deploy duplicate or conflicting API handlers.
+
+Do not assume local Express behavior proves Vercel serverless behavior.
+
+## Production deployment rules
+
+The current audit report states that production changes have not yet been deployed.
+
+Do not claim that the live website contains the new changes unless you have actually verified them.
+
+If authenticated GitHub or Vercel access is unavailable:
+
+1. Complete and save the local repairs.
+2. Run all possible local checks.
+3. Prepare a concise list of modified and newly created files.
+4. Check the Git working tree.
+5. Provide exact commit and push commands.
+6. Explain the expected Vercel deployment workflow.
+7. Leave the deployment status explicitly marked “Not yet deployed from this workspace.”
+
+Use the existing connected repository and branch. Do not invent repository names, credentials, tokens, or remote URLs.
+
+If deployment access is genuinely available, use the authorized workflow and verify the resulting deployment.
+
+After deployment, perform read-only production verification where tools permit.
+
+Check:
+
+- `https://arthniti-six.vercel.app/`
+- `https://arthniti-six.vercel.app/api/health`
+- `https://arthniti-six.vercel.app/api/market-indices`
+- `https://arthniti-six.vercel.app/api/economic-news`
+- `https://arthniti-six.vercel.app/#audit`
+- `https://arthniti-six.vercel.app/#methodology`
+- `https://arthniti-six.vercel.app/#trade`
+
+Use appropriate timeouts and do not hammer the live APIs.
+
+For each endpoint, record the actual HTTP status, response shape, relevant cache/security headers, and verification time.
+
+A successful health response does not independently prove that all data pipelines, frontend routes, or upstream providers are healthy.
+
+Check whether the live deployment contains the intended release rather than merely serving an older successful build.
+
+---
+
+# PHASE 12 — ACADEMIC PRESENTATION READINESS
+
+Inspect the actual website as a departmental evaluator would.
+
+Ensure:
+- Economic terms are used accurately.
+- All charts have meaningful titles, units, and reference periods.
+- Sources and methodology are easy to locate.
+- Static datasets are distinguished from live feeds.
+- Data freshness is visible.
+- Preliminary data and revisions are disclosed.
+- Unavailable data is clearly identified.
+- Secondary market-data feeds are not presented as official exchange-direct feeds.
+- The globe clearly identifies merchandise trade and its reference year.
+- No unverified number is described as independently verified.
+- No placeholder data is presented as a genuine observation.
+- The application remains readable on desktop and mobile.
+- Error states are professional and informative.
+
+Keep the existing visual design unless a change is necessary to fix a defect.
+
+Do not add decorative complexity, unrelated features, or unnecessary new sections during this final audit.
+
+---
+
+# PHASE 13 — FINAL RELEASE GATES
+
+Before recommending submission, assess each gate using actual evidence.
+
+**Gate A — Data integrity**
+
+All tested accounting identities pass. Conflicting economic observations are corrected only when authoritative evidence supports the correction. Unverified figures are clearly labelled.
+
+**Gate B — Code quality**
+
+The actual type-check command passes and the production build completes successfully.
+
+**Gate C — Regression**
+
+All applicable automated regression tests pass. No known critical regression remains.
+
+**Gate D — Security**
+
+The dependency audit has actually run. Critical and high-severity findings are fixed or explicitly documented with a justified exception and mitigation plan.
+
+**Gate E — API reliability**
+
+API failure handling, request deduplication, caching, stale-data behavior, and refresh controls have been tested.
+
+**Gate F — Frontend**
+
+The available responsive, navigation, accessibility, and rendering checks pass. Unsupported physical-device tests remain explicitly unverified.
+
+**Gate G — Performance**
+
+Current bundle measurements and controlled local load-test results are recorded accurately.
+
+**Gate H — Deployment**
+
+The production deployment is marked verified only after the actual deployed site has been inspected.
+
+**Gate I — Academic transparency**
+
+All source claims, methodological limitations, and data-freshness statements match the implemented application.
+
+If a gate fails, fix it or document the remaining blocker and its academic or production impact.
+
+Do not downgrade a genuine defect merely to make the project pass.
+
+---
+
+# PHASE 14 — REQUIRED FINAL REPORT
+
+Produce a final report with the following structure.
+
+## A. Executive Verdict
+
+Choose one:
+
+- READY FOR DEPARTMENTAL DEMONSTRATION.
+- READY SUBJECT TO DOCUMENTED LIMITATIONS.
+- NOT READY — CRITICAL ISSUES REMAIN.
+
+Explain why the verdict is justified.
+
+## B. Previous Audit Claim Verification
+
+For each important claim in the prior report, state:
+
+- Confirmed by fresh execution.
+- Confirmed by code inspection only.
+- Partially confirmed.
+- Not reproducible.
+- Contradicted by current evidence.
+
+## C. Economic Data Integrity
+
+For each indicator, report the verified value, unit, reference period, primary source, publication date, source URL, and verification status.
+
+Clearly distinguish independently verified observations from unverified records.
+
+## D. Defects Repaired
+
+List the actual files changed, root causes, repairs, and supporting test results.
+
+## E. Regression and Build Results
+
+Include the commands executed, exit codes, test counts, failures, warnings, and durations.
+
+## F. Security and Dependencies
+
+Report the actual dependency-audit result, vulnerabilities, fixes, and unresolved risks.
+
+## G. Performance and Load Testing
+
+Report actual measurements, environment, cache conditions, concurrency, error rate, and latency percentiles.
+
+## H. Accessibility and Responsive Testing
+
+State exactly which viewports, browsers, and accessibility checks were tested and which remain untested.
+
+## I. Deployment Status
+
+Report each status separately:
+
+- Changes saved locally.
+- Type checks completed.
+- Regression tests completed.
+- Production build completed.
+- Changes committed to Git.
+- Changes pushed to GitHub.
+- Deployment completed on Vercel.
+- Live production endpoints verified.
+- Frontend routes verified on the deployed version.
+
+Never infer a later status from an earlier one.
+
+## J. Remaining Actions
+
+Give exact commands or manual steps for every unresolved item.
+
+## K. Final Academic Recommendation
+
+Write a concise, evidence-based conclusion suitable for the Department of Economics, AMU.
+
+---
+
+# FINAL EXECUTION INSTRUCTION
+
+Start by inspecting the current repository and reproducing the previous audit's claims. Independently verify the highest-impact economic figures against primary sources. Repair the actual defects, run the full available test suite, inspect the production configuration, and document deployment status honestly.
+
+Do not stop at a plan. Execute the available work, preserve existing features, and leave the project in the strongest verifiable state possible.
+
+**The final deliverable is a tested and corrected project—not merely a report claiming that the project was tested.**

@@ -16,6 +16,20 @@ import {
   parseBilateralTradeCsv,
 } from '../src/services/globalTradeNetworkService.ts';
 import {
+  auditBilateralTradeNetworkNodes,
+  OFFICIAL_BILATERAL_TRADE_CSV_PATH,
+} from '../src/data/indiaTradeNetworkData.ts';
+import {
+  INDICATOR_PROVENANCE_CLASSIFICATIONS,
+  getIndicatorProvenanceClassification,
+  getIndicatorSourceEntryById,
+  getIndicatorSourceRegistry,
+} from '../src/services/indicatorRegistry.ts';
+import {
+  validateBilateralTradeIdentity,
+  validateMerchandiseTradeIdentity,
+} from '../src/utils/economicEngine.ts';
+import {
   VALID_PAGE_IDS,
   alignIndicatorsForComparison,
   computeSeriesStats,
@@ -28,6 +42,7 @@ import {
 } from '../src/services/economyService.ts';
 import {
   computeBackoffDelayMs,
+  createOutOfOrderResponseGuard,
   formatIndianIndexNumber,
   formatPercentChange,
   formatPointChange,
@@ -35,11 +50,14 @@ import {
 } from '../src/services/indianMarketService.ts';
 import {
   evaluateIndianMarketSession,
+  resetMarketIndicesCacheForTest,
   default as marketIndicesHandler,
 } from '../api/market-indices.ts';
 import {
   areHeadlinesDuplicate,
   isEconomicallyRelevant,
+  parseRssFeedXmlItems,
+  resetEconomicNewsCacheForTest,
   sanitizeExternalHttpUrl,
   default as economicNewsHandler,
 } from '../api/economic-news.ts';
@@ -91,8 +109,22 @@ test('1. All 8 Official CSV Datasets parse cleanly and satisfy monthly & cumulat
   const gdpInd = parseMospiGdpCsv(gdpCsv, 'official_mospi_csv');
   assert.equal(gdpInd.currentValue, 7.8, 'Latest Real GDP YoY should be 7.8% (Q1 FY27)');
   assert.equal(gdpInd.officialGdpMeta?.activeBaseYear, '2022–23');
-  assert.equal(gdpInd.officialGdpMeta?.realGdpLevelLakhCr, 90.41);
+  assert.equal(
+    gdpInd.officialGdpMeta?.realGdpLevelLakhCr,
+    81.36,
+    'Q1 FY27 Real GDP constant-price level must equal 81.36 Lakh Crore (verified against Q1 FY26 75.46 Lakh Cr -> +7.82% YoY)'
+  );
   assert.equal(gdpInd.releaseDate, '31 Aug 2026');
+
+  // Verify Q1 FY27 vs Q1 FY26 and Q4 FY26 vs Q4 FY25 YoY growth consistency in GDP CSV
+  const q1Fy27 = gdpInd.observations.find((o) => o.date === '2026-27-Q1')!;
+  const q1Fy26 = gdpInd.observations.find((o) => o.date === '2025-26-Q1')!;
+  const computedQ1Growth = Number(
+    (((q1Fy27.realGdpConstantLakhCr! - q1Fy26.realGdpConstantLakhCr!) /
+      q1Fy26.realGdpConstantLakhCr!) *
+      100).toFixed(1)
+  );
+  assert.equal(computedQ1Growth, 7.8, 'Constant-price GDP level ratio Q1 FY27 / Q1 FY26 must yield 7.8% YoY');
 
   // 2. Official MoSPI CPI (Base 2024=100)
   const cpiCsv = fs.readFileSync(path.join(PUBLIC_DATA_DIR, 'mospi_cpi_official.csv'), 'utf-8');
@@ -174,22 +206,40 @@ test('1. All 8 Official CSV Datasets parse cleanly and satisfy monthly & cumulat
   assert.equal(tradeInd.officialTradeMeta?.merchandiseExportsUsdBn, 44.4);
   assert.equal(tradeInd.officialTradeMeta?.merchandiseImportsUsdBn, 74.61);
   assert.equal(tradeInd.officialTradeMeta?.tradeDeficitMagnitudeUsdBn, 30.21);
-  assert.equal(tradeInd.officialTradeMeta?.fyCumulativeExportsUsdBn, 261.62);
-  assert.equal(tradeInd.officialTradeMeta?.fyCumulativeImportsUsdBn, 437.69);
-  assert.equal(tradeInd.officialTradeMeta?.fyCumulativeDeficitUsdBn, 176.07);
+  // Official published DGCI&S / PIB Apr-Sep 2026 (H1 FY 2026-27) cumulative totals:
+  assert.equal(tradeInd.officialTradeMeta?.fyCumulativeExportsUsdBn, 259.89);
+  assert.equal(tradeInd.officialTradeMeta?.fyCumulativeImportsUsdBn, 437.53);
+  assert.equal(tradeInd.officialTradeMeta?.fyCumulativeDeficitUsdBn, 177.64);
 
-  // Verify every single monthly observation & fiscal-year cumulative identity in tradeInd
-  let currentFy = '';
-  let runningExp = 0;
-  let runningImp = 0;
+  // Verify Jan 2026 row preserves official published Apr-Jan FY26 cumulative figures (366.63 / 649.86 / 283.23)
+  const jan2026Obs = tradeInd.observations.find((o) => o.date === '2026-01')!;
+  assert.equal(jan2026Obs.merchandiseExportsUsdBn, 36.56);
+  assert.equal(jan2026Obs.merchandiseImportsUsdBn, 71.24);
+  assert.equal(jan2026Obs.tradeBalanceUsdBn, -34.68);
+  assert.equal(jan2026Obs.fyCumulativeExportsUsdBn, 366.63);
+  assert.equal(jan2026Obs.fyCumulativeImportsUsdBn, 649.86);
+  assert.equal(jan2026Obs.fyCumulativeDeficitUsdBn, 283.23);
+
+  // Verify every single monthly observation & fiscal-year cumulative deficit identity in tradeInd
   for (const obs of tradeInd.observations) {
     const exp = obs.merchandiseExportsUsdBn!;
     const imp = obs.merchandiseImportsUsdBn!;
     const bal = obs.tradeBalanceUsdBn!;
-    assert.equal(
-      Number((exp - imp).toFixed(2)),
+    const identityCheck = validateMerchandiseTradeIdentity(
+      exp,
+      imp,
       bal,
-      `Row ${obs.date}: Trade Balance (${bal}) must equal Exports (${exp}) - Imports (${imp})`
+      obs.tradeDeficitMagnitudeUsdBn
+    );
+    assert.equal(
+      identityCheck.valid,
+      true,
+      `Row ${obs.date} must satisfy monthly merchandise trade identity`
+    );
+    assert.equal(
+      obs.fyCumulativeDeficitUsdBn,
+      Number((obs.fyCumulativeImportsUsdBn! - obs.fyCumulativeExportsUsdBn!).toFixed(2)),
+      `Row ${obs.date} cumulative FY deficit must equal cumulative imports minus cumulative exports`
     );
     if (obs.servicesSurplusEstUsdBn !== undefined && obs.overallTradeBalanceUsdBn !== undefined) {
       assert.equal(
@@ -198,51 +248,32 @@ test('1. All 8 Official CSV Datasets parse cleanly and satisfy monthly & cumulat
         `Row ${obs.date}: Overall Trade Balance must equal Merchandise Balance + Services Surplus`
       );
     }
-    if (obs.financialYear !== currentFy) {
-      currentFy = obs.financialYear || '';
-      runningExp = 0;
-      runningImp = 0;
-    }
-    runningExp = Number((runningExp + exp).toFixed(2));
-    runningImp = Number((runningImp + imp).toFixed(2));
-    const runningDef = Number((runningImp - runningExp).toFixed(2));
-    assert.equal(
-      obs.fyCumulativeExportsUsdBn,
-      runningExp,
-      `Row ${obs.date}: Cumulative FY Exports must equal running sum`
-    );
-    assert.equal(
-      obs.fyCumulativeImportsUsdBn,
-      runningImp,
-      `Row ${obs.date}: Cumulative FY Imports must equal running sum`
-    );
-    assert.equal(
-      obs.fyCumulativeDeficitUsdBn,
-      runningDef,
-      `Row ${obs.date}: Cumulative FY Deficit must equal CumImports - CumExports`
-    );
   }
 
-  // 8. Official TRADESTAT Bilateral Partners Matrix
+  // 8. Official TRADESTAT Bilateral Partners Matrix & Single Source of Truth Audit Helper
+  assert.equal(OFFICIAL_BILATERAL_TRADE_CSV_PATH, '/data/moci_tradestat_bilateral_partners.csv');
   const bilateralCsv = fs.readFileSync(
     path.join(PUBLIC_DATA_DIR, 'moci_tradestat_bilateral_partners.csv'),
     'utf-8'
   );
   const partners = parseBilateralTradeCsv(bilateralCsv);
   assert.equal(partners.length, 27);
+  const auditResult = auditBilateralTradeNetworkNodes(partners);
+  assert.equal(auditResult.valid, true, `Bilateral trade network audit errors: ${auditResult.errors.join('; ')}`);
+  assert.equal(auditResult.verifiedCount, 24);
+  assert.equal(auditResult.illustrativeCount, 3);
+  assert.equal(auditResult.regionalBlocCount, 2);
+  assert.equal(auditResult.sovereignCount, 25);
+
   const verifiedPartners = partners.filter((p) => p.dataStatus === 'verified_official');
-  assert.equal(verifiedPartners.length, 24);
   for (const p of verifiedPartners) {
-    assert.equal(
-      Number((p.exportsUsdBn! + p.importsUsdBn!).toFixed(2)),
-      p.totalTradeUsdBn,
-      `Total trade for ${p.name} must equal exports + imports`
+    const idCheck = validateBilateralTradeIdentity(
+      p.exportsUsdBn!,
+      p.importsUsdBn!,
+      p.totalTradeUsdBn!,
+      p.tradeBalanceUsdBn!
     );
-    assert.equal(
-      Number((p.exportsUsdBn! - p.importsUsdBn!).toFixed(2)),
-      p.tradeBalanceUsdBn,
-      `Trade balance for ${p.name} must equal exports - imports`
-    );
+    assert.equal(idCheck.valid, true, `Bilateral identity failed for ${p.name}`);
     assert.equal(
       Number(((p.totalTradeUsdBn! / INDIA_FY24_TOTAL_TRADE_USD_BN) * 100).toFixed(2)),
       p.shareOfIndiaTradePct,
@@ -251,9 +282,11 @@ test('1. All 8 Official CSV Datasets parse cleanly and satisfy monthly & cumulat
   }
 });
 
-test('2. Cross-layer consistency between CSV datasets, mockEconomicData.ts, and Structured Source Registry', () => {
+test('2. Cross-layer consistency between CSV datasets, mockEconomicData.ts, indicatorRegistry.ts, and Single Source of Truth', () => {
   const syncIndicators = getIndicatorsSync();
   const registry = getStructuredIndicatorRegistrySync();
+  const directRegistry = getIndicatorSourceRegistry();
+  assert.equal(registry.length, directRegistry.length);
 
   const gdpSync = syncIndicators.find((i) => i.id === 'gdp-growth')!;
   const cpiSync = syncIndicators.find((i) => i.id === 'cpi-inflation')!;
@@ -264,23 +297,52 @@ test('2. Cross-layer consistency between CSV datasets, mockEconomicData.ts, and 
   const repoSync = syncIndicators.find((i) => i.id === 'rbi-repo-rate')!;
 
   assert.equal(gdpSync.currentValue, 7.8);
+  assert.equal(
+    gdpSync.observations[gdpSync.observations.length - 1].realGdpConstantLakhCr,
+    81.36,
+    'mockEconomicData latest Q1 FY27 Real GDP constant level must equal 81.36 Lakh Crore'
+  );
   assert.equal(cpiSync.currentValue, 5.54, 'mockEconomicData CPI must match mospi_cpi_official.csv (5.54%)');
   assert.equal(plfsSync.currentValue, 5.0);
   assert.equal(fxSync.currentValue, 94.6986);
   assert.equal(crudeSync.currentValue, 116.09);
+  assert.equal(crudeSync.observations.length, 33, 'mockEconomicData crude series must have all 33 completed months');
   assert.equal(tradeSync.currentValue, -30.21);
+  const latestTradeObs = tradeSync.observations[tradeSync.observations.length - 1];
+  assert.equal(latestTradeObs.secondaryValue, 44.4);
+  assert.equal(latestTradeObs.tertiaryValue, 74.61);
+  assert.ok(tradeSync.economicInterpretation.includes('$259.89B'));
+  assert.ok(tradeSync.economicInterpretation.includes('$437.53B'));
+  assert.ok(tradeSync.economicInterpretation.includes('$177.64B'));
   assert.equal(repoSync.currentValue, 5.5);
 
-  const cpiReg = registry.find((r) => r.indicatorId === 'cpi-inflation')!;
+  const gdpReg = getIndicatorSourceEntryById('gdp-growth')!;
+  assert.ok(gdpReg.methodologicalNotes.includes('81.36'));
+
+  const cpiReg = getIndicatorSourceEntryById('cpi-inflation')!;
   assert.ok(cpiReg.unit.includes('5.54%'));
   assert.ok(cpiReg.referencePeriod.includes('September 2026'));
+  assert.ok(cpiReg.methodologicalNotes.includes('derived analytical series'));
 
-  const tradeReg = registry.find((r) => r.indicatorId === 'merchandise-trade')!;
+  const tradeReg = getIndicatorSourceEntryById('merchandise-trade')!;
   assert.ok(tradeReg.unit.includes('-$30.21B'));
-  assert.ok(tradeReg.methodologicalNotes.includes('$261.62B'));
+  assert.ok(tradeReg.methodologicalNotes.includes('$259.89B'));
+  assert.ok(tradeReg.methodologicalNotes.includes('$437.53B'));
+  assert.ok(tradeReg.methodologicalNotes.includes('$177.64B'));
+
+  // Verify explicit provenance classifications exist for all 10 indicators
+  assert.equal(Object.keys(INDICATOR_PROVENANCE_CLASSIFICATIONS).length, 10);
+  assert.equal(
+    getIndicatorProvenanceClassification('gdp-growth')?.classification,
+    'official_source_independently_verified'
+  );
+  assert.equal(
+    getIndicatorProvenanceClassification('live-indian-market-indices')?.classification,
+    'secondary_aggregator_feed'
+  );
 });
 
-test('3. Navigation routes, deep-linking, and Structured Indicator Source Registry completeness', () => {
+test('3. Navigation routes, deep-linking, hash aliases (#audit, #methodology, #trade), and Registry completeness', () => {
   assert.equal(VALID_PAGE_IDS.length, 10, 'All 10 primary routes must be registered');
   assert.equal(ARTHNITI_NAV_ITEMS.length, 10, 'Sidebar must expose all 10 routes');
 
@@ -295,6 +357,19 @@ test('3. Navigation routes, deep-linking, and Structured Indicator Source Regist
       indicatorId: 'merchandise-trade',
     }
   );
+  // Verify Phase 11 required hash aliases (#audit, #methodology, #trade)
+  assert.deepEqual(resolvePageFromLocation('#audit', ''), {
+    pageId: 'data-sources',
+    indicatorId: null,
+  });
+  assert.deepEqual(resolvePageFromLocation('#methodology', ''), {
+    pageId: 'data-sources',
+    indicatorId: null,
+  });
+  assert.deepEqual(resolvePageFromLocation('#trade', ''), {
+    pageId: 'currency-oil',
+    indicatorId: 'merchandise-trade',
+  });
   assert.deepEqual(resolvePageFromLocation('', '?page=economic-news'), {
     pageId: 'economic-news',
     indicatorId: null,
@@ -398,7 +473,7 @@ test('5. NaN/Infinity resilience and negative USD currency formatting (-$30.21B,
   assert.ok(Number.isFinite(alignment.pearsonR));
 });
 
-test('6. Market session IST boundaries, retryable status classification, and bounded exponential backoff with jitter', () => {
+test('6. Market session IST boundaries, retryable status classification, out-of-order response guard, and bounded exponential backoff', () => {
   // 1. Weekday 11:00 AM IST -> OPEN (2026-10-26 is Monday, 11:00 IST = 05:30 UTC)
   const mondayOpenUtc = Date.parse('2026-10-26T05:30:00Z');
   assert.equal(evaluateIndianMarketSession(mondayOpenUtc).status, 'OPEN');
@@ -437,9 +512,22 @@ test('6. Market session IST boundaries, retryable status classification, and bou
     const delay = computeBackoffDelayMs(attempt, 200, 2000);
     assert.ok(delay >= 200 && delay <= 2000, `Backoff delay ${delay}ms must be bounded within [200, 2000]`);
   }
+
+  // 8. Out-of-order response guard prevents stale request #1 from overwriting newer request #2
+  const guard = createOutOfOrderResponseGuard();
+  const req1 = guard.nextRequestId();
+  const req2 = guard.nextRequestId();
+  assert.equal(req1, 1);
+  assert.equal(req2, 2);
+  // Newer request #2 finishes first
+  assert.equal(guard.shouldApplyResponse(req2), true);
+  assert.equal(guard.getLatestCompletedId(), 2);
+  // Older request #1 arrives late — must be rejected
+  assert.equal(guard.shouldApplyResponse(req1), false);
+  assert.equal(guard.getLatestCompletedId(), 2);
 });
 
-test('7. External URL sanitization, clickbait filtering, and headline deduplication', () => {
+test('7. External URL sanitization, clickbait filtering, headline deduplication, and malformed RSS/XML resilience', () => {
   const fallback = 'https://www.rbi.org.in/';
   assert.equal(
     sanitizeExternalHttpUrl('javascript:alert(document.cookie)', fallback),
@@ -495,9 +583,55 @@ test('7. External URL sanitization, clickbait filtering, and headline deduplicat
     true,
     'Must detect duplicate syndicated headlines'
   );
+
+  // Malformed RSS/XML parsing resilience
+  const sampleFeedCfg: any = {
+    id: 'test-rbi-feed',
+    name: 'Reserve Bank of India (Test)',
+    shortName: 'RBI',
+    type: 'official_india',
+    officialUrl: 'https://www.rbi.org.in/',
+    feedUrl: 'https://www.rbi.org.in/rss.xml',
+    format: 'rss',
+    defaultCategory: 'india',
+    defaultSubTopic: 'india-rbi-monetary',
+    isPolicyFeed: true,
+    maxItems: 5,
+  };
+
+  assert.deepEqual(
+    parseRssFeedXmlItems('<rss><channel><unclosed_tag', sampleFeedCfg),
+    [],
+    'Truncated XML without valid <item> blocks must return empty array without throwing'
+  );
+
+  const mixedXml = `
+    <rss version="2.0">
+      <channel>
+        <item>
+          <title></title>
+          <link>https://www.rbi.org.in/empty-title</link>
+        </item>
+        <item>
+          <title><![CDATA[RBI Monetary Policy Committee retains SDF at 5.25% and Repo Rate at 5.50%]]></title>
+          <link>javascript:alert('xss')</link>
+          <pubDate>Mon, 26 Oct 2026 10:00:00 GMT</pubDate>
+          <description><![CDATA[<p>Official monetary policy press release from Reserve Bank of India.</p>]]></description>
+        </item>
+      </channel>
+    </rss>
+  `;
+  const parsedItems = parseRssFeedXmlItems(mixedXml, sampleFeedCfg);
+  assert.equal(parsedItems.length, 1, 'Must skip empty-title item and parse valid economic item');
+  assert.equal(
+    parsedItems[0].originalUrl,
+    'https://www.rbi.org.in/',
+    'Must sanitize javascript: link in RSS item to officialUrl'
+  );
+  assert.ok(!parsedItems[0].conciseSummary.includes('<p>'), 'Must strip HTML tags from RSS summary');
 });
 
-test('8. Serverless API handlers, security headers, secret non-leakage, cooldowns, and vercel.json config', async () => {
+test('8. Serverless API handlers, security headers, secret non-leakage, deterministic stale-cache fallback, deduplication, cooldowns, and vercel.json config', async () => {
   // 1. Health endpoint security headers & non-exposure of secrets
   const healthMock = createMockReqRes('GET');
   await healthHandler(healthMock.req, healthMock.res);
@@ -505,9 +639,9 @@ test('8. Serverless API handlers, security headers, secret non-leakage, cooldown
   assert.equal(healthMock.getHeaders()['x-content-type-options'], 'nosniff');
   assert.equal(healthMock.getHeaders()['x-frame-options'], 'SAMEORIGIN');
   assert.equal(healthMock.getHeaders()['referrer-policy'], 'strict-origin-when-cross-origin');
-  const healthPayload = healthMock.getJson();
-  assert.equal(healthPayload?.ok, true);
-  assert.equal(healthPayload?.status, 'healthy');
+  const healthPayload = getHealthCheckPayload();
+  assert.equal(healthPayload.ok, true);
+  assert.equal(healthPayload.status, 'healthy');
   const serializedHealth = JSON.stringify(healthPayload);
   assert.ok(!serializedHealth.includes('GEMINI_API_KEY'), 'Health check must never expose secret env keys');
 
@@ -527,7 +661,120 @@ test('8. Serverless API handlers, security headers, secret non-leakage, cooldown
   assert.equal(simErrMock.getJson()?.ok, false);
   assert.ok(simErrMock.getJson()?.error.includes('Simulated News Aggregation Failure'));
 
-  // 4. Verify vercel.json exists and configures rewrites and security headers
+  // 4. Deterministic mocked upstream tests for /api/market-indices:
+  //    - Partial upstream failure (4 indices succeed, 1 index returns HTTP 503)
+  //    - Concurrent request deduplication & 5-second force-refresh cooldown
+  //    - Complete upstream outage -> STALE_FALLBACK retention without fabricated numbers
+  const originalFetch = globalThis.fetch;
+  try {
+    resetMarketIndicesCacheForTest();
+    let upstreamCallCount = 0;
+
+    globalThis.fetch = async (input: string | URL | Request) => {
+      upstreamCallCount += 1;
+      const urlStr = String(input);
+      // Simulate partial outage: NIFTY IT (%5ECNXIT) returns HTTP 503
+      if (urlStr.includes('%5ECNXIT')) {
+        return new Response('Upstream unavailable', { status: 503 });
+      }
+      return new Response(
+        JSON.stringify({
+          chart: {
+            result: [
+              {
+                meta: {
+                  regularMarketPrice: 24850.5,
+                  chartPreviousClose: 24700.0,
+                  regularMarketDayHigh: 24910.0,
+                  regularMarketDayLow: 24680.0,
+                  regularMarketTime: 1761472800,
+                },
+                timestamp: [1761469200, 1761472800],
+                indicators: {
+                  quote: [
+                    {
+                      open: [24720.0, 24800.0],
+                      close: [24750.0, 24850.5],
+                    },
+                  ],
+                },
+              },
+            ],
+          },
+        }),
+        { status: 200, headers: { 'content-type': 'application/json' } }
+      );
+    };
+
+    // Fire 2 concurrent requests to /api/market-indices
+    const reqA = createMockReqRes('GET');
+    const reqB = createMockReqRes('GET');
+    await Promise.all([
+      marketIndicesHandler(reqA.req, reqA.res),
+      marketIndicesHandler(reqB.req, reqB.res),
+    ]);
+
+    assert.equal(reqA.getStatusCode(), 200);
+    assert.equal(reqB.getStatusCode(), 200);
+    // Because of in-flight deduplication, only 1 batch of upstream fetches (6 symbol attempts: 5 primary + 1 retry/fallback for CNXIT) is executed instead of 12
+    assert.equal(upstreamCallCount, 6, 'Concurrent market API requests must share a single in-flight fetch');
+
+    const payloadA = reqA.getJson();
+    assert.equal(payloadA.ok, true);
+    assert.equal(payloadA.indices.length, 5);
+    const niftyIt = payloadA.indices.find((i: any) => i.id === 'nifty-it');
+    assert.equal(niftyIt.status, 'unavailable', 'Failed single index must be marked unavailable');
+    assert.equal(niftyIt.currentValue, null, 'Failed single index must never have a fabricated price');
+    const nifty50 = payloadA.indices.find((i: any) => i.id === 'nifty-50');
+    assert.equal(nifty50.status, 'ok');
+    assert.equal(nifty50.currentValue, 24850.5);
+
+    // Immediate force-refresh within 5-second cooldown must be served from cache without calling upstream again
+    const reqCooldown = createMockReqRes('GET', { refresh: 'true' });
+    await marketIndicesHandler(reqCooldown.req, reqCooldown.res);
+    assert.equal(reqCooldown.getStatusCode(), 200);
+    assert.equal(reqCooldown.getJson().cacheStatus, 'HIT');
+    assert.equal(upstreamCallCount, 6, '5-second force-refresh cooldown must prevent upstream abuse');
+
+    // Now test deterministic RSS fetch & cooldown on /api/economic-news
+    resetEconomicNewsCacheForTest();
+    globalThis.fetch = async () => {
+      const validRss = `
+        <rss version="2.0">
+          <channel>
+            <item>
+              <title>RBI Monetary Policy Report highlights resilient GDP growth and moderating CPI inflation</title>
+              <link>https://www.rbi.org.in/Scripts/BS_PressReleaseDisplay.aspx?prid=99999</link>
+              <pubDate>Mon, 26 Oct 2026 09:30:00 GMT</pubDate>
+              <description>Reserve Bank of India official macroeconomic assessment.</description>
+            </item>
+          </channel>
+        </rss>
+      `;
+      return new Response(validRss, {
+        status: 200,
+        headers: { 'content-type': 'application/rss+xml' },
+      });
+    };
+
+    const newsFirst = createMockReqRes('GET');
+    await economicNewsHandler(newsFirst.req, newsFirst.res);
+    assert.equal(newsFirst.getStatusCode(), 200);
+    assert.equal(newsFirst.getJson().cacheStatus, 'MISS');
+    assert.ok(newsFirst.getJson().articles.length >= 1);
+
+    // Force-refresh within 5-second cooldown returns HIT
+    const newsCooldown = createMockReqRes('GET', { refresh: 'true' });
+    await economicNewsHandler(newsCooldown.req, newsCooldown.res);
+    assert.equal(newsCooldown.getStatusCode(), 200);
+    assert.equal(newsCooldown.getJson().cacheStatus, 'HIT');
+  } finally {
+    globalThis.fetch = originalFetch;
+    resetMarketIndicesCacheForTest();
+    resetEconomicNewsCacheForTest();
+  }
+
+  // 5. Verify vercel.json exists and configures rewrites and security headers
   const vercelJsonPath = path.resolve(process.cwd(), 'vercel.json');
   assert.ok(fs.existsSync(vercelJsonPath), 'vercel.json must exist in repository root');
   const vercelConfig = JSON.parse(fs.readFileSync(vercelJsonPath, 'utf-8'));

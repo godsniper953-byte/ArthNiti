@@ -209,7 +209,7 @@ export const AnalyticalChartPanel: React.FC<AnalyticalChartPanelProps> = ({
             Unable to Retrieve Upstream Time-Series
           </h4>
           <p className="text-xs text-slate-400 max-w-md mt-1">
-            The configured FastAPI endpoint did not respond within the timeout window. You can restore the verified local illustrative dataset immediately.
+            Simulated error state active for UI resilience testing. Click below to restore the verified repository time-series dataset immediately.
           </p>
           <button
             type="button"
@@ -217,7 +217,7 @@ export const AnalyticalChartPanel: React.FC<AnalyticalChartPanelProps> = ({
             className="mt-3 px-3.5 py-1.5 text-xs font-medium bg-emerald-600 hover:bg-emerald-500 text-white rounded-md transition-colors flex items-center gap-1.5 cursor-pointer"
           >
             <RefreshCw className="w-3.5 h-3.5" />
-            <span>Restore Illustrative Dataset</span>
+            <span>Restore Verified Dataset</span>
           </button>
         </div>
       );
@@ -565,7 +565,7 @@ export const AnalyticalChartPanel: React.FC<AnalyticalChartPanelProps> = ({
       {/* Footer Metadata + UI State Simulator (for testing Loading, Empty, and Error resilience) */}
       <div className="mt-4 pt-3 border-t border-slate-800/60 flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-[11px] text-slate-400">
         <div>
-          <span>Illustrative development series · {filteredData.length} observations shown</span>
+          <span>Verified repository time-series ({sourceLabel}) · {filteredData.length} observations shown</span>
           {referenceBand && (
             <span className="ml-2 text-emerald-400">· Shaded: {referenceBand.label}</span>
           )}

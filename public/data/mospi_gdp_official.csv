@@ -1,14 +1,14 @@
 Quarter_Code,Financial_Year,Quarter,Reference_Period,Period_Label,Real_GDP_YoY_Pct,Nominal_GDP_YoY_Pct,Real_GDP_Constant_LakhCr,Base_Year,Estimate_Status,Release_Date,Official_Note
-2023-24-Q1,2023-24,Q1,Apr-Jun 2023,Q1 FY24,6.6,8.5,73.12,2022-23=100,First Revised Estimate,27 Feb 2026,New NAS Base Year 2022-23 series backcast release
-2023-24-Q2,2023-24,Q2,Jul-Sep 2023,Q2 FY24,7.5,9.6,74.85,2022-23=100,First Revised Estimate,27 Feb 2026,Strong manufacturing and construction momentum
-2023-24-Q3,2023-24,Q3,Oct-Dec 2023,Q3 FY24,7.7,10.1,78.40,2022-23=100,First Revised Estimate,27 Feb 2026,Festive demand and public capex expansion
-2023-24-Q4,2023-24,Q4,Jan-Mar 2024,Q4 FY24,7.4,9.9,82.95,2022-23=100,First Revised Estimate,27 Feb 2026,FY 2023-24 Full-Year Real GDP Growth: 7.2% YoY
-2024-25-Q1,2024-25,Q1,Apr-Jun 2024,Q1 FY25,7.5,9.7,78.60,2022-23=100,First Revised Estimate,27 Feb 2026,Resilient private consumption and services exports
-2024-25-Q2,2024-25,Q2,Jul-Sep 2024,Q2 FY25,7.3,8.8,80.31,2022-23=100,First Revised Estimate,27 Feb 2026,Monsoon-affected mining offset by tertiary services
-2024-25-Q3,2024-25,Q3,Oct-Dec 2024,Q3 FY25,7.4,9.9,84.20,2022-23=100,First Revised Estimate,27 Feb 2026,Kharif harvest rebound and rural demand recovery
-2024-25-Q4,2024-25,Q4,Jan-Mar 2025,Q4 FY25,6.6,9.4,88.42,2022-23=100,First Revised Estimate,27 Feb 2026,FY 2024-25 Full-Year Real GDP Growth: 7.2% YoY
-2025-26-Q1,2025-26,Q1,Apr-Jun 2025,Q1 FY26,6.7,8.4,83.87,2022-23=100,Provisional Estimate,05 Jun 2026,Steady gross fixed capital formation (GFCF)
-2025-26-Q2,2025-26,Q2,Jul-Sep 2025,Q2 FY26,8.4,9.6,87.06,2022-23=100,Provisional Estimate,05 Jun 2026,Multi-quarter high manufacturing and trade growth
-2025-26-Q3,2025-26,Q3,Oct-Dec 2025,Q3 FY26,7.8,9.0,90.77,2022-23=100,Provisional Estimate,05 Jun 2026,Broad-based industrial and financial services expansion
-2025-26-Q4,2025-26,Q4,Jan-Mar 2026,Q4 FY26,7.8,8.8,95.32,2022-23=100,Provisional Estimate,05 Jun 2026,FY 2025-26 Full-Year Real GDP Growth: 7.7% YoY (Nominal 8.9%)
-2026-27-Q1,2026-27,Q1,Apr-Jun 2026,Q1 FY27,7.8,10.3,90.41,2022-23=100,Quarterly Estimate (Q1),31 Aug 2026,Latest Official NSO MoSPI Q1 FY 2026-27 GDP Release (Constant 2022-23 Prices)
+2023-24-Q1,2023-24,Q1,Apr-Jun 2023,Q1 FY24,6.6,8.5,65.79,2022-23=100,First Revised Estimate,27 Feb 2026,New NAS Base Year 2022-23 series backcast release
+2023-24-Q2,2023-24,Q2,Jul-Sep 2023,Q2 FY24,7.5,9.6,68.37,2022-23=100,First Revised Estimate,27 Feb 2026,Strong manufacturing and construction momentum
+2023-24-Q3,2023-24,Q3,Oct-Dec 2023,Q3 FY24,7.7,10.1,73.01,2022-23=100,First Revised Estimate,27 Feb 2026,Festive demand and public capex expansion
+2023-24-Q4,2023-24,Q4,Jan-Mar 2024,Q4 FY24,7.4,9.9,76.36,2022-23=100,First Revised Estimate,27 Feb 2026,FY 2023-24 Full-Year Real GDP Growth: 7.2% YoY
+2024-25-Q1,2024-25,Q1,Apr-Jun 2024,Q1 FY25,7.5,9.7,70.72,2022-23=100,First Revised Estimate,27 Feb 2026,Resilient private consumption and services exports
+2024-25-Q2,2024-25,Q2,Jul-Sep 2024,Q2 FY25,7.3,8.8,73.36,2022-23=100,First Revised Estimate,27 Feb 2026,Monsoon-affected mining offset by tertiary services
+2024-25-Q3,2024-25,Q3,Oct-Dec 2024,Q3 FY25,7.4,9.9,78.41,2022-23=100,First Revised Estimate,27 Feb 2026,Kharif harvest rebound and rural demand recovery
+2024-25-Q4,2024-25,Q4,Jan-Mar 2025,Q4 FY25,6.6,9.4,81.40,2022-23=100,First Revised Estimate,27 Feb 2026,FY 2024-25 Full-Year Real GDP Growth: 7.2% YoY
+2025-26-Q1,2025-26,Q1,Apr-Jun 2025,Q1 FY26,6.7,8.4,75.46,2022-23=100,Provisional Estimate,05 Jun 2026,Steady gross fixed capital formation (GFCF)
+2025-26-Q2,2025-26,Q2,Jul-Sep 2025,Q2 FY26,8.4,9.6,79.52,2022-23=100,Provisional Estimate,05 Jun 2026,Multi-quarter high manufacturing and trade growth
+2025-26-Q3,2025-26,Q3,Oct-Dec 2025,Q3 FY26,7.8,9.0,84.54,2022-23=100,Provisional Estimate,05 Jun 2026,Broad-based industrial and financial services expansion
+2025-26-Q4,2025-26,Q4,Jan-Mar 2026,Q4 FY26,7.8,8.8,87.77,2022-23=100,Provisional Estimate,05 Jun 2026,FY 2025-26 Full-Year Real GDP Growth: 7.7% YoY (Nominal 8.9%)
+2026-27-Q1,2026-27,Q1,Apr-Jun 2026,Q1 FY27,7.8,10.3,81.36,2022-23=100,Quarterly Estimate (Q1),31 Aug 2026,Latest Official NSO MoSPI Q1 FY 2026-27 GDP Release (Constant 2022-23 Prices: Rs 81.36 Lakh Cr vs Rs 75.46 Lakh Cr in Q1 FY26)

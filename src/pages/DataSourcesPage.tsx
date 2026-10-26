@@ -7,10 +7,10 @@ import {
   ExternalLink,
   FileText,
   Search,
-  ShieldCheck,
 } from 'lucide-react';
 import { DataSourceMetadata } from '../types/economy';
 import { getStructuredIndicatorRegistrySync } from '../services/economyService';
+import { ProvenanceAuditSection } from '../components/ProvenanceAuditSection';
 
 interface DataSourcesPageProps {
   sources: DataSourceMetadata[];
@@ -95,7 +95,7 @@ export const DataSourcesPage: React.FC<DataSourcesPageProps> = ({ sources, theme
               Data Provenance Disclosure — 7 Official Macro Datasets + Live Market &amp; News Intelligence
             </div>
             <p>
-              <strong>Real GDP Growth (MoSPI Base 2022–23: 7.8% YoY in Q1 FY27)</strong>, <strong>All-India Combined CPI Inflation (MoSPI Base 2024 = 100: 5.54% YoY in Sep 2026)</strong>, <strong>All-India Unemployment Rate (MoSPI Monthly PLFS, CWS Age 15+: 5.0% in Sep 2026)</strong>, <strong>India Merchandise Trade Balance (MoCI / DGCI&amp;S &amp; RBI DBIE: Exports $44.40B − Imports $74.61B = -$30.21B Signed Balance / $30.21B Deficit in Sep 2026)</strong>, <strong>USD/INR Official Reference Rate (FBIL / RBI DBIE: ₹94.6986 per 1 USD on 22 Oct 2026)</strong>, <strong>Indian Basket Crude Oil Price (PPAC: $116.09/bbl Sep 2026 Completed Monthly Avg; $120.08/bbl Oct 2026 Partial MTD; $119.99/bbl Daily on 22 Oct 2026)</strong>, and the <strong>RBI Policy Repo Rate (Official MPC: 5.50% effective 07 Oct 2026)</strong> are loaded from verified repository CSV datasets (<code className="font-mono-tabular">/public/data/*.csv</code>) with zero-code browser CSV updaters.
+              <strong>Real GDP Growth (MoSPI Base 2022–23: 7.8% YoY / ₹81.36 Lakh Cr in Q1 FY27)</strong>, <strong>All-India Combined CPI Inflation (MoSPI Base 2024 = 100: 5.54% YoY in Sep 2026)</strong>, <strong>All-India Unemployment Rate (MoSPI Monthly PLFS, CWS Age 15+: 5.0% in Sep 2026)</strong>, <strong>India Merchandise Trade Balance (MoCI / DGCI&amp;S &amp; RBI DBIE: Exports $44.40B − Imports $74.61B = -$30.21B Signed Balance / $30.21B Deficit in Sep 2026; H1 FY27 Cumulative Exports $259.89B − Imports $437.53B = -$177.64B)</strong>, <strong>USD/INR Official Reference Rate (FBIL / RBI DBIE: ₹94.6986 per 1 USD on 22 Oct 2026)</strong>, <strong>Indian Basket Crude Oil Price (PPAC: $116.09/bbl Sep 2026 Completed Monthly Avg; $120.08/bbl Oct 2026 Partial MTD; $119.99/bbl Daily on 22 Oct 2026)</strong>, and the <strong>RBI Policy Repo Rate (Official MPC: 5.50% effective 07 Oct 2026)</strong> are loaded from verified repository CSV datasets (<code className="font-mono-tabular">/public/data/*.csv</code>) with zero-code browser CSV updaters.
             </p>
             <p className="text-slate-400">
               <strong>Retrieval Architecture &amp; Horizon Transparency:</strong> Because MoSPI, RBI, FBIL, PPAC, and TRADESTAT do not provide unauthenticated CORS-enabled real-time JSON APIs, clicking &ldquo;Revalidate Official CSV&rdquo; on macroeconomic indicators reloads and validates the local <code className="font-mono-tabular">/public/data/*.csv</code> dataset (or user-uploaded browser CSV overrides) rather than polling a live government API. Historical series reflect official published releases (including FY 2023–24 final bilateral trade totals of $1,115.28B), while the 2026 dataset horizon (aligned with the platform&rsquo;s October 2026 reference clock) is stored in <code className="font-mono-tabular">/public/data/*.csv</code> and can be updated at any time via each page&rsquo;s CSV uploader. Conversely, <strong>Live Indian Market Indices</strong> (<code className="font-mono-tabular">/api/market-indices</code>, 15s server cache TTL) and <strong>Economic News Intelligence</strong> (<code className="font-mono-tabular">/api/economic-news</code>, 300s server cache TTL) perform live server-side HTTP aggregation with per-instance memory caching, 5-second force-refresh cooldowns, and explicit stale-cache fallback labelling.
@@ -105,109 +105,11 @@ export const DataSourcesPage: React.FC<DataSourcesPageProps> = ({ sources, theme
       </div>
 
       {/* Structured Indicator Source Registry Table (Academic & Departmental Audit View) */}
-      <section
-        aria-label="Structured Indicator Source Registry"
-        className={`rounded-xl border overflow-hidden ${
-          theme === 'dark'
-            ? 'bg-[#0B1325] border-slate-800/90 text-slate-100'
-            : 'bg-white border-slate-200 text-slate-900 shadow-xs'
-        }`}
-      >
-        <div className="p-5 sm:p-6 border-b border-slate-800/60 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
-          <div>
-            <div className="flex items-center gap-2 text-xs font-mono-tabular text-emerald-400">
-              <ShieldCheck className="w-4 h-4" />
-              <span>Indicator-Level Provenance &amp; Freshness Audit Matrix</span>
-            </div>
-            <h2 className="text-base sm:text-lg font-semibold mt-0.5">
-              Structured Indicator Source Registry ({filteredRegistry.length} / {indicatorRegistry.length} Domains)
-            </h2>
-          </div>
-          <span className="text-xs font-mono-tabular text-slate-400">
-            Publication Time ≠ Retrieval Time Enforced
-          </span>
-        </div>
-
-        <div className="overflow-x-auto">
-          <table className="w-full text-left border-collapse text-xs">
-            <thead>
-              <tr
-                className={`border-b font-mono-tabular text-[11px] uppercase tracking-wider ${
-                  theme === 'dark'
-                    ? 'bg-[#060B16] border-slate-800 text-slate-400'
-                    : 'bg-slate-50 border-slate-200 text-slate-600'
-                }`}
-              >
-                <th className="py-3 px-4">Indicator &amp; ID</th>
-                <th className="py-3 px-4">Provider &amp; Retrieval</th>
-                <th className="py-3 px-4">Unit &amp; Definition</th>
-                <th className="py-3 px-4">Ref Period &amp; Pub Date</th>
-                <th className="py-3 px-4">Frequency &amp; Threshold</th>
-                <th className="py-3 px-4">Methodological Safeguards</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-800/60">
-              {filteredRegistry.map((row) => (
-                <tr
-                  key={row.indicatorId}
-                  className={
-                    theme === 'dark' ? 'hover:bg-slate-900/40' : 'hover:bg-slate-50/80'
-                  }
-                >
-                  <td className="py-3.5 px-4 align-top min-w-[190px]">
-                    <div className="font-semibold text-emerald-400">{row.displayName}</div>
-                    <div className="font-mono-tabular text-[11px] text-slate-400 mt-0.5">
-                      ID: {row.indicatorId}
-                    </div>
-                    <div className="mt-1">
-                      <span className="inline-block font-mono-tabular text-[10px] px-1.5 py-0.5 rounded border border-emerald-500/30 bg-emerald-500/10 text-emerald-300">
-                        {row.dataStatus === 'verified_official_csv'
-                          ? 'Verified Official CSV'
-                          : row.dataStatus === 'live_exchange_api_proxy'
-                          ? 'Live Server Exchange Proxy'
-                          : 'Live Server RSS/JSON Engine'}
-                      </span>
-                    </div>
-                  </td>
-                  <td className="py-3.5 px-4 align-top min-w-[210px]">
-                    <div className="font-medium">{row.provider}</div>
-                    <div className="text-[11px] text-slate-400 mt-0.5">{row.retrievalMethod}</div>
-                    <a
-                      href={row.sourceUrl}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="inline-flex items-center gap-1 text-[11px] font-mono-tabular text-amber-400 hover:underline mt-1"
-                    >
-                      <span>Official Source</span>
-                      <ExternalLink className="w-3 h-3" />
-                    </a>
-                  </td>
-                  <td className="py-3.5 px-4 align-top font-mono-tabular min-w-[180px]">
-                    {row.unit}
-                  </td>
-                  <td className="py-3.5 px-4 align-top min-w-[175px]">
-                    <div className="font-mono-tabular font-medium text-cyan-400">
-                      {row.referencePeriod}
-                    </div>
-                    <div className="text-[11px] text-slate-400 mt-0.5">
-                      Published: {row.publicationTimestamp}
-                    </div>
-                  </td>
-                  <td className="py-3.5 px-4 align-top min-w-[165px]">
-                    <div className="font-mono-tabular">{row.expectedUpdateFrequency}</div>
-                    <div className="text-[11px] text-slate-400 mt-0.5">
-                      Freshness: {row.freshnessThreshold}
-                    </div>
-                  </td>
-                  <td className="py-3.5 px-4 align-top text-slate-400 leading-relaxed min-w-[260px]">
-                    {row.methodologicalNotes}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      </section>
+      <ProvenanceAuditSection
+        filteredRegistry={filteredRegistry}
+        totalCount={indicatorRegistry.length}
+        theme={theme}
+      />
 
       {/* Source Cards Directory */}
       {filteredSources.length === 0 ? (

@@ -22,6 +22,8 @@ import { AnalyticalChartPanel } from '../components/charts/AnalyticalChartPanel'
 import { RelationshipExplorer } from '../components/dashboard/RelationshipExplorer';
 import { LiveIndianMarketsSection } from '../components/visualizations/LiveIndianMarketsSection';
 import { IndianMarketIndicesResponse } from '../services/indianMarketService';
+import { EconomicNewsSection } from '../components/news/EconomicNewsSection';
+import { EconomicNewsResponse } from '../services/economicNewsService';
 
 const LazyIndiaEconomicGlobe = React.lazy(() =>
   import('../components/visualizations/IndiaEconomicGlobe').then((m) => ({
@@ -68,6 +70,14 @@ interface OverviewPageProps {
   onSimulateSingleIndexUnavailable?: (indexId: string | null) => void;
   selectedMarketIndexId?: string;
   onSelectMarketIndexId?: (indexId: string) => void;
+  newsData?: EconomicNewsResponse | null;
+  newsLoading?: boolean;
+  newsError?: string | null;
+  newsStaleCache?: boolean;
+  newsAutoRefresh?: boolean;
+  onToggleNewsAutoRefresh?: () => void;
+  onRefreshNewsNow?: () => void;
+  onSimulateNewsError?: (simulate: boolean) => void;
 }
 
 export const OverviewPage: React.FC<OverviewPageProps> = ({
@@ -109,6 +119,14 @@ export const OverviewPage: React.FC<OverviewPageProps> = ({
   onSimulateSingleIndexUnavailable = () => {},
   selectedMarketIndexId = 'nifty-50',
   onSelectMarketIndexId = () => {},
+  newsData = null,
+  newsLoading = false,
+  newsError = null,
+  newsStaleCache = false,
+  newsAutoRefresh = true,
+  onToggleNewsAutoRefresh = () => {},
+  onRefreshNewsNow = () => {},
+  onSimulateNewsError = () => {},
 }) => {
   const kpiSectionRef = useRef<HTMLDivElement | null>(null);
 
@@ -543,6 +561,21 @@ export const OverviewPage: React.FC<OverviewPageProps> = ({
           onSelectPage={onSelectPage}
         />
       </section>
+
+      {/* 4B. Economic News & Current Affairs Intelligence Preview Section */}
+      <EconomicNewsSection
+        newsData={newsData}
+        isLoading={newsLoading}
+        errorMessage={newsError}
+        isStaleCache={newsStaleCache}
+        autoRefreshEnabled={newsAutoRefresh}
+        onToggleAutoRefresh={onToggleNewsAutoRefresh}
+        onRefreshNow={onRefreshNewsNow}
+        onSimulateError={onSimulateNewsError}
+        onSelectPage={onSelectPage}
+        theme={theme}
+        mode="overview-preview"
+      />
 
       {/* 5. Latest Data Updates & Source Transparency Grid */}
       <section className="grid grid-cols-1 lg:grid-cols-12 gap-6">

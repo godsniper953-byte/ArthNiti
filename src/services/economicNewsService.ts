@@ -1,0 +1,156 @@
+/**
+ * Client-side Economic News & Current Affairs Intelligence Service
+ * Fetches live aggregated official releases & financial news from /api/economic-news.
+ *
+ * Features:
+ *   - Client-side memory & localStorage caching so users can still read cached stories
+ *     with a transparent "Stale Cache Fallback" notice if their network drops.
+ *   - Never invents or fabricates headlines, links, or dates.
+ */
+
+import type {
+  AffectedArthNitiIndicator,
+  EconomicNewsArticle,
+  EconomicNewsResponse,
+  EconomicStoryIntelligence,
+  ImpactDirection,
+  NewsDashboardSection,
+  NewsMacroCategory,
+  NewsSourceStatus,
+  NewsSubTopicId,
+} from '../../api/economic-news';
+import { NEWS_SUBTOPICS_META } from '../../api/economic-news';
+
+export type {
+  AffectedArthNitiIndicator,
+  EconomicNewsArticle,
+  EconomicNewsResponse,
+  EconomicStoryIntelligence,
+  ImpactDirection,
+  NewsDashboardSection,
+  NewsMacroCategory,
+  NewsSourceStatus,
+  NewsSubTopicId,
+};
+
+export { NEWS_SUBTOPICS_META };
+
+const CLIENT_STORAGE_KEY = 'arthniti_economic_news_cache_v1';
+
+let memoryCache: EconomicNewsResponse | null = null;
+
+function saveClientCache(payload: EconomicNewsResponse): void {
+  memoryCache = payload;
+  try {
+    if (typeof window !== 'undefined' && window.localStorage) {
+      window.localStorage.setItem(CLIENT_STORAGE_KEY, JSON.stringify(payload));
+    }
+  } catch {
+    // Ignore storage quota errors
+  }
+}
+
+function loadClientCache(): EconomicNewsResponse | null {
+  if (memoryCache) return memoryCache;
+  try {
+    if (typeof window !== 'undefined' && window.localStorage) {
+      const raw = window.localStorage.getItem(CLIENT_STORAGE_KEY);
+      if (raw) {
+        const parsed = JSON.parse(raw) as EconomicNewsResponse;
+        if (parsed && Array.isArray(parsed.articles) && parsed.articles.length > 0) {
+          memoryCache = parsed;
+          return parsed;
+        }
+      }
+    }
+  } catch {
+    // Ignore corrupted storage
+  }
+  return null;
+}
+
+export interface FetchEconomicNewsResult {
+  status: 'success' | 'error';
+  data: EconomicNewsResponse | null;
+  isStaleClientCache: boolean;
+  errorMessage: string | null;
+}
+
+export async function fetchEconomicNews(options?: {
+  forceRefresh?: boolean;
+  simulateError?: boolean;
+}): Promise<FetchEconomicNewsResult> {
+  const params = new URLSearchParams();
+  if (options?.forceRefresh) {
+    params.set('force', '1');
+  }
+  if (options?.simulateError) {
+    params.set('simulateError', '1');
+  }
+
+  const queryString = params.toString();
+  const url = `/api/economic-news${queryString ? `?${queryString}` : ''}`;
+
+  try {
+    const res = await fetch(url, {
+      headers: {
+        Accept: 'application/json',
+      },
+    });
+
+    if (!res.ok) {
+      const errBody = await res.json().catch(() => ({}));
+      throw new Error(
+        errBody?.error ||
+          `Server returned HTTP ${res.status} when fetching live economic news.`
+      );
+    }
+
+    const payload = (await res.json()) as EconomicNewsResponse;
+    if (!payload.ok || !Array.isArray(payload.articles)) {
+      throw new Error('Malformed response from /api/economic-news endpoint.');
+    }
+
+    saveClientCache(payload);
+    return {
+      status: 'success',
+      data: payload,
+      isStaleClientCache: payload.cacheStatus === 'STALE_FALLBACK',
+      errorMessage: null,
+    };
+  } catch (err: any) {
+    // If simulating error explicitly for verification, return the error state directly
+    if (options?.simulateError) {
+      return {
+        status: 'error',
+        data: loadClientCache(),
+        isStaleClientCache: true,
+        errorMessage:
+          err?.message ||
+          'Unable to fetch live economic news from official and financial feeds.',
+      };
+    }
+
+    const fallback = loadClientCache();
+    if (fallback) {
+      return {
+        status: 'success',
+        data: {
+          ...fallback,
+          cacheStatus: 'STALE_FALLBACK',
+        },
+        isStaleClientCache: true,
+        errorMessage: null,
+      };
+    }
+
+    return {
+      status: 'error',
+      data: null,
+      isStaleClientCache: false,
+      errorMessage:
+        err?.message ||
+        'Failed to retrieve live economic news and current affairs intelligence.',
+    };
+  }
+}

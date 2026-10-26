@@ -4,6 +4,7 @@ import { fileURLToPath } from 'url';
 import dotenv from 'dotenv';
 import { createServer as createViteServer } from 'vite';
 import marketIndicesHandler from './api/market-indices.ts';
+import economicNewsHandler from './api/economic-news.ts';
 
 dotenv.config();
 
@@ -19,6 +20,11 @@ async function startServer() {
   // Mount server-side Indian Stock Market Indices API route
   app.get('/api/market-indices', async (req, res) => {
     await marketIndicesHandler(req, res);
+  });
+
+  // Mount server-side Economic News & Current Affairs Intelligence API route
+  app.get('/api/economic-news', async (req, res) => {
+    await economicNewsHandler(req, res);
   });
 
   if (process.env.NODE_ENV !== 'production') {

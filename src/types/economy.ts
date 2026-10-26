@@ -5,6 +5,7 @@ export type PageId =
   | 'labour-market'
   | 'currency-oil'
   | 'financial-markets'
+  | 'economic-news'
   | 'comparisons'
   | 'data-sources'
   | 'about';

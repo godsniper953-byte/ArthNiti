@@ -12,6 +12,7 @@ import {
   GitCompare,
   Info,
   Landmark,
+  Newspaper,
   TrendingUp,
   X,
 } from 'lucide-react';
@@ -60,6 +61,12 @@ export const ARTHNITI_NAV_ITEMS: NavItemConfig[] = [
     label: 'Financial Markets',
     shortDesc: 'Indices & Sovereign Yields',
     icon: Landmark,
+  },
+  {
+    id: 'economic-news',
+    label: 'Economic News',
+    shortDesc: 'India & Global Intelligence',
+    icon: Newspaper,
   },
   {
     id: 'comparisons',

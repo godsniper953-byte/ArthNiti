@@ -51,6 +51,10 @@ import {
   fetchIndianMarketIndices,
   IndianMarketIndicesResponse,
 } from './services/indianMarketService';
+import {
+  EconomicNewsResponse,
+  fetchEconomicNews,
+} from './services/economicNewsService';
 import { EconomicIndicator, PageId } from './types/economy';
 import { Sidebar } from './components/navigation/Sidebar';
 import { TopBar } from './components/navigation/TopBar';
@@ -61,6 +65,7 @@ import { InflationPage } from './pages/InflationPage';
 import { LabourMarketPage } from './pages/LabourMarketPage';
 import { CurrencyOilPage } from './pages/CurrencyOilPage';
 import { FinancialMarketsPage } from './pages/FinancialMarketsPage';
+import { EconomicNewsPage } from './pages/EconomicNewsPage';
 import { ComparisonsPage } from './pages/ComparisonsPage';
 import { DataSourcesPage } from './pages/DataSourcesPage';
 import { AboutPage } from './pages/AboutPage';
@@ -154,6 +159,13 @@ export default function App() {
   );
   const [selectedMarketIndexId, setSelectedMarketIndexId] = useState<string>('nifty-50');
 
+  // Live Economic News & Current Affairs Intelligence State
+  const [newsData, setNewsData] = useState<EconomicNewsResponse | null>(null);
+  const [newsLoading, setNewsLoading] = useState<boolean>(true);
+  const [newsError, setNewsError] = useState<string | null>(null);
+  const [newsStaleCache, setNewsStaleCache] = useState<boolean>(false);
+  const [newsAutoRefresh, setNewsAutoRefresh] = useState<boolean>(true);
+
   const baseIndicators = useMemo(() => getIndicatorsSync(), []);
   const sources = useMemo(() => getDataSourcesSync(), []);
   const sectorGva = useMemo(() => getSectorGvaSync(), []);
@@ -204,6 +216,35 @@ export default function App() {
       });
     },
     [handleFetchMarketIndices]
+  );
+
+  const handleFetchEconomicNews = useCallback(
+    async (options?: { forceRefresh?: boolean; simulateError?: boolean }) => {
+      setNewsLoading(true);
+      if (options?.simulateError === false) {
+        setNewsError(null);
+      }
+      const res = await fetchEconomicNews({
+        forceRefresh: options?.forceRefresh,
+        simulateError: options?.simulateError,
+      });
+      if (res.status === 'success' && res.data) {
+        setNewsData(res.data);
+        setNewsStaleCache(res.isStaleClientCache);
+        setNewsError(null);
+      } else {
+        if (res.data) {
+          setNewsData(res.data);
+          setNewsStaleCache(true);
+        }
+        setNewsError(
+          res.errorMessage ||
+            'Failed to retrieve live economic news and current affairs intelligence.'
+        );
+      }
+      setNewsLoading(false);
+    },
+    []
   );
 
   const handleFetchOfficialCpi = useCallback(async (simulateError = false) => {
@@ -345,6 +386,7 @@ export default function App() {
     handleFetchOfficialCrude(false);
     handleFetchOfficialTrade(false);
     handleFetchMarketIndices({ forceRefresh: false, simulateError: false });
+    handleFetchEconomicNews({ forceRefresh: false, simulateError: false });
   }, [
     handleFetchOfficialCpi,
     handleFetchOfficialGdp,
@@ -354,7 +396,19 @@ export default function App() {
     handleFetchOfficialCrude,
     handleFetchOfficialTrade,
     handleFetchMarketIndices,
+    handleFetchEconomicNews,
   ]);
+
+  // Safe automatic polling for Live Economic News (every 5 minutes when tab is visible)
+  useEffect(() => {
+    if (!newsAutoRefresh || newsError) return;
+    const timerId = window.setInterval(() => {
+      if (document.visibilityState === 'visible') {
+        handleFetchEconomicNews({ forceRefresh: false, simulateError: false });
+      }
+    }, 300000);
+    return () => window.clearInterval(timerId);
+  }, [newsAutoRefresh, newsError, handleFetchEconomicNews]);
 
   // Safe automatic polling for Live Indian Market Indices (pauses when tab is hidden or market is closed)
   useEffect(() => {
@@ -875,6 +929,18 @@ export default function App() {
             onSimulateSingleIndexUnavailable={handleSimulateSingleIndexUnavailable}
             selectedMarketIndexId={selectedMarketIndexId}
             onSelectMarketIndexId={setSelectedMarketIndexId}
+            newsData={newsData}
+            newsLoading={newsLoading}
+            newsError={newsError}
+            newsStaleCache={newsStaleCache}
+            newsAutoRefresh={newsAutoRefresh}
+            onToggleNewsAutoRefresh={() => setNewsAutoRefresh((prev) => !prev)}
+            onRefreshNewsNow={() =>
+              handleFetchEconomicNews({ forceRefresh: true, simulateError: false })
+            }
+            onSimulateNewsError={(simErr) =>
+              handleFetchEconomicNews({ forceRefresh: false, simulateError: simErr })
+            }
           />
         );
       case 'gdp-growth':
@@ -988,6 +1054,25 @@ export default function App() {
             onSimulateSingleIndexUnavailable={handleSimulateSingleIndexUnavailable}
             selectedMarketIndexId={selectedMarketIndexId}
             onSelectMarketIndexId={setSelectedMarketIndexId}
+          />
+        );
+      case 'economic-news':
+        return (
+          <EconomicNewsPage
+            newsData={newsData}
+            isLoading={newsLoading}
+            errorMessage={newsError}
+            isStaleCache={newsStaleCache}
+            autoRefreshEnabled={newsAutoRefresh}
+            onToggleAutoRefresh={() => setNewsAutoRefresh((prev) => !prev)}
+            onRefreshNow={() =>
+              handleFetchEconomicNews({ forceRefresh: true, simulateError: false })
+            }
+            onSimulateError={(simErr) =>
+              handleFetchEconomicNews({ forceRefresh: false, simulateError: simErr })
+            }
+            onSelectPage={handleSelectPage}
+            theme={theme}
           />
         );
       case 'comparisons':

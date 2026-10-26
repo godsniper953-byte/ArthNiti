@@ -39,6 +39,7 @@ const PAGE_LABELS: Record<PageId, string> = {
   'labour-market': 'Labour Market',
   'currency-oil': 'Currency, Oil & Trade',
   'financial-markets': 'Financial Markets',
+  'economic-news': 'Economic News & Current Affairs',
   comparisons: 'Economic Comparisons',
   'data-sources': 'Data Sources',
   about: 'About ArthNiti',

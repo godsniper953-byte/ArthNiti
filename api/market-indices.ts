@@ -697,6 +697,15 @@ export async function fetchIndianMarketIndicesPayload(options?: {
         : undefined;
       const overallSession = evaluateIndianMarketSession(fetchStartMs, firstExchangeTimeSec);
 
+      const openPollSec = Math.max(
+        10,
+        parseInt(process.env.MARKET_OPEN_POLL_INTERVAL_SECONDS || '30', 10) || 30
+      );
+      const closedPollSec = Math.max(
+        60,
+        parseInt(process.env.MARKET_CLOSED_POLL_INTERVAL_SECONDS || '300', 10) || 300
+      );
+
       const responsePayload: IndianMarketIndicesResponse = {
         ok: validQuotes.length > 0,
         fetchedAtMs: fetchStartMs,
@@ -711,7 +720,9 @@ export async function fetchIndianMarketIndicesPayload(options?: {
         cacheStatus: 'MISS',
         cacheAgeSeconds: 0,
         recommendedPollIntervalSeconds:
-          overallSession.status === 'OPEN' || overallSession.status === 'PRE_OPEN' ? 30 : 300,
+          overallSession.status === 'OPEN' || overallSession.status === 'PRE_OPEN'
+            ? openPollSec
+            : closedPollSec,
         indices: quotes,
       };
 

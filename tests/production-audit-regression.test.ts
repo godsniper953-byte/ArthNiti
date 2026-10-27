@@ -56,6 +56,7 @@ import {
 import {
   areHeadlinesDuplicate,
   isEconomicallyRelevant,
+  normalizeNewsPublicationTimestamp,
   parseRssFeedXmlItems,
   resetEconomicNewsCacheForTest,
   sanitizeExternalHttpUrl,
@@ -636,6 +637,37 @@ test('7. External URL sanitization, clickbait filtering, headline deduplication,
   );
   assert.equal(parsedItems[0].provenanceType, 'LIVE_FEED_ITEM');
   assert.ok(!parsedItems[0].conciseSummary.includes('<p>'), 'Must strip HTML tags from RSS summary');
+
+  // Verify RBI timezone-less <pubDate> normalization (prevents +5:30 future timestamp bug)
+  const fetchNowMs = Date.parse('2026-10-27T16:54:00Z'); // 22:24 IST
+  const rbiNorm = normalizeNewsPublicationTimestamp(
+    'Tue, 27 Oct 2026 18:15:00',
+    true,
+    fetchNowMs
+  );
+  assert.equal(rbiNorm.timestampStatus, 'ASSUMED_IST_OFFSET');
+  assert.equal(rbiNorm.shouldReject, false);
+  // 18:15 IST = 12:45 UTC (well before 16:54 UTC fetch time)
+  assert.equal(rbiNorm.validDate.toISOString(), '2026-10-27T12:45:00.000Z');
+  assert.ok(rbiNorm.validDate.getTime() < fetchNowMs, 'Normalized RBI pubDate must be earlier than fetchNowMs');
+
+  // Verify minor future clock skew (+15m ahead of fetch time) is clamped to fetchNowMs
+  const minorFutureNorm = normalizeNewsPublicationTimestamp(
+    'Tue, 27 Oct 2026 17:10:00 GMT',
+    false,
+    fetchNowMs
+  );
+  assert.equal(minorFutureNorm.timestampStatus, 'FUTURE_TIMESTAMP_CLAMPED');
+  assert.equal(minorFutureNorm.shouldReject, false);
+  assert.equal(minorFutureNorm.validDate.getTime(), fetchNowMs);
+
+  // Verify implausible future timestamp (>24h ahead of fetch time) is rejected
+  const farFutureNorm = normalizeNewsPublicationTimestamp(
+    'Sat, 31 Oct 2026 18:00:00 GMT',
+    false,
+    fetchNowMs
+  );
+  assert.equal(farFutureNorm.shouldReject, true);
 });
 
 test('8. Serverless API handlers, security headers, secret non-leakage, deterministic stale-cache fallback, deduplication, cooldowns, and vercel.json config', async () => {

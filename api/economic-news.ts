@@ -96,6 +96,12 @@ export interface EconomicStoryIntelligence {
     | 'Policy & Market Transmission Brief';
 }
 
+export type NewsTimestampValidationStatus =
+  | 'VALID_NORMALIZED'
+  | 'ASSUMED_IST_OFFSET'
+  | 'FUTURE_TIMESTAMP_CLAMPED'
+  | 'MISSING_OR_INVALID_DATE';
+
 export interface EconomicNewsArticle {
   id: string;
   headline: string;
@@ -106,8 +112,11 @@ export interface EconomicNewsArticle {
   provenanceType?: 'LIVE_FEED_ITEM' | 'BUNDLED_OFFICIAL_RELEASE_SUMMARY';
   sourceHomepageUrl: string;
   originalUrl: string;
+  rawPublishedAt?: string;
   publishedAtIso: string;
   publishedAtIst: string;
+  fetchedAtIst?: string;
+  timestampStatus?: NewsTimestampValidationStatus;
   relativeTimeLabel: string;
   category: NewsMacroCategory;
   categoryLabel: string;
@@ -1231,6 +1240,88 @@ function getOfficialStatisticalMilestones(nowMs: number): EconomicNewsArticle[] 
   });
 }
 
+const EXPLICIT_TZ_REGEX =
+  /(?:Z|[+-]\d{2}:?\d{2}|\b(?:GMT|UTC|IST|EST|EDT|CST|CDT|MST|MDT|PST|PDT|CET|CEST|BST)\b)\s*$/i;
+
+/**
+ * Normalizes RSS/JSON publication timestamps to a consistent Date (UTC epoch / IST display).
+ * - Fixes Indian institutional feeds (such as rbi.org.in) that emit local IST wall-clock times
+ *   without a timezone suffix (e.g. "Tue, 27 Oct 2026 18:15:00"), preventing them from being
+ *   misinterpreted as UTC and shifted +5:30 hours into the future.
+ * - Rejects implausible future timestamps (> 24 hours ahead of fetch time).
+ * - Clamps minor upstream clock skew (> nowMs) to nowMs and marks FUTURE_TIMESTAMP_CLAMPED.
+ */
+export function normalizeNewsPublicationTimestamp(
+  rawDateStr: string | undefined | null,
+  assumeIstIfNoOffset: boolean,
+  nowMs: number = Date.now()
+): {
+  validDate: Date;
+  rawPublishedAt: string;
+  timestampStatus: NewsTimestampValidationStatus;
+  shouldReject: boolean;
+} {
+  const cleanedRaw = (rawDateStr || '').trim();
+  if (!cleanedRaw) {
+    return {
+      validDate: new Date(nowMs),
+      rawPublishedAt: '',
+      timestampStatus: 'MISSING_OR_INVALID_DATE',
+      shouldReject: false,
+    };
+  }
+
+  let candidateStr = cleanedRaw.replace(/\bIST\s*$/i, '+0530');
+  let timestampStatus: NewsTimestampValidationStatus = 'VALID_NORMALIZED';
+
+  const hasExplicitTz = EXPLICIT_TZ_REGEX.test(cleanedRaw);
+  if (!hasExplicitTz && assumeIstIfNoOffset) {
+    // If ISO-like YYYY-MM-DD without time, keep midnight IST; if date+time without offset, append +0530
+    candidateStr = /^\d{4}-\d{2}-\d{2}$/.test(candidateStr)
+      ? `${candidateStr}T00:00:00+05:30`
+      : `${candidateStr} +0530`;
+    timestampStatus = 'ASSUMED_IST_OFFSET';
+  }
+
+  const parsed = new Date(candidateStr);
+  if (Number.isNaN(parsed.getTime())) {
+    return {
+      validDate: new Date(nowMs),
+      rawPublishedAt: cleanedRaw,
+      timestampStatus: 'MISSING_OR_INVALID_DATE',
+      shouldReject: false,
+    };
+  }
+
+  const parsedMs = parsed.getTime();
+  // Reject implausible future dates more than 24 hours ahead of fetch time
+  if (parsedMs > nowMs + 24 * 60 * 60 * 1000) {
+    return {
+      validDate: new Date(nowMs),
+      rawPublishedAt: cleanedRaw,
+      timestampStatus: 'FUTURE_TIMESTAMP_CLAMPED',
+      shouldReject: true,
+    };
+  }
+
+  // Clamp any timestamp that appears after the recorded fetch time (nowMs)
+  if (parsedMs > nowMs) {
+    return {
+      validDate: new Date(nowMs),
+      rawPublishedAt: cleanedRaw,
+      timestampStatus: 'FUTURE_TIMESTAMP_CLAMPED',
+      shouldReject: false,
+    };
+  }
+
+  return {
+    validDate: parsed,
+    rawPublishedAt: cleanedRaw,
+    timestampStatus,
+    shouldReject: false,
+  };
+}
+
 export function parseRssFeedXmlItems(
   xml: string,
   feed: FeedConfig,
@@ -1239,6 +1330,9 @@ export function parseRssFeedXmlItems(
   if (!xml || typeof xml !== 'string') return [];
   const parsedArticles: EconomicNewsArticle[] = [];
   const itemMatches = xml.match(/<item(?:\s[^>]*)?>[\s\S]*?<\/item>/gi) || [];
+  const fetchedAtIst = formatIstTimestamp(new Date(nowMs));
+  const assumeIstIfNoOffset =
+    feed.type === 'official_india' || feed.defaultCategory === 'india';
 
   for (let i = 0; i < itemMatches.length; i++) {
     const itemXml = itemMatches[i];
@@ -1258,8 +1352,15 @@ export function parseRssFeedXmlItems(
       continue;
     }
 
-    const parsedDate = rawPubDate ? new Date(rawPubDate) : new Date(nowMs);
-    const validDate = Number.isNaN(parsedDate.getTime()) ? new Date(nowMs) : parsedDate;
+    const normTs = normalizeNewsPublicationTimestamp(
+      rawPubDate,
+      assumeIstIfNoOffset,
+      nowMs
+    );
+    if (normTs.shouldReject) {
+      continue;
+    }
+    const { validDate, rawPublishedAt, timestampStatus } = normTs;
     const summary = rewriteConciseSummary(headline, rawDesc, feed.shortName);
     const analysis = classifyAndAnalyzeStory(headline, summary, feed);
     const subMeta = NEWS_SUBTOPICS_META[analysis.subTopicId];
@@ -1274,8 +1375,11 @@ export function parseRssFeedXmlItems(
       provenanceType: 'LIVE_FEED_ITEM',
       sourceHomepageUrl: feed.officialUrl,
       originalUrl: link,
+      rawPublishedAt,
       publishedAtIso: validDate.toISOString(),
       publishedAtIst: formatIstTimestamp(validDate),
+      fetchedAtIst,
+      timestampStatus,
       relativeTimeLabel: computeRelativeTimeLabel(validDate, nowMs),
       category: analysis.category,
       categoryLabel:
@@ -1369,8 +1473,11 @@ async function fetchSingleFeed(
         if (!headline || !isEconomicallyRelevant(headline, rawDesc, feed.type)) {
           continue;
         }
-        const parsedDate = doc.lnchdt ? new Date(doc.lnchdt) : new Date(nowMs);
-        const validDate = Number.isNaN(parsedDate.getTime()) ? new Date(nowMs) : parsedDate;
+        const normTs = normalizeNewsPublicationTimestamp(doc.lnchdt, false, nowMs);
+        if (normTs.shouldReject) {
+          continue;
+        }
+        const { validDate, rawPublishedAt, timestampStatus } = normTs;
         const summary = rewriteConciseSummary(headline, rawDesc, feed.shortName);
         const analysis = classifyAndAnalyzeStory(headline, summary, feed);
         const subMeta = NEWS_SUBTOPICS_META[analysis.subTopicId];
@@ -1385,8 +1492,11 @@ async function fetchSingleFeed(
           provenanceType: 'LIVE_FEED_ITEM',
           sourceHomepageUrl: sanitizeExternalHttpUrl(feed.officialUrl, 'https://www.worldbank.org/'),
           originalUrl: link,
+          rawPublishedAt,
           publishedAtIso: validDate.toISOString(),
           publishedAtIst: formatIstTimestamp(validDate),
+          fetchedAtIst,
+          timestampStatus,
           relativeTimeLabel: computeRelativeTimeLabel(validDate, nowMs),
           category: analysis.category,
           categoryLabel:

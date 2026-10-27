@@ -442,19 +442,24 @@ export default function App() {
     handleFetchEconomicNews,
   ]);
 
-  // Safe automatic polling for Live Economic News (every 5 minutes when tab is visible; refreshes on tab restore only if >= 5m old)
+  // Safe automatic polling for Live Economic News (configurable via VITE_ECONOMIC_NEWS_POLL_INTERVAL_MS, default 300,000ms = 5m)
   useEffect(() => {
     if (!newsAutoRefresh || newsError) return;
+    const newsPollMs = Math.max(
+      60000,
+      Number(import.meta.env.VITE_ECONOMIC_NEWS_POLL_INTERVAL_MS) || 300000
+    );
+
     const timerId = window.setInterval(() => {
       if (document.visibilityState === 'visible') {
         handleFetchEconomicNews({ forceRefresh: false, simulateError: false });
       }
-    }, 300000);
+    }, newsPollMs);
 
     const handleNewsVisibilityChange = () => {
       if (document.visibilityState === 'visible') {
         const lastFetchedMs = newsData?.fetchedAtMs || 0;
-        if (Date.now() - lastFetchedMs >= 300000) {
+        if (Date.now() - lastFetchedMs >= newsPollMs) {
           handleFetchEconomicNews({ forceRefresh: false, simulateError: false });
         }
       }
@@ -467,14 +472,22 @@ export default function App() {
     };
   }, [newsAutoRefresh, newsError, newsData?.fetchedAtMs, handleFetchEconomicNews]);
 
-  // Safe automatic polling for Live Indian Market Indices (pauses when tab is hidden or market is closed)
+  // Safe automatic polling for Live Indian Market Indices (configurable via VITE_MARKET_OPEN_POLL_INTERVAL_MS / VITE_MARKET_CLOSED_POLL_INTERVAL_MS)
   useEffect(() => {
     if (!marketAutoRefresh || marketError) return;
 
     const sessionState = marketData?.marketStatus || 'CLOSED';
-    // Only poll actively when market is OPEN or PRE_OPEN (30s interval); when CLOSED, check once every 5 minutes in case session opens
+    const openPollMs = Math.max(
+      15000,
+      Number(import.meta.env.VITE_MARKET_OPEN_POLL_INTERVAL_MS) || 30000
+    );
+    const closedPollMs = Math.max(
+      60000,
+      Number(import.meta.env.VITE_MARKET_CLOSED_POLL_INTERVAL_MS) || 300000
+    );
+    // Only poll actively when market is OPEN or PRE_OPEN (default 30s interval); when CLOSED, check once every 5 minutes in case session opens
     const intervalMs =
-      sessionState === 'OPEN' || sessionState === 'PRE_OPEN' ? 30000 : 300000;
+      sessionState === 'OPEN' || sessionState === 'PRE_OPEN' ? openPollMs : closedPollMs;
 
     const timerId = window.setInterval(() => {
       if (document.visibilityState === 'visible') {
@@ -488,7 +501,7 @@ export default function App() {
         (sessionState === 'OPEN' || sessionState === 'PRE_OPEN')
       ) {
         const lastFetchedMs = marketData?.fetchedAtMs || 0;
-        if (Date.now() - lastFetchedMs >= 30000) {
+        if (Date.now() - lastFetchedMs >= openPollMs) {
           handleFetchMarketIndices({ forceRefresh: false });
         }
       }

@@ -492,14 +492,20 @@ test('6. Market session IST boundaries, retryable status classification, out-of-
   assert.equal(weekendSession.status, 'CLOSED');
   assert.ok(weekendSession.label.includes('Weekend'));
 
-  // 5. Formatting helpers handle null/NaN safely
+  // 5. Official NSE/BSE Exchange Holiday (Friday 2026-10-02 Gandhi Jayanti 11:00 IST = 05:30 UTC) -> CLOSED (Exchange Holiday)
+  const holidayUtc = Date.parse('2026-10-02T05:30:00Z');
+  const holidaySession = evaluateIndianMarketSession(holidayUtc);
+  assert.equal(holidaySession.status, 'CLOSED');
+  assert.ok(holidaySession.label.includes('Holiday'));
+
+  // 6. Formatting helpers handle null/NaN safely
   assert.equal(formatIndianIndexNumber(null), '—');
   assert.equal(formatIndianIndexNumber(NaN), '—');
   assert.equal(formatPointChange(125.4), '+125.40');
   assert.equal(formatPointChange(-42.1), '-42.10');
   assert.equal(formatPercentChange(1.234), '+1.23%');
 
-  // 6. Retryable vs non-retryable HTTP statuses (permanent 400/404/405 must NOT retry)
+  // 7. Retryable vs non-retryable HTTP statuses (permanent 400/404/405 must NOT retry)
   assert.equal(isRetryableHttpStatus(400), false);
   assert.equal(isRetryableHttpStatus(404), false);
   assert.equal(isRetryableHttpStatus(405), false);
@@ -507,13 +513,13 @@ test('6. Market session IST boundaries, retryable status classification, out-of-
   assert.equal(isRetryableHttpStatus(502), true);
   assert.equal(isRetryableHttpStatus(503), true);
 
-  // 7. Bounded exponential backoff with jitter stays within [base, maxDelayMs]
+  // 8. Bounded exponential backoff with jitter stays within [base, maxDelayMs]
   for (let attempt = 0; attempt < 6; attempt++) {
     const delay = computeBackoffDelayMs(attempt, 200, 2000);
     assert.ok(delay >= 200 && delay <= 2000, `Backoff delay ${delay}ms must be bounded within [200, 2000]`);
   }
 
-  // 8. Out-of-order response guard prevents stale request #1 from overwriting newer request #2
+  // 9. Out-of-order response guard prevents stale request #1 from overwriting newer request #2
   const guard = createOutOfOrderResponseGuard();
   const req1 = guard.nextRequestId();
   const req2 = guard.nextRequestId();
@@ -628,17 +634,26 @@ test('7. External URL sanitization, clickbait filtering, headline deduplication,
     'https://www.rbi.org.in/',
     'Must sanitize javascript: link in RSS item to officialUrl'
   );
+  assert.equal(parsedItems[0].provenanceType, 'LIVE_FEED_ITEM');
   assert.ok(!parsedItems[0].conciseSummary.includes('<p>'), 'Must strip HTML tags from RSS summary');
 });
 
 test('8. Serverless API handlers, security headers, secret non-leakage, deterministic stale-cache fallback, deduplication, cooldowns, and vercel.json config', async () => {
-  // 1. Health endpoint security headers & non-exposure of secrets
+  // 1. Health endpoint security headers, CSP, HSTS, Permissions-Policy, origin-validated CORS & non-exposure of secrets
   const healthMock = createMockReqRes('GET');
   await healthHandler(healthMock.req, healthMock.res);
   assert.equal(healthMock.getStatusCode(), 200);
   assert.equal(healthMock.getHeaders()['x-content-type-options'], 'nosniff');
   assert.equal(healthMock.getHeaders()['x-frame-options'], 'SAMEORIGIN');
   assert.equal(healthMock.getHeaders()['referrer-policy'], 'strict-origin-when-cross-origin');
+  assert.ok(healthMock.getHeaders()['permissions-policy'].includes('camera=()'));
+  assert.ok(healthMock.getHeaders()['strict-transport-security'].includes('max-age=63072000'));
+  assert.ok(healthMock.getHeaders()['content-security-policy'].includes("default-src 'self'"));
+  assert.equal(
+    healthMock.getHeaders()['access-control-allow-origin'],
+    'https://arthniti-six.vercel.app',
+    'Default CORS origin must be restricted to https://arthniti-six.vercel.app instead of wildcard *'
+  );
   const healthPayload = getHealthCheckPayload();
   assert.equal(healthPayload.ok, true);
   assert.equal(healthPayload.status, 'healthy');
@@ -662,9 +677,10 @@ test('8. Serverless API handlers, security headers, secret non-leakage, determin
   assert.ok(simErrMock.getJson()?.error.includes('Simulated News Aggregation Failure'));
 
   // 4. Deterministic mocked upstream tests for /api/market-indices:
-  //    - Partial upstream failure (4 indices succeed, 1 index returns HTTP 503)
+  //    - Partial upstream failure (NIFTY IT returns HTTP 503)
+  //    - Fallback symbol resolution (NIFTY_MIDCAP_100.NS fails -> ^CRSMID succeeds)
   //    - Concurrent request deduplication & 5-second force-refresh cooldown
-  //    - Complete upstream outage -> STALE_FALLBACK retention without fabricated numbers
+  //    - Zero/invalid price rejection
   const originalFetch = globalThis.fetch;
   try {
     resetMarketIndicesCacheForTest();
@@ -673,16 +689,30 @@ test('8. Serverless API handlers, security headers, secret non-leakage, determin
     globalThis.fetch = async (input: string | URL | Request) => {
       upstreamCallCount += 1;
       const urlStr = String(input);
-      // Simulate partial outage: NIFTY IT (%5ECNXIT) returns HTTP 503
+      // Simulate partial outage: NIFTY IT (%5ECNXIT) returns HTTP 503 on both query1 and query2
       if (urlStr.includes('%5ECNXIT')) {
         return new Response('Upstream unavailable', { status: 503 });
       }
+      // Simulate NIFTY_MIDCAP_100.NS failing so fallback ^CRSMID (%5ECRSMID) is tested
+      if (urlStr.includes('NIFTY_MIDCAP_100.NS')) {
+        return new Response('Primary symbol unavailable', { status: 404 });
+      }
+      const returnedSym = urlStr.includes('%5ECRSMID')
+        ? '^CRSMID'
+        : urlStr.includes('%5EBSESN')
+        ? '^BSESN'
+        : urlStr.includes('%5ENSEBANK')
+        ? '^NSEBANK'
+        : '^NSEI';
       return new Response(
         JSON.stringify({
           chart: {
             result: [
               {
                 meta: {
+                  symbol: returnedSym,
+                  currency: 'INR',
+                  exchangeTimezoneName: 'Asia/Kolkata',
                   regularMarketPrice: 24850.5,
                   chartPreviousClose: 24700.0,
                   regularMarketDayHigh: 24910.0,
@@ -716,29 +746,39 @@ test('8. Serverless API handlers, security headers, secret non-leakage, determin
 
     assert.equal(reqA.getStatusCode(), 200);
     assert.equal(reqB.getStatusCode(), 200);
-    // Because of in-flight deduplication, only 1 batch of upstream fetches (6 symbol attempts: 5 primary + 1 retry/fallback for CNXIT) is executed instead of 12
-    assert.equal(upstreamCallCount, 6, 'Concurrent market API requests must share a single in-flight fetch');
+    // In-flight deduplication: 3 direct symbols (1 call each) + 1 failing symbol (^CNXIT: 2 calls) + 1 fallback symbol (NIFTY_MIDCAP_100.NS 2 calls + ^CRSMID 1 call) = 8 calls total instead of 16
+    assert.equal(upstreamCallCount, 8, 'Concurrent market API requests must share a single in-flight fetch');
 
     const payloadA = reqA.getJson();
     assert.equal(payloadA.ok, true);
     assert.equal(payloadA.indices.length, 5);
     const niftyIt = payloadA.indices.find((i: any) => i.id === 'nifty-it');
     assert.equal(niftyIt.status, 'unavailable', 'Failed single index must be marked unavailable');
+    assert.equal(niftyIt.freshnessStatus, 'UNAVAILABLE');
     assert.equal(niftyIt.currentValue, null, 'Failed single index must never have a fabricated price');
+    const midcap100 = payloadA.indices.find((i: any) => i.id === 'nifty-midcap-100');
+    assert.equal(midcap100.status, 'ok', 'NIFTY MIDCAP 100 must succeed via ^CRSMID fallback when primary fails');
+    assert.equal(midcap100.returnedSymbol, '^CRSMID');
     const nifty50 = payloadA.indices.find((i: any) => i.id === 'nifty-50');
     assert.equal(nifty50.status, 'ok');
     assert.equal(nifty50.currentValue, 24850.5);
+    assert.equal(nifty50.currency, 'INR');
 
     // Immediate force-refresh within 5-second cooldown must be served from cache without calling upstream again
     const reqCooldown = createMockReqRes('GET', { refresh: 'true' });
     await marketIndicesHandler(reqCooldown.req, reqCooldown.res);
     assert.equal(reqCooldown.getStatusCode(), 200);
     assert.equal(reqCooldown.getJson().cacheStatus, 'HIT');
-    assert.equal(upstreamCallCount, 6, '5-second force-refresh cooldown must prevent upstream abuse');
+    assert.equal(upstreamCallCount, 8, '5-second force-refresh cooldown must prevent upstream abuse');
 
-    // Now test deterministic RSS fetch & cooldown on /api/economic-news
+    // Now test deterministic RSS fetch, partial feed failure, & cooldown on /api/economic-news
     resetEconomicNewsCacheForTest();
-    globalThis.fetch = async () => {
+    globalThis.fetch = async (input: string | URL | Request) => {
+      const urlStr = String(input);
+      // Simulate 1 feed returning HTTP 429 rate-limit to verify partial feed failure resilience
+      if (urlStr.includes('cnbc.com')) {
+        return new Response('Rate Limited', { status: 429 });
+      }
       const validRss = `
         <rss version="2.0">
           <channel>
@@ -762,6 +802,15 @@ test('8. Serverless API handlers, security headers, secret non-leakage, determin
     assert.equal(newsFirst.getStatusCode(), 200);
     assert.equal(newsFirst.getJson().cacheStatus, 'MISS');
     assert.ok(newsFirst.getJson().articles.length >= 1);
+    assert.ok(
+      newsFirst.getJson().articles.every((a: any) => a.provenanceType === 'LIVE_FEED_ITEM'),
+      'Default /api/economic-news articles must all be LIVE_FEED_ITEM'
+    );
+    const cnbcStatus = newsFirst
+      .getJson()
+      .sourcesStatus.find((s: any) => s.id === 'cnbc-economy');
+    assert.equal(cnbcStatus.status, 'unavailable');
+    assert.equal(cnbcStatus.note, 'HTTP 429');
 
     // Force-refresh within 5-second cooldown returns HIT
     const newsCooldown = createMockReqRes('GET', { refresh: 'true' });
@@ -774,12 +823,16 @@ test('8. Serverless API handlers, security headers, secret non-leakage, determin
     resetEconomicNewsCacheForTest();
   }
 
-  // 5. Verify vercel.json exists and configures rewrites and security headers
+  // 5. Verify vercel.json exists and configures rewrites and full security headers (CSP, HSTS, Permissions-Policy)
   const vercelJsonPath = path.resolve(process.cwd(), 'vercel.json');
   assert.ok(fs.existsSync(vercelJsonPath), 'vercel.json must exist in repository root');
   const vercelConfig = JSON.parse(fs.readFileSync(vercelJsonPath, 'utf-8'));
   assert.equal(vercelConfig.buildCommand, 'npm run build');
   assert.equal(vercelConfig.outputDirectory, 'dist');
   assert.ok(Array.isArray(vercelConfig.rewrites) && vercelConfig.rewrites.length >= 2);
-  assert.ok(Array.isArray(vercelConfig.headers) && vercelConfig.headers.length >= 1);
+  assert.ok(Array.isArray(vercelConfig.headers) && vercelConfig.headers.length >= 2);
+  const rootHeaderKeys = vercelConfig.headers[0].headers.map((h: any) => h.key);
+  assert.ok(rootHeaderKeys.includes('Content-Security-Policy'));
+  assert.ok(rootHeaderKeys.includes('Strict-Transport-Security'));
+  assert.ok(rootHeaderKeys.includes('Permissions-Policy'));
 });

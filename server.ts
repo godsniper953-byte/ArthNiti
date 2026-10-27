@@ -3,7 +3,9 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 import dotenv from 'dotenv';
 import { createServer as createViteServer } from 'vite';
-import marketIndicesHandler from './api/market-indices.ts';
+import marketIndicesHandler, {
+  ARTHNITI_CSP_HEADER,
+} from './api/market-indices.ts';
 import economicNewsHandler from './api/economic-news.ts';
 import healthHandler from './api/health.ts';
 
@@ -22,12 +24,16 @@ async function startServer() {
   // Defensive HTTP security headers across all responses
   app.use((_req, res, next) => {
     res.setHeader('X-Content-Type-Options', 'nosniff');
-    res.setHeader('X-Frame-Options', 'SAMEORIGIN');
     res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
     res.setHeader(
       'Permissions-Policy',
-      'camera=(), microphone=(), geolocation=(), payment=()'
+      'camera=(), microphone=(), geolocation=(), payment=(), usb=()'
     );
+    res.setHeader(
+      'Strict-Transport-Security',
+      'max-age=63072000; includeSubDomains; preload'
+    );
+    res.setHeader('Content-Security-Policy', ARTHNITI_CSP_HEADER);
     next();
   });
 

@@ -21,6 +21,8 @@
  *     intelligence linking news events to ArthNiti's 7 official macro indicators and live stock indices.
  */
 
+import { applyApiSecurityAndCorsHeaders } from './market-indices.ts';
+
 export type NewsMacroCategory = 'india' | 'global' | 'current-affairs';
 
 export type NewsSubTopicId =
@@ -101,6 +103,7 @@ export interface EconomicNewsArticle {
   sourceName: string;
   sourceShortName: string;
   sourceType: 'official_india' | 'official_international' | 'economic_press';
+  provenanceType?: 'LIVE_FEED_ITEM' | 'BUNDLED_OFFICIAL_RELEASE_SUMMARY';
   sourceHomepageUrl: string;
   originalUrl: string;
   publishedAtIso: string;
@@ -125,6 +128,9 @@ export interface NewsSourceStatus {
   feedUrl: string;
   status: 'ok' | 'degraded' | 'unavailable';
   articlesCount: number;
+  lastFetchedIst?: string;
+  latestArticlePublishedIst?: string | null;
+  httpContentType?: string;
   note?: string;
 }
 
@@ -1199,9 +1205,10 @@ function getOfficialStatisticalMilestones(nowMs: number): EconomicNewsArticle[] 
       id: m.id,
       headline: m.headline,
       conciseSummary: m.summary,
-      sourceName: m.sourceName,
-      sourceShortName: m.sourceShortName,
+      sourceName: `${m.sourceName} (Bundled Official Release Brief)`,
+      sourceShortName: `${m.sourceShortName} (Bundled)`,
       sourceType: m.sourceType,
+      provenanceType: 'BUNDLED_OFFICIAL_RELEASE_SUMMARY' as const,
       sourceHomepageUrl: m.sourceHomepageUrl,
       originalUrl: m.originalUrl,
       publishedAtIso: pubDate.toISOString(),
@@ -1264,6 +1271,7 @@ export function parseRssFeedXmlItems(
       sourceName: feed.name,
       sourceShortName: feed.shortName,
       sourceType: feed.type,
+      provenanceType: 'LIVE_FEED_ITEM',
       sourceHomepageUrl: feed.officialUrl,
       originalUrl: link,
       publishedAtIso: validDate.toISOString(),
@@ -1304,6 +1312,7 @@ async function fetchSingleFeed(
   feed: FeedConfig,
   nowMs: number
 ): Promise<{ status: NewsSourceStatus; articles: EconomicNewsArticle[] }> {
+  const fetchedAtIst = formatIstTimestamp(new Date(nowMs));
   try {
     const res = await fetch(feed.feedUrl, {
       headers: {
@@ -1317,6 +1326,8 @@ async function fetchSingleFeed(
       signal: AbortSignal.timeout(6500),
     });
 
+    const httpContentType = res.headers.get('content-type') || undefined;
+
     if (!res.ok) {
       return {
         status: {
@@ -1328,6 +1339,9 @@ async function fetchSingleFeed(
           feedUrl: feed.feedUrl,
           status: 'unavailable',
           articlesCount: 0,
+          lastFetchedIst: fetchedAtIst,
+          latestArticlePublishedIst: null,
+          httpContentType,
           note: `HTTP ${res.status}`,
         },
         articles: [],
@@ -1368,6 +1382,7 @@ async function fetchSingleFeed(
           sourceName: feed.name,
           sourceShortName: feed.shortName,
           sourceType: feed.type,
+          provenanceType: 'LIVE_FEED_ITEM',
           sourceHomepageUrl: sanitizeExternalHttpUrl(feed.officialUrl, 'https://www.worldbank.org/'),
           originalUrl: link,
           publishedAtIso: validDate.toISOString(),
@@ -1394,6 +1409,9 @@ async function fetchSingleFeed(
       parsedArticles = parseRssFeedXmlItems(xml, feed, nowMs);
     }
 
+    const latestArticlePublishedIst =
+      parsedArticles.length > 0 ? parsedArticles[0].publishedAtIst : null;
+
     return {
       status: {
         id: feed.id,
@@ -1404,6 +1422,9 @@ async function fetchSingleFeed(
         feedUrl: feed.feedUrl,
         status: parsedArticles.length > 0 ? 'ok' : 'degraded',
         articlesCount: parsedArticles.length,
+        lastFetchedIst: fetchedAtIst,
+        latestArticlePublishedIst,
+        httpContentType,
       },
       articles: parsedArticles,
     };
@@ -1418,6 +1439,8 @@ async function fetchSingleFeed(
         feedUrl: feed.feedUrl,
         status: 'unavailable',
         articlesCount: 0,
+        lastFetchedIst: fetchedAtIst,
+        latestArticlePublishedIst: null,
         note: err?.message || 'Feed timeout or network error',
       },
       articles: [],
@@ -1473,6 +1496,7 @@ function assignDashboardSections(articles: EconomicNewsArticle[]): EconomicNewsA
 export async function getEconomicNewsPayload(options?: {
   forceRefresh?: boolean;
   simulateError?: boolean;
+  includeBundledMilestones?: boolean;
 }): Promise<EconomicNewsResponse> {
   const nowMs = Date.now();
 
@@ -1548,15 +1572,17 @@ export async function getEconomicNewsPayload(options?: {
         );
       }
 
-      // Combine live deduplicated RSS/API articles with verified official MoSPI/MoCI/RBI statistical release milestones
-      const officialMilestones = getOfficialStatisticalMilestones(fetchStartMs);
-      for (const milestone of officialMilestones) {
-        if (
-          !deduplicated.some((existing) =>
-            areHeadlinesDuplicate(existing.headline, milestone.headline)
-          )
-        ) {
-          deduplicated.push(milestone);
+      // Only include bundled official statistical release summaries if explicitly requested
+      if (options?.includeBundledMilestones) {
+        const officialMilestones = getOfficialStatisticalMilestones(fetchStartMs);
+        for (const milestone of officialMilestones) {
+          if (
+            !deduplicated.some((existing) =>
+              areHeadlinesDuplicate(existing.headline, milestone.headline)
+            )
+          ) {
+            deduplicated.push(milestone);
+          }
         }
       }
 
@@ -1589,12 +1615,7 @@ export async function getEconomicNewsPayload(options?: {
 }
 
 export default async function handler(req: any, res: any) {
-  res.setHeader('Access-Control-Allow-Origin', '*');
-  res.setHeader('Access-Control-Allow-Methods', 'GET, OPTIONS');
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
-  res.setHeader('X-Content-Type-Options', 'nosniff');
-  res.setHeader('X-Frame-Options', 'SAMEORIGIN');
-  res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
+  applyApiSecurityAndCorsHeaders(req, res);
 
   if (req.method === 'OPTIONS') {
     return res.status(200).end();
@@ -1607,7 +1628,10 @@ export default async function handler(req: any, res: any) {
     });
   }
 
-  const forceRefresh = req.query?.force === '1' || req.query?.force === 'true';
+  const forceRefresh =
+    req.query?.force === '1' ||
+    req.query?.force === 'true' ||
+    req.query?.refresh === 'true';
   const simulateError =
     req.query?.simulateError === '1' || req.query?.simulateError === 'true';
 

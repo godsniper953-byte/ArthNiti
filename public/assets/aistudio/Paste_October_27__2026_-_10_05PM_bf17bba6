@@ -1,0 +1,784 @@
+# ARTHNITI — FINAL MASTER PRODUCTION VERIFICATION, REPAIR, SECURITY & LIVE-DEPLOYMENT READINESS PROMPT
+
+## PROJECT
+**ArthNiti — Indian Economic Intelligence Platform**
+
+Production website: https://arthniti-six.vercel.app/
+
+Project objective: Perform the final comprehensive audit, repair, testing, security assessment, data-source verification, refresh-timing verification, integration verification, performance testing, and production deployment verification of the EXISTING ArthNiti application.
+
+This is the final engineering and verification pass. Do not perform another unnecessary redesign. Do not replace working features with mock implementations. Do not declare the project complete merely because the build succeeds.
+
+Your goal is to establish, with reproducible evidence, whether every important feature works correctly, every configured external connection is functioning as intended, every dataset refreshes at its appropriate interval, the application handles failures safely, and the deployed website is secure and reliable.
+
+## 1. NON-NEGOTIABLE RULES
+
+1. Inspect the complete existing repository and project structure before making changes.
+2. Preserve the existing ArthNiti design, branding, navigation, visualizations, economic pages, interactive trade globe, data-source pages, and working features.
+3. Create a backup or a clearly recoverable checkpoint before modifying files.
+4. Fix verified defects in the existing implementation. Do not rebuild the project from scratch.
+5. Never invent economic values, source URLs, API responses, timestamps, test results, traffic capacity, or successful connections.
+6. Never substitute mock data, bundled CSV data, random values, hardcoded values, or fabricated fallback prices for live observations without clearly identifying their provenance.
+7. Distinguish LIVE, DELAYED, CACHED, STALE, HISTORICAL, BUNDLED DATASET, DERIVED, FORECAST, UNAVAILABLE, and SOURCE NOT CONNECTED wherever applicable.
+8. A successful HTTP response does not prove that the data inside it is current, correct, or sourced from the claimed provider.
+9. A successful local build does not prove that production has been deployed.
+10. A passing unit test does not prove that an external service is currently operational.
+11. Do not claim that a website, endpoint, data provider, or API is connected unless you test the actual connection or clearly state the limitation.
+12. Do not claim that the site is completely secure, unhackable, or capable of unlimited traffic.
+13. Never expose, print, commit, or send secret keys to the browser, logs, reports, source control, or external AI services unnecessarily.
+14. Do not run destructive database operations, uncontrolled production load tests, intrusive scans against third parties, or tests that could incur significant charges.
+15. Do not disable security controls, TypeScript checks, tests, lint rules, or browser protections just to make the project pass.
+16. If a tool, credential, network connection, browser, or deployment permission is unavailable, explicitly report the unperformed check. Do not pretend it passed.
+17. If a defect is found, repair it, rerun the relevant tests, and record the before-and-after evidence.
+18. Do not stop after producing an audit report. Perform all safe, authorized fixes and available verification steps first.
+
+## 2. ESTABLISH THE ACTUAL PROJECT AND DEPLOYMENT STATE
+
+First inspect:
+
+- All source files, configuration files, routes, API handlers, environment-variable references, data files, tests, and deployment settings.
+- package.json and lockfiles.
+- vite.config.ts, vercel.json, TypeScript configuration, build scripts, and test scripts.
+- Existing Git status, branch, remotes, and recent commit, where accessible.
+- Existing API routes and their corresponding frontend consumers.
+- All external source URLs, polling intervals, caching rules, refresh controls, retry policies, and fallback paths.
+- Existing documentation and audit claims.
+
+Run the real available commands to establish the baseline.
+
+At minimum, execute the equivalent of:
+
+npm run lint
+npm test
+npm audit
+npm run build
+
+If a script is missing, inspect the project and use the appropriate safe alternative. Never report a command as passed unless it was actually executed successfully.
+
+Record the command, exit code, duration, and meaningful output.
+
+Determine separately:
+
+A. What works in the local source code.
+B. What works in the local production build.
+C. What external services are reachable.
+D. What works on the currently deployed production website.
+E. Whether the deployed website contains the same release as the corrected local code.
+
+The production site is https://arthniti-six.vercel.app/.
+
+Inspect the actual deployment state, including:
+
+- Homepage and all important application routes.
+- /api/health
+- /api/market-indices
+- /api/economic-news
+- Official CSV and static-data endpoints.
+- Data-source and provenance pages.
+- Hash/deep links, including #audit, #methodology, and #trade, if supported by the application.
+
+Verify actual status codes, response content types, response structure, timestamps, cache headers, error responses, and data freshness. Test relevant routes using a real browser when browser access is available.
+
+If production is serving an old build, identify the exact mismatch and provide the safest steps to deploy the corrected release. Do not state that deployment is complete until the live version has been verified.
+
+## 3. BUILD A COMPLETE INVENTORY OF ALL DATA SOURCES AND CONNECTIONS
+
+Search the entire codebase for:
+
+- fetch()
+- axios or other HTTP clients
+- API routes
+- environment variables
+- CSV and JSON imports
+- RSS/XML parsers
+- financial-market providers
+- government data endpoints
+- scheduled jobs
+- polling timers
+- React Query/SWR or other caching libraries
+- service workers and browser caches
+- WebSockets or streaming connections
+- hardcoded data
+- fallback data
+- mock/demo/evaluation datasets
+- unused API integrations
+- broken or outdated external URLs.
+
+Create a complete source inventory containing:
+
+1. Feature or indicator.
+2. Exact external provider.
+3. Exact configured URL or endpoint.
+4. Whether the connection is direct, proxied through a backend, imported from a static file, or bundled locally.
+5. Whether credentials are required.
+6. Whether the provider is currently reachable.
+7. Last successful fetch time.
+8. Actual source observation time, if available.
+9. Expected refresh interval.
+10. Actual observed refresh behaviour.
+11. Cache TTL and cache location.
+12. Last known good data timestamp.
+13. Failure and retry behaviour.
+14. Whether the data is live, delayed, cached, historical, derived, bundled, or disconnected.
+15. Verification evidence and any remaining limitation.
+
+Inspect the consumer of every important source. A configured URL is not proof of an operational integration.
+
+For every external connection, distinguish DNS/TLS/connectivity failures, HTTP errors, provider rate limits, malformed responses, parsing errors, authentication failures, empty data, and stale data.
+
+Do not invent a provider's API capabilities, uptime, refresh restrictions, or licensing terms.
+
+## 4. VERIFY ALL INDIAN STOCK MARKET INDICES
+
+Audit every index actually configured in ArthNiti. At minimum, inspect the existing implementation for these five reported instruments:
+
+- NIFTY 50 — ^NSEI
+- SENSEX — ^BSESN
+- BANK NIFTY — ^NSEBANK
+- NIFTY IT — ^CNXIT
+- NIFTY MIDCAP 100 — NIFTY_MIDCAP_100.NS, including the documented ^CRSMID fallback if it is still appropriate and correctly mapped.
+
+Do not assume that these exact symbols work just because they appear in configuration. Verify each independently against the real provider response.
+
+For EVERY index, verify:
+
+- Provider symbol and actual returned instrument.
+- Current value, where the exchange/provider makes it available.
+- Absolute point change.
+- Percentage change.
+- Previous close and session reference.
+- Currency and units.
+- Observation timestamp and timezone.
+- Last successful fetch timestamp.
+- Provider response status.
+- Whether the value is live, delayed, cached, stale, or unavailable.
+- Whether the displayed symbol matches the returned instrument.
+- Whether fallback symbols return the correct index rather than a different instrument.
+- Whether missing or malformed values are rejected.
+- Whether the frontend receives and renders the expected values.
+- Whether the UI updates after a successful refresh.
+- Whether failed refreshes leave the last valid observation visible with an explicit stale indicator.
+
+Do not display fabricated zero values for missing prices. Do not show an old cached price as current. Do not show a previous-session close as an active live price without identifying it correctly.
+
+### Market-hours logic
+
+Inspect the real exchange trading calendar and session rules used by the application. Account for:
+
+- India Standard Time.
+- Regular trading sessions.
+- Weekends.
+- Exchange holidays and special sessions.
+- Pre-open and post-close states, where relevant.
+- Provider-specific publication delays.
+- Market holidays and unexpected closures.
+
+Do not infer that the market is open merely because the API responds.
+
+When the market is closed, avoid repeatedly contacting the upstream provider at unnecessary intraday intervals. Show the last valid session value and timestamp, with an accurate CLOSED or LAST SESSION label.
+
+During market hours, refresh according to a documented, realistic schedule compatible with the upstream provider's rules. A 15-second server-cache TTL does not prove that the source publishes a new observation every 15 seconds.
+
+Verify whether the frontend polls the backend, whether the backend cache expires, and whether the next fetch actually reaches the upstream provider. Ensure the user interface does not falsely imply that new market observations arrive on every polling cycle.
+
+### Market refresh test
+
+Run a controlled test that:
+
+1. Captures the current displayed value and timestamp.
+2. Requests the market endpoint.
+3. Checks the provider observation timestamp.
+4. Waits for the configured refresh interval.
+5. Requests the endpoint again.
+6. Determines whether the cache behaved correctly.
+7. Verifies whether the provider was contacted when expected.
+8. Confirms that a new observation is shown only when genuinely available.
+9. Simulates a provider timeout and rate-limit response.
+10. Confirms that stale data is visibly identified and no fake values are introduced.
+
+Test the normal polling interval, manual refresh, request deduplication, cooldown, out-of-order responses, and repeated tab visibility changes.
+
+Do not force a price change for testing. Markets may be closed or prices may legitimately remain unchanged.
+
+## 5. VERIFY ALL ECONOMIC INDICATORS AND OFFICIAL DATA SOURCES
+
+Audit every indicator shown in the application, not just the examples below.
+
+### GDP
+
+Inspect the official MoSPI source and the relevant published release. Verify:
+
+- Real versus nominal GDP.
+- Current-price versus constant-price levels.
+- Base year and series methodology.
+- Reference quarter and financial year.
+- Year-on-year growth calculations.
+- Revision status.
+- Units and rounding.
+- Publication date and observation date.
+
+The previously reported Q1 FY 2026–27 values are ₹81.36 lakh crore real GDP, ₹88.27 lakh crore nominal GDP, and 7.8% real growth. Treat these as claims to revalidate against the official release and the actual deployed dataset, not values to hardcode merely to satisfy the audit.
+
+### CPI inflation
+
+Verify the actual MoSPI publication, headline inflation rate, CPI index level, reference period, base year, provisional/final status, and publication date.
+
+Keep the inflation rate separate from the index level. Clearly identify any core inflation series calculated by ArthNiti rather than directly published by the official source.
+
+### RBI monetary policy
+
+Verify the current applicable policy rate, effective date, policy announcement, and the associated SDF, MSF, and Bank Rate where applicable. Never assume a previously reported rate remains current.
+
+### Unemployment and labour-market indicators
+
+Verify the relevant MoSPI PLFS publication, observation period, population definition, age group, geography, and methodology.
+
+Never mix Current Weekly Status with Usual Status measures. Clearly distinguish monthly, quarterly, and annual statistics.
+
+### USD/INR
+
+Verify the correct reference-rate provider and observation date. Distinguish official reference rates from tradable spot quotes, indicative prices, and delayed third-party aggregations.
+
+### Crude oil and commodity prices
+
+Verify the Indian Basket crude oil source and the relevant PPAC publication.
+
+Separate completed-month averages, month-to-date averages, and daily observations. Preserve the currency, unit, date, and methodology. Never present a monthly average as a current live price.
+
+### Merchandise trade and bilateral trade network
+
+Verify relevant Ministry of Commerce, DGCI&S, and TRADESTAT publications.
+
+Check exports, imports, balance/deficit, units, reference period, cumulative totals, revisions, and arithmetic identities.
+
+Use the actual definitions of the relevant columns. Do not replace official cumulative totals with naive sums of unrevised monthly estimates when the published official series reconciles revisions.
+
+For bilateral trade:
+
+- Verify the actual reporting period and source.
+- Check exports plus imports against total trade.
+- Check exports minus imports against trade balance.
+- Distinguish sovereign countries from regional aggregates such as EU-27 and ASEAN-10.
+- Clearly identify corridors or partners with unavailable official data.
+- Never fill missing partner data with fabricated values.
+
+### All remaining indicators
+
+For every additional indicator, establish its exact definition, official source, units, frequency, publication lag, observation date, and calculation methodology.
+
+Where an official API is unavailable, use an identifiable official publication or dataset if the terms and implementation permit. Clearly disclose manual/static ingestion and do not label it as a direct live feed.
+
+## 6. VERIFY ECONOMIC NEWS AND EVERY CONFIGURED NEWS FEED
+
+Inspect every configured feed, including the existing institutional, financial-media, and international sources.
+
+For each feed, verify:
+
+- Actual configured URL.
+- DNS/TLS and HTTP response.
+- Content type and valid RSS/XML/JSON structure.
+- Successful parsing.
+- Number of usable articles.
+- Publication timestamp and timezone.
+- Article URL and publisher.
+- Duplicate handling.
+- Source-specific failure state.
+- Last successful fetch.
+- Cache age and refresh interval.
+
+Test malformed XML, malformed JSON, missing titles, missing dates, invalid URLs, HTML error pages, empty responses, slow responses, timeouts, HTTP 403/404/429/500 responses, and unreachable providers.
+
+Do not report a feed as healthy just because a cached copy contains articles.
+
+Do not fabricate article headlines, publication dates, authors, links, or source names. Preserve article attribution and link to the original publication.
+
+Sanitize external article URLs and reject unsafe schemes. Avoid arbitrary redirects or untrusted server-side fetches.
+
+If one feed fails, continue serving valid articles from healthy feeds. Clearly report partial feed failure without taking down the whole news page.
+
+Verify the news section's polling behaviour, cache TTL, background refresh policy, duplicate removal, and UI loading/error states.
+
+## 7. VERIFY REFRESH SCHEDULES AND CACHE BEHAVIOUR ACROSS THE ENTIRE WEBSITE
+
+Create a refresh matrix covering every data-driven feature.
+
+For each feature record:
+
+- Frontend polling interval.
+- Backend refresh interval.
+- Cache TTL.
+- Upstream source publication frequency.
+- Expected source publication lag.
+- Whether the schedule changes during market hours or when markets are closed.
+- Whether refresh occurs on tab focus or visibility restoration.
+- Whether refresh is triggered by navigation.
+- Whether manual refresh is supported.
+- Whether the browser, CDN, serverless function, or upstream provider adds another cache.
+- Whether a last-updated timestamp is accurate.
+- Whether stale data can accidentally be labelled fresh.
+
+Identify duplicate polling loops, excessively frequent requests, missing cleanup of timers, refreshes continuing unnecessarily after unmount, and race conditions caused by overlapping requests.
+
+Use appropriate request cancellation, deduplication, timeout handling, and protection against out-of-order responses.
+
+When the tab returns from the background, refresh according to the feature's actual freshness requirements rather than launching uncontrolled parallel requests.
+
+Use exponential backoff with jitter for retryable failures. Respect provider Retry-After headers where applicable. Avoid retrying permanent authentication or configuration errors indefinitely.
+
+Do not let a failed refresh erase the last valid observation. Retain it only with its original timestamp and an honest stale/unavailable status.
+
+Do not create a fake countdown that implies a provider will publish new information at a particular time.
+
+## 8. VERIFY FRONTEND-TO-BACKEND AND EXTERNAL WEBSITE CONNECTIONS
+
+Trace every major user-visible feature from the frontend component to its actual data source.
+
+Verify that:
+
+- The frontend calls the correct endpoint.
+- The endpoint returns the expected schema.
+- Data parsing and validation work.
+- Values render in the intended component.
+- Refreshes update the displayed data.
+- Errors produce a visible and understandable state.
+- Routes and deep links resolve correctly.
+- No page silently relies on an unrelated mock dataset.
+- Environment-specific API base URLs are correct.
+- Production requests use HTTPS.
+- CORS is restricted appropriately if cross-origin access is necessary.
+- No internal development server, localhost URL, test endpoint, or placeholder API remains in production configuration.
+
+Inspect all links and integrations relevant to the project, including official data-source links, source citations, news article links, APIs, and external navigation.
+
+Check for broken links and incorrect redirects. Test links that open in a new tab for appropriate security attributes.
+
+Do not claim that every external website is operational based solely on the presence of a hyperlink. Distinguish between a working external link, a functioning data integration, and a source whose availability cannot be confirmed.
+
+For APIs that require credentials, verify server-side configuration without exposing secrets. If the required credentials are missing, identify the integration as not fully operational.
+
+## 9. SECURITY AUDIT — FRONTEND, BACKEND, APIs AND DEPLOYMENT
+
+Perform a defensive security audit of the actual implementation.
+
+### Secrets and configuration
+
+- Ensure private API keys and tokens remain server-side.
+- Inspect client bundles and source maps for leaked credentials.
+- Check Git history and tracked files for accidental secrets where access permits.
+- Check .env files, environment-variable references, build output, logs, and error responses.
+- Verify that .env files and sensitive local files are excluded from version control.
+- Use environment-specific secrets configured through the appropriate deployment platform.
+- Never print secret values in the audit report.
+
+If a real secret has been exposed, recommend rotation and remove it from active exposure. Do not assume deleting it from the latest commit removes it from Git history.
+
+### API security
+
+Verify:
+
+- HTTP method restrictions.
+- Request validation and safe parsing.
+- Appropriate status codes.
+- Response-size limits.
+- Timeouts and bounded concurrency.
+- Rate limiting or equivalent abuse controls where necessary.
+- Cache behaviour and refresh cooldowns.
+- Error messages that do not disclose internals.
+- Safe handling of query parameters.
+- No unintended public access to administrative or diagnostic functionality.
+
+Remember that in-memory caches and cooldowns in serverless environments may be per-instance rather than globally shared. Do not claim globally enforced rate limiting unless it is actually implemented and verified.
+
+### Injection and browser security
+
+Inspect for:
+
+- Cross-site scripting.
+- Unsafe HTML rendering.
+- Dangerous URL schemes.
+- SQL or command injection if relevant.
+- Server-side request forgery.
+- Open redirects.
+- Path traversal.
+- Prototype pollution.
+- Unsafe deserialization.
+- Dependency vulnerabilities.
+- Insecure use of eval or equivalent dynamic execution.
+- Sensitive information in URLs, browser storage, or error messages.
+
+Validate externally supplied URLs and allowlist server-side destinations where appropriate. Do not allow user-controlled URLs to become arbitrary server-side fetch targets.
+
+### Security headers and transport
+
+Inspect actual deployed HTTP responses rather than relying only on configuration.
+
+Check appropriate use of:
+
+- HTTPS and secure redirects.
+- Strict-Transport-Security when appropriate for the domain and deployment.
+- Content-Security-Policy.
+- X-Content-Type-Options.
+- Referrer-Policy.
+- Permissions-Policy.
+- Clickjacking protection through suitable CSP frame-ancestors or X-Frame-Options.
+- Secure cookie attributes if cookies are used.
+
+Implement a Content-Security-Policy that works with the actual app. Do not blindly introduce a policy that breaks charts, fonts, scripts, API calls, the 3D globe, or other legitimate features. Avoid unsafe-inline and unsafe-eval where practical, and document any justified exception.
+
+Do not expose unnecessary permissions or enable cross-origin access broadly.
+
+### Authentication and user data
+
+If the application has no login or user database, do not invent an authentication subsystem. Verify that no unintended personal-data collection, insecure user-data storage, exposed administrative route, or unnecessary tracking exists.
+
+If user data or authentication does exist, audit authorization, session management, password handling, CSRF protections where applicable, and data minimization.
+
+### Dependency and supply-chain security
+
+Run the actual dependency audit for the package manager in use. Inspect high- and critical-severity issues, abandoned packages, suspicious dependencies, and lockfile consistency.
+
+Do not blindly upgrade every dependency. Apply targeted compatible fixes and rerun all tests.
+
+A zero-vulnerability package audit is a useful result, not proof that the application has no security vulnerabilities.
+
+### Security testing
+
+Run safe automated checks and appropriate tests of the application's own endpoints.
+
+Verify rejection of unsupported methods, unsafe URLs, invalid input, malformed responses, and abusive repeated refresh requests.
+
+Do not attack unrelated external services or perform destructive tests on production.
+
+Document untested areas and distinguish code review, automated checks, and real penetration testing.
+
+## 10. RELIABILITY, FAILURE RESILIENCE AND HIGH-TRAFFIC BEHAVIOUR
+
+Inspect and test:
+
+- Slow upstream APIs.
+- Provider timeouts.
+- DNS failures.
+- HTTP 429 and Retry-After.
+- HTTP 5xx responses.
+- Malformed payloads.
+- Empty datasets.
+- Partial provider failures.
+- Simultaneous refresh requests.
+- Duplicate requests.
+- Cold starts.
+- Cache misses.
+- Cache expiry.
+- Stale-cache fallback.
+- Serverless execution limits.
+- Memory and CPU pressure.
+- Oversized news responses.
+- Browser offline/online transitions.
+- Network interruptions during navigation.
+
+Use bounded timeouts, limited retries, request deduplication, and controlled concurrency.
+
+Use stale-while-revalidate or a comparable strategy where appropriate, but only if stale content is clearly labelled and its original timestamp is preserved.
+
+Prevent one unavailable news source or market symbol from crashing the whole application.
+
+Verify that all error states recover when the source becomes available again.
+
+Inspect whether cache and rate-limit mechanisms are shared across instances. If the current deployment cannot provide globally coordinated caching or rate limiting, document the limitation and recommend a suitable shared service only if the observed workload justifies it.
+
+Do not introduce a paid database, Redis/KV service, or new infrastructure without documenting the need, alternatives, and likely cost.
+
+### Controlled load testing
+
+Run local or staging load tests only when the environment is available and safe.
+
+Test normal traffic, concurrent requests, burst traffic, cache misses, and provider failure scenarios. Separate warm-cache results from cold upstream requests.
+
+Measure request success, errors, throughput, p50/p95/p99 latency, CPU/memory if available, and upstream request counts.
+
+Never use a local benchmark as proof of Vercel production capacity. Do not run uncontrolled load tests against production or upstream providers.
+
+If a production-safe, authorized synthetic check is available, keep it bounded and report its exact scope.
+
+## 11. RESPONSIVENESS, ACCESSIBILITY AND USER EXPERIENCE
+
+Verify the site at viewport widths around:
+
+- 320 px
+- 360 px
+- 390 px
+- 430 px
+- 768 px
+- 1024 px
+- 1366 px
+- 1440 px
+- 1920 px
+
+Test major routes and important components, including charts, market cards, data tables, mobile navigation, search, the trade globe, and source/methodology pages.
+
+Check for:
+
+- Horizontal overflow.
+- Cut-off content.
+- Unusable navigation.
+- Broken charts.
+- Layout shifts.
+- Incorrect touch targets.
+- Missing loading states.
+- Infinite spinners.
+- Empty error states.
+- Incorrect typography or spacing.
+- Mobile-only and desktop-only rendering defects.
+- WebGL failures and the non-WebGL fallback.
+
+Audit keyboard navigation, focus visibility, semantic headings, landmarks, accessible labels, dialog focus management, escape-key behaviour, live status announcements, reduced-motion preferences, and screen-reader-readable economic tables.
+
+Run automated accessibility checks if available.
+
+Do not claim real-device or screen-reader testing unless it was actually performed. List any physical-device testing that remains necessary.
+
+## 12. PERFORMANCE AND BROWSER RESOURCE MANAGEMENT
+
+Measure the actual production build.
+
+Inspect:
+
+- Main JavaScript bundle.
+- Vendor chunks.
+- Lazy-loaded routes.
+- 3D globe and WebGL bundles.
+- Chart rendering cost.
+- Image and font loading.
+- Caching headers for static assets.
+- Compression.
+- Duplicate dependencies.
+- Unused code.
+- Layout shifts.
+- Memory leaks.
+- Repeated API requests.
+- Slow rendering on mobile hardware.
+
+Preserve the existing visual quality and functionality while applying justified optimizations.
+
+Ensure that the 3D globe loads lazily if that is the current design, and that the non-WebGL fallback remains functional.
+
+Use browser performance measurements when tools are available. Report real metrics, not estimated scores.
+
+Do not sacrifice correctness, accessibility, or security merely to improve a benchmark.
+
+## 13. DATA QUALITY, PROVENANCE AND ANTI-FABRICATION CHECKS
+
+Create or verify a consistent provenance model for every economic observation.
+
+Where applicable, store or expose:
+
+- Indicator identifier.
+- Value.
+- Unit.
+- Reference period.
+- Observation date.
+- Publication date.
+- Last fetched timestamp.
+- Source name and URL.
+- Update frequency.
+- Data status.
+- Methodology.
+- Whether the value is official, third-party, derived, estimated, forecast, historical, or bundled.
+
+Use a single source of truth for each indicator's definition and data-processing rules where practical.
+
+Validate CSV headers, required columns, dates, numeric values, missing values, duplicate periods, and arithmetic identities.
+
+Never silently convert invalid values to zero.
+
+Ensure that source labels match the data actually loaded. If a historical CSV is loaded locally, do not label it as a direct real-time government API response.
+
+Keep source data, derived calculations, and forecasts distinguishable. Record rounding rules and explain methodological transformations.
+
+Verify that the data-source page accurately lists connected, partially connected, and unconnected sources.
+
+Ensure the audit matrix itself does not falsely classify an integration as healthy merely because a test fixture or bundled dataset exists.
+
+## 14. AUTOMATED TESTS AND REGRESSION COVERAGE
+
+Inspect the existing test suite and extend it where necessary.
+
+Test at least these areas:
+
+1. Market symbol mapping and index response validation.
+2. Missing prices and invalid numeric values.
+3. Observation timestamps and stale-data classification.
+4. Market open/closed handling.
+5. Cache TTL and refresh scheduling.
+6. Duplicate request suppression.
+7. Out-of-order response protection.
+8. Provider timeout and rate-limit behaviour.
+9. News RSS/XML/JSON parsing.
+10. Invalid or unsafe news URLs.
+11. Partial feed failure.
+12. GDP real/nominal consistency and growth calculations.
+13. CPI rate versus index level.
+14. RBI rate labels and effective dates.
+15. Labour-market methodology labels.
+16. USD/INR source attribution.
+17. Crude monthly, MTD, and daily distinctions.
+18. Trade arithmetic and cumulative revision handling.
+19. Bilateral trade identity checks.
+20. Provenance status and source links.
+21. API method restrictions and security headers.
+22. Secret non-leakage.
+23. Responsive component behaviour where testable.
+24. Route and deep-link resolution.
+25. Loading, error, empty, stale, and recovery states.
+26. Production configuration and API URL correctness.
+
+Use deterministic mocked fixtures for unit tests, but keep fixture-based tests separate from real integration tests. Mock data in a test must never be mistaken for live-source verification.
+
+Rerun all affected tests after every repair. Then rerun the complete test suite, type checking, security audit, and production build.
+
+## 15. FINAL PRODUCTION DEPLOYMENT VERIFICATION
+
+Determine whether the corrected project can actually be pushed to the correct GitHub repository and deployed to Vercel.
+
+If Git and deployment credentials are available:
+
+1. Confirm the correct repository and branch.
+2. Inspect the diff and exclude secrets, local files, and generated artifacts that should not be committed.
+3. Confirm the tests and build pass.
+4. Commit only the intended, reviewed changes.
+5. Push only to the explicitly configured and authorized repository.
+6. Wait for the deployment process to complete.
+7. Verify the deployed release and live endpoints.
+8. Confirm that production serves the corrected data files and API handlers.
+9. Confirm that the live frontend uses the intended backend routes.
+10. Repeat the critical live refresh and error-state checks.
+
+Never overwrite an unrelated repository, force-push without authorization, expose credentials, or silently deploy unreviewed changes.
+
+If credentials or Git access are unavailable, do not claim to have deployed. Provide the exact files changed, commands executed, and safe steps the project owner must complete.
+
+After deployment, verify that the live release no longer serves the previously identified incorrect GDP value or outdated cumulative trade totals, provided those fixes remain correct under official source verification.
+
+Also verify the actual deployed source/provenance page and the audit/methodology/trade deep links.
+
+A successful deployment status alone is insufficient. Confirm the new code and corrected data are actually served.
+
+## 16. FINAL ACCEPTANCE CRITERIA
+
+ArthNiti can receive a fully verified production-readiness verdict only if all applicable criteria below are met with evidence:
+
+- Every configured critical data integration has been inspected and tested.
+- Each market index has a verified symbol mapping and validated response.
+- Refresh schedules match the feature's actual data requirements.
+- Freshness timestamps are accurate and visible.
+- Stale and unavailable data are labelled honestly.
+- Economic data definitions, units, reference periods, and source attributions are correct.
+- News feeds are individually checked and partial failures are handled.
+- Frontend and backend connections work together.
+- No unresolved critical or high-severity security finding remains without an explicitly justified, approved disposition.
+- Secrets are not exposed in the client or public repository.
+- Dependencies and production configuration have been audited.
+- Regression tests, type checks, and production build pass.
+- Important user flows and responsive layouts work.
+- Controlled reliability testing has no unexplained failures.
+- Deployment state is verified.
+- The production website serves the intended release.
+- Remaining limitations are explicitly documented.
+
+If a criterion cannot be verified, mark it NOT VERIFIED. If a provider is unavailable, report the provider as UNAVAILABLE rather than falsely claiming success.
+
+## 17. REQUIRED FINAL REPORT FORMAT
+
+Return a detailed, evidence-based report with the following sections:
+
+### A. Executive verdict
+
+Choose exactly one:
+
+- PRODUCTION READY — all critical checks verified and deployed.
+- CONDITIONALLY READY — core checks pass, but specific documented limitations remain.
+- NOT READY — material defects, unverified critical connections, or deployment problems remain.
+
+Explain the verdict briefly.
+
+### B. Verification scope
+
+List which files, commands, browser checks, endpoints, providers, and environments were actually inspected.
+
+### C. Live connection matrix
+
+For every market index, economic indicator, news feed, and external integration, provide:
+
+| Feature/source | Provider | Connection result | Last fetch | Observation timestamp | Refresh interval | Cache TTL | Freshness status | Evidence |
+|---|---|---|---|---|---|---|---|---|
+
+Use exact observed values where available. Use NOT VERIFIED where evidence is missing.
+
+### D. Refresh verification matrix
+
+For each data-driven feature, state:
+
+- Configured interval.
+- Actual observed behaviour.
+- Upstream observation freshness.
+- Cache behaviour.
+- Market-hours logic where applicable.
+- Failure handling.
+- Pass/fail status.
+
+Explicitly distinguish frontend polling, backend cache refresh, and upstream data publication.
+
+### E. Economic data integrity report
+
+List verified indicators, source publications, methodology checks, corrected values, and unresolved discrepancies.
+
+### F. Security report
+
+List each finding, severity, affected file/endpoint, evidence, repair, retest result, and remaining risk.
+
+Do not claim that a code review or automated scan is equivalent to a comprehensive professional penetration test.
+
+### G. Performance and reliability report
+
+Include build sizes, real performance metrics, load-test conditions, error counts, latency percentiles, cache hit/miss behaviour, and limitations.
+
+### H. Test results
+
+Provide the exact commands, exit codes, test counts, failures, and warnings.
+
+### I. Files changed
+
+List each modified or created file and the reason for the change.
+
+### J. Deployment verification
+
+State separately:
+
+- Local fixes completed.
+- Local tests passed.
+- Git commit completed.
+- GitHub push completed.
+- Vercel deployment completed.
+- Live deployment verified.
+- Corrected data and refresh behaviour verified on production.
+
+### K. Outstanding issues
+
+List every unresolved defect, inaccessible provider, missing credential, unverified integration, unperformed physical-device test, deployment limitation, and manual action required.
+
+### L. Final action checklist
+
+Give only the remaining actions needed to reach verified production readiness, in priority order.
+
+## 18. FINAL EXECUTION INSTRUCTION
+
+Begin by inspecting the actual project and current deployment. Establish a reproducible baseline, then execute the audit in a systematic order.
+
+Repair every safe, verified defect you can fix in the available environment. Do not stop after generating recommendations.
+
+After repairs, rerun the relevant tests and complete regression suite. Verify external connections and data freshness independently wherever possible. Verify production deployment separately from local success.
+
+Do not ask the project owner to repeat information already present in the repository or this prompt. Ask for access only when a genuinely required permission, credential, repository connection, or deployment action is unavailable.
+
+Most importantly, do not fabricate evidence, do not label bundled data as live, do not claim an untested source is connected, and do not declare completion simply because the application builds.
+
+The final deliverable must be a genuinely evidence-based engineering audit and, wherever access permits, a repaired, tested, and production-verified ArthNiti application.

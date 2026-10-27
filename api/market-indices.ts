@@ -28,11 +28,23 @@ export interface IntradayPricePoint {
 
 export type MarketSessionState = 'OPEN' | 'PRE_OPEN' | 'CLOSED';
 
+export type MarketQuoteFreshnessStatus =
+  | 'DELAYED_EXCHANGE_FEED'
+  | 'LAST_SESSION_CLOSE'
+  | 'CACHED'
+  | 'STALE_FALLBACK'
+  | 'UNAVAILABLE';
+
 export interface IndianMarketIndexQuote {
   id: string;
   name: string;
   shortName: string;
   symbol: string;
+  returnedSymbol?: string | null;
+  currency?: string;
+  unit?: string;
+  exchangeTimezoneName?: string;
+  freshnessStatus?: MarketQuoteFreshnessStatus;
   exchange: 'NSE' | 'BSE';
   fullExchangeName: string;
   constituentsCount: number;
@@ -79,6 +91,7 @@ interface IndexConfig {
   name: string;
   shortName: string;
   yahooSymbol: string;
+  fallbackYahooSymbol?: string;
   exchange: 'NSE' | 'BSE';
   fullExchangeName: string;
   constituentsCount: number;
@@ -135,6 +148,7 @@ export const INDIAN_MARKET_INDICES_CONFIG: IndexConfig[] = [
     name: 'NIFTY MIDCAP 100',
     shortName: 'MIDCAP 100',
     yahooSymbol: 'NIFTY_MIDCAP_100.NS',
+    fallbackYahooSymbol: '^CRSMID',
     exchange: 'NSE',
     fullExchangeName: 'National Stock Exchange of India (NSE)',
     constituentsCount: 100,
@@ -142,6 +156,67 @@ export const INDIAN_MARKET_INDICES_CONFIG: IndexConfig[] = [
       'Broad mid-capitalization benchmark representing 100 midcap companies from the NIFTY Midcap 150 universe on NSE.',
   },
 ];
+
+// Official NSE & BSE 2026 Equity Market Trading Holidays (YYYY-MM-DD in IST)
+export const NSE_BSE_HOLIDAYS_2026 = new Set<string>([
+  '2026-01-26', // Republic Day
+  '2026-03-03', // Holi
+  '2026-03-26', // Shri Ram Navami
+  '2026-03-31', // Shri Mahavir Jayanti
+  '2026-04-03', // Good Friday
+  '2026-04-14', // Dr. Baba Saheb Ambedkar Jayanti
+  '2026-05-01', // Maharashtra Day
+  '2026-05-28', // Bakri Id
+  '2026-06-26', // Muharram
+  '2026-09-14', // Ganesh Chaturthi
+  '2026-10-02', // Mahatma Gandhi Jayanti
+  '2026-10-20', // Dussehra
+  '2026-11-10', // Diwali-Balipratipada
+  '2026-11-24', // Prakash Gurpurb Sri Guru Nanak Dev
+  '2026-12-25', // Christmas
+]);
+
+export const ARTHNITI_CSP_HEADER =
+  "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com data:; img-src 'self' data: blob: https:; connect-src 'self' https://arthniti-six.vercel.app; worker-src 'self' blob:; frame-ancestors 'self' https://*.google.com https://*.aistudio.google.com https://*.run.app https://*.vercel.app; object-src 'none'; base-uri 'self'; form-action 'self'";
+
+export function applyApiSecurityAndCorsHeaders(req: any, res: any): void {
+  const rawOrigin = String(req?.headers?.origin || '').trim();
+  let allowedOrigin = 'https://arthniti-six.vercel.app';
+  if (rawOrigin) {
+    try {
+      const parsed = new URL(rawOrigin);
+      const host = parsed.hostname.toLowerCase();
+      if (
+        rawOrigin === 'https://arthniti-six.vercel.app' ||
+        host === 'localhost' ||
+        host === '127.0.0.1' ||
+        host.endsWith('.vercel.app') ||
+        host.endsWith('.run.app')
+      ) {
+        allowedOrigin = rawOrigin;
+      }
+    } catch {
+      // Keep default production origin
+    }
+  }
+
+  res.setHeader('Access-Control-Allow-Origin', allowedOrigin);
+  res.setHeader('Vary', 'Origin');
+  res.setHeader('Access-Control-Allow-Methods', 'GET, OPTIONS');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+  res.setHeader('X-Content-Type-Options', 'nosniff');
+  res.setHeader('X-Frame-Options', 'SAMEORIGIN');
+  res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
+  res.setHeader(
+    'Permissions-Policy',
+    'camera=(), microphone=(), geolocation=(), payment=(), usb=()'
+  );
+  res.setHeader(
+    'Strict-Transport-Security',
+    'max-age=63072000; includeSubDomains; preload'
+  );
+  res.setHeader('Content-Security-Policy', ARTHNITI_CSP_HEADER);
+}
 
 // In-memory server cache to protect upstream feeds and prevent rate-limiting
 let cachedPayload: IndianMarketIndicesResponse | null = null;
@@ -219,6 +294,14 @@ export function evaluateIndianMarketSession(
       };
     }
 
+    const nowDateIst = getIstCalendarDateString(nowMs);
+    if (nowDateIst && NSE_BSE_HOLIDAYS_2026.has(nowDateIst)) {
+      return {
+        status: 'CLOSED',
+        label: 'Market Closed (Exchange Holiday) — Last Close Displayed',
+      };
+    }
+
     // Pre-open session: 09:00 IST (540m) to 09:15 IST (555m)
     if (totalMinutes >= 540 && totalMinutes < 555) {
       return {
@@ -229,10 +312,9 @@ export function evaluateIndianMarketSession(
 
     // Regular trading session: 09:15 IST (555m) to 15:30 IST (930m)
     if (totalMinutes >= 555 && totalMinutes < 930) {
-      // Check if today is a market holiday by comparing the exchange quote date in IST with today's IST date
+      // Check if today is an unscheduled/special market holiday by comparing the exchange quote date in IST with today's IST date
       if (exchangeRegularMarketTimeSec) {
         const quoteDateIst = getIstCalendarDateString(exchangeRegularMarketTimeSec * 1000);
-        const nowDateIst = getIstCalendarDateString(nowMs);
         // If we are more than 20 minutes into the session and the quote date is from an earlier day, it is a market holiday
         if (quoteDateIst && nowDateIst && quoteDateIst !== nowDateIst && totalMinutes >= 575) {
           return {
@@ -259,49 +341,72 @@ export function evaluateIndianMarketSession(
   }
 }
 
-async function fetchYahooChartWithFallback(symbol: string): Promise<any> {
-  const endpoints = [
-    `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(symbol)}?interval=5m&range=1d&includePrePost=false`,
-    `https://query2.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(symbol)}?interval=5m&range=1d&includePrePost=false`,
-  ];
+async function fetchYahooChartWithFallback(
+  primarySymbol: string,
+  fallbackSymbol?: string
+): Promise<{ result: any; requestedSymbol: string }> {
+  const candidateSymbols = [primarySymbol];
+  if (fallbackSymbol && fallbackSymbol !== primarySymbol) {
+    candidateSymbols.push(fallbackSymbol);
+  }
 
   let lastError: Error | null = null;
 
-  for (const url of endpoints) {
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 7000);
+  for (const symbol of candidateSymbols) {
+    const endpoints = [
+      `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(symbol)}?interval=5m&range=1d&includePrePost=false`,
+      `https://query2.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(symbol)}?interval=5m&range=1d&includePrePost=false`,
+    ];
 
-    try {
-      const response = await fetch(url, {
-        headers: {
-          'User-Agent':
-            'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
-          Accept: 'application/json',
-        },
-        signal: controller.signal,
-      });
-      clearTimeout(timeoutId);
+    for (const url of endpoints) {
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 7000);
 
-      if (!response.ok) {
-        throw new Error(`HTTP ${response.status} from ${new URL(url).hostname}`);
+      try {
+        const response = await fetch(url, {
+          headers: {
+            'User-Agent':
+              'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
+            Accept: 'application/json',
+          },
+          signal: controller.signal,
+        });
+        clearTimeout(timeoutId);
+
+        if (!response.ok) {
+          throw new Error(`HTTP ${response.status} from ${new URL(url).hostname}`);
+        }
+
+        const json = await response.json();
+        const result = json?.chart?.result?.[0];
+        if (!result || !result.meta) {
+          throw new Error(
+            json?.chart?.error?.description || `Malformed chart payload for ${symbol}`
+          );
+        }
+
+        // Verify returned instrument symbol if meta.symbol is provided
+        if (
+          typeof result.meta.symbol === 'string' &&
+          result.meta.symbol.length > 0 &&
+          result.meta.symbol.toUpperCase() !== primarySymbol.toUpperCase() &&
+          (!fallbackSymbol ||
+            result.meta.symbol.toUpperCase() !== fallbackSymbol.toUpperCase())
+        ) {
+          throw new Error(
+            `Returned instrument symbol (${result.meta.symbol}) does not match expected index symbol (${symbol})`
+          );
+        }
+
+        return { result, requestedSymbol: symbol };
+      } catch (err: any) {
+        clearTimeout(timeoutId);
+        lastError = err instanceof Error ? err : new Error(String(err));
       }
-
-      const json = await response.json();
-      const result = json?.chart?.result?.[0];
-      if (!result || !result.meta) {
-        throw new Error(
-          json?.chart?.error?.description || `Malformed chart payload for ${symbol}`
-        );
-      }
-
-      return result;
-    } catch (err: any) {
-      clearTimeout(timeoutId);
-      lastError = err instanceof Error ? err : new Error(String(err));
     }
   }
 
-  throw lastError || new Error(`Failed to fetch market data for ${symbol}`);
+  throw lastError || new Error(`Failed to fetch market data for ${primarySymbol}`);
 }
 
 async function fetchSingleIndexQuote(
@@ -311,8 +416,21 @@ async function fetchSingleIndexQuote(
   const fetchedAtIst = formatTimestampIst(nowMs, true);
 
   try {
-    const result = await fetchYahooChartWithFallback(cfg.yahooSymbol);
+    const { result, requestedSymbol } = await fetchYahooChartWithFallback(
+      cfg.yahooSymbol,
+      cfg.fallbackYahooSymbol
+    );
     const meta = result.meta;
+    const returnedSymbol =
+      typeof meta.symbol === 'string' && meta.symbol.length > 0
+        ? meta.symbol
+        : requestedSymbol;
+    const currency = typeof meta.currency === 'string' && meta.currency ? meta.currency : 'INR';
+    const exchangeTimezoneName =
+      typeof meta.exchangeTimezoneName === 'string' && meta.exchangeTimezoneName
+        ? meta.exchangeTimezoneName
+        : 'Asia/Kolkata';
+
     const timestamps: number[] = Array.isArray(result.timestamp) ? result.timestamp : [];
     const quoteObj = result.indicators?.quote?.[0] || {};
     const closes: (number | null)[] = Array.isArray(quoteObj.close) ? quoteObj.close : [];
@@ -359,7 +477,12 @@ async function fetchSingleIndexQuote(
         ? meta.previousClose
         : null;
 
-    if (rawCurrent === null || rawPrevClose === null || rawPrevClose <= 0) {
+    if (
+      rawCurrent === null ||
+      rawCurrent <= 0 ||
+      rawPrevClose === null ||
+      rawPrevClose <= 0
+    ) {
       throw new Error(`Missing valid price or previous close for ${cfg.name}`);
     }
 
@@ -424,12 +547,21 @@ async function fetchSingleIndexQuote(
       : null;
 
     const sessionInfo = evaluateIndianMarketSession(nowMs, exchangeTimeSec ?? undefined);
+    const freshnessStatus: MarketQuoteFreshnessStatus =
+      sessionInfo.status === 'OPEN' || sessionInfo.status === 'PRE_OPEN'
+        ? 'DELAYED_EXCHANGE_FEED'
+        : 'LAST_SESSION_CLOSE';
 
     return {
       id: cfg.id,
       name: cfg.name,
       shortName: cfg.shortName,
       symbol: cfg.yahooSymbol,
+      returnedSymbol,
+      currency,
+      unit: `Index Points (${currency})`,
+      exchangeTimezoneName,
+      freshnessStatus,
       exchange: cfg.exchange,
       fullExchangeName: cfg.fullExchangeName,
       constituentsCount: cfg.constituentsCount,
@@ -452,8 +584,8 @@ async function fetchSingleIndexQuote(
       dataSource: `Yahoo Finance v8 Exchange Feed (${cfg.exchange})`,
       dataDelayDisclosure:
         cfg.exchange === 'NSE'
-          ? 'Near real-time / standard public exchange feed (5-min intraday intervals, auto-polled every 30s)'
-          : 'Near real-time / standard BSE feed (5-min intraday intervals, auto-polled every 30s)',
+          ? 'Near real-time / standard public exchange feed (5-min intraday intervals, auto-polled every 30s when open)'
+          : 'Near real-time / standard BSE feed (5-min intraday intervals, auto-polled every 30s when open)',
       isRealtime: false,
       intradayPoints,
     };
@@ -464,6 +596,11 @@ async function fetchSingleIndexQuote(
       name: cfg.name,
       shortName: cfg.shortName,
       symbol: cfg.yahooSymbol,
+      returnedSymbol: null,
+      currency: 'INR',
+      unit: 'Index Points (INR)',
+      exchangeTimezoneName: 'Asia/Kolkata',
+      freshnessStatus: 'UNAVAILABLE',
       exchange: cfg.exchange,
       fullExchangeName: cfg.fullExchangeName,
       constituentsCount: cfg.constituentsCount,
@@ -548,6 +685,10 @@ export async function fetchIndianMarketIndicesPayload(options?: {
           ...cachedPayload,
           cacheStatus: 'STALE_FALLBACK' as const,
           cacheAgeSeconds: Math.round((Date.now() - cachedAtMs) / 1000),
+          indices: cachedPayload.indices.map((ind) => ({
+            ...ind,
+            freshnessStatus: 'STALE_FALLBACK' as const,
+          })),
         };
       }
 
@@ -569,7 +710,8 @@ export async function fetchIndianMarketIndicesPayload(options?: {
           'Public exchange index feed via server-side proxy (/api/market-indices). Intraday charts reflect 5-minute exchange intervals; quotes may carry up to a 1–5 minute public dissemination delay depending on exchange feed licensing. Zero simulated ticks.',
         cacheStatus: 'MISS',
         cacheAgeSeconds: 0,
-        recommendedPollIntervalSeconds: overallSession.status === 'OPEN' ? 30 : 60,
+        recommendedPollIntervalSeconds:
+          overallSession.status === 'OPEN' || overallSession.status === 'PRE_OPEN' ? 30 : 300,
         indices: quotes,
       };
 
@@ -589,13 +731,7 @@ export async function fetchIndianMarketIndicesPayload(options?: {
 
 // Default export for Vercel Serverless Functions (/api/market-indices)
 export default async function handler(req: any, res: any) {
-  // Allow CORS for Vercel preview deployments & set security headers
-  res.setHeader('Access-Control-Allow-Origin', '*');
-  res.setHeader('Access-Control-Allow-Methods', 'GET, OPTIONS');
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
-  res.setHeader('X-Content-Type-Options', 'nosniff');
-  res.setHeader('X-Frame-Options', 'SAMEORIGIN');
-  res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
+  applyApiSecurityAndCorsHeaders(req, res);
 
   if (req.method === 'OPTIONS') {
     res.status(200).end();

@@ -442,7 +442,7 @@ export default function App() {
     handleFetchEconomicNews,
   ]);
 
-  // Safe automatic polling for Live Economic News (every 5 minutes when tab is visible)
+  // Safe automatic polling for Live Economic News (every 5 minutes when tab is visible; refreshes on tab restore only if >= 5m old)
   useEffect(() => {
     if (!newsAutoRefresh || newsError) return;
     const timerId = window.setInterval(() => {
@@ -450,8 +450,22 @@ export default function App() {
         handleFetchEconomicNews({ forceRefresh: false, simulateError: false });
       }
     }, 300000);
-    return () => window.clearInterval(timerId);
-  }, [newsAutoRefresh, newsError, handleFetchEconomicNews]);
+
+    const handleNewsVisibilityChange = () => {
+      if (document.visibilityState === 'visible') {
+        const lastFetchedMs = newsData?.fetchedAtMs || 0;
+        if (Date.now() - lastFetchedMs >= 300000) {
+          handleFetchEconomicNews({ forceRefresh: false, simulateError: false });
+        }
+      }
+    };
+
+    document.addEventListener('visibilitychange', handleNewsVisibilityChange);
+    return () => {
+      window.clearInterval(timerId);
+      document.removeEventListener('visibilitychange', handleNewsVisibilityChange);
+    };
+  }, [newsAutoRefresh, newsError, newsData?.fetchedAtMs, handleFetchEconomicNews]);
 
   // Safe automatic polling for Live Indian Market Indices (pauses when tab is hidden or market is closed)
   useEffect(() => {
@@ -473,7 +487,10 @@ export default function App() {
         document.visibilityState === 'visible' &&
         (sessionState === 'OPEN' || sessionState === 'PRE_OPEN')
       ) {
-        handleFetchMarketIndices({ forceRefresh: false });
+        const lastFetchedMs = marketData?.fetchedAtMs || 0;
+        if (Date.now() - lastFetchedMs >= 30000) {
+          handleFetchMarketIndices({ forceRefresh: false });
+        }
       }
     };
 
@@ -482,7 +499,13 @@ export default function App() {
       window.clearInterval(timerId);
       document.removeEventListener('visibilitychange', handleVisibilityChange);
     };
-  }, [marketAutoRefresh, marketError, marketData?.marketStatus, handleFetchMarketIndices]);
+  }, [
+    marketAutoRefresh,
+    marketError,
+    marketData?.marketStatus,
+    marketData?.fetchedAtMs,
+    handleFetchMarketIndices,
+  ]);
 
   const handleUploadCustomCsv = useCallback((csvText: string) => {
     try {

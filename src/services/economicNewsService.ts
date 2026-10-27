@@ -22,6 +22,7 @@ import type {
 import { NEWS_SUBTOPICS_META } from '../../api/economic-news';
 import {
   computeBackoffDelayMs,
+  createOutOfOrderResponseGuard,
   isRetryableHttpStatus,
 } from './indianMarketService';
 
@@ -37,11 +38,18 @@ export type {
   NewsSubTopicId,
 };
 
-export { NEWS_SUBTOPICS_META, computeBackoffDelayMs, isRetryableHttpStatus };
+export {
+  NEWS_SUBTOPICS_META,
+  computeBackoffDelayMs,
+  createOutOfOrderResponseGuard,
+  isRetryableHttpStatus,
+};
 
 const CLIENT_STORAGE_KEY = 'arthniti_economic_news_cache_v1';
 
 let memoryCache: EconomicNewsResponse | null = null;
+const newsResponseGuard = createOutOfOrderResponseGuard();
+let latestAppliedNewsResult: FetchEconomicNewsResult | null = null;
 
 function saveClientCache(payload: EconomicNewsResponse): void {
   memoryCache = payload;
@@ -96,6 +104,7 @@ export async function fetchEconomicNews(options?: {
   }
 
   const maxRetries = options?.simulateError ? 0 : (options?.maxRetries ?? 2);
+  const requestId = newsResponseGuard.nextRequestId();
 
   const requestTask = (async (): Promise<FetchEconomicNewsResult> => {
     const params = new URLSearchParams();
@@ -149,13 +158,20 @@ export async function fetchEconomicNews(options?: {
           throw new Error('Malformed response from /api/economic-news endpoint.');
         }
 
-        saveClientCache(payload);
-        return {
+        const freshResult: FetchEconomicNewsResult = {
           status: 'success',
           data: payload,
           isStaleClientCache: payload.cacheStatus === 'STALE_FALLBACK',
           errorMessage: null,
         };
+
+        if (newsResponseGuard.shouldApplyResponse(requestId)) {
+          saveClientCache(payload);
+          latestAppliedNewsResult = freshResult;
+          return freshResult;
+        }
+
+        return latestAppliedNewsResult || freshResult;
       } catch (err: any) {
         clearTimeout(timeoutId);
         lastError = err instanceof Error ? err : new Error(String(err));

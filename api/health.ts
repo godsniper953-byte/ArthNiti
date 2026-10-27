@@ -3,7 +3,10 @@
  * Compatible with both Vercel Serverless Functions and Express (server.ts).
  */
 
-import { formatTimestampIst } from './market-indices.ts';
+import {
+  applyApiSecurityAndCorsHeaders,
+  formatTimestampIst,
+} from './market-indices.ts';
 
 export interface HealthCheckResponse {
   ok: boolean;
@@ -41,12 +44,7 @@ export function getHealthCheckPayload(): HealthCheckResponse {
 }
 
 export default async function handler(req: any, res: any) {
-  res.setHeader('Access-Control-Allow-Origin', '*');
-  res.setHeader('Access-Control-Allow-Methods', 'GET, OPTIONS');
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
-  res.setHeader('X-Content-Type-Options', 'nosniff');
-  res.setHeader('X-Frame-Options', 'SAMEORIGIN');
-  res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
+  applyApiSecurityAndCorsHeaders(req, res);
 
   if (req.method === 'OPTIONS') {
     return res.status(200).end();

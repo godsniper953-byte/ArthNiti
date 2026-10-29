@@ -10,6 +10,7 @@ import {
   Database,
   Droplets,
   GitCompare,
+  GraduationCap,
   Info,
   Landmark,
   Newspaper,
@@ -67,6 +68,12 @@ export const ARTHNITI_NAV_ITEMS: NavItemConfig[] = [
     label: 'Economic News',
     shortDesc: 'India & Global Intelligence',
     icon: Newspaper,
+  },
+  {
+    id: 'economist-bites',
+    label: "Economists' Bites",
+    shortDesc: 'Expert Views & Quick Summaries',
+    icon: GraduationCap,
   },
   {
     id: 'comparisons',

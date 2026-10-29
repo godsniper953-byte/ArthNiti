@@ -46,6 +46,7 @@ export const VALID_PAGE_IDS: PageId[] = [
   'currency-oil',
   'financial-markets',
   'economic-news',
+  'economist-bites',
   'comparisons',
   'data-sources',
   'about',
@@ -65,6 +66,9 @@ const HASH_PAGE_ALIASES: Record<string, { pageId: PageId; defaultIndicatorId?: s
   unemployment: { pageId: 'labour-market', defaultIndicatorId: 'unemployment-rate' },
   markets: { pageId: 'financial-markets' },
   news: { pageId: 'economic-news' },
+  bites: { pageId: 'economist-bites' },
+  economists: { pageId: 'economist-bites' },
+  research: { pageId: 'economist-bites' },
 };
 
 /**

@@ -56,6 +56,10 @@ import {
   EconomicNewsResponse,
   fetchEconomicNews,
 } from './services/economicNewsService';
+import {
+  EconomistBitesResponse,
+  fetchEconomistBites,
+} from './services/economistBitesService';
 import { EconomicIndicator, PageId } from './types/economy';
 import { Sidebar } from './components/navigation/Sidebar';
 import { TopBar } from './components/navigation/TopBar';
@@ -80,6 +84,9 @@ const FinancialMarketsPage = React.lazy(() =>
 );
 const EconomicNewsPage = React.lazy(() =>
   import('./pages/EconomicNewsPage').then((m) => ({ default: m.EconomicNewsPage }))
+);
+const EconomistBitesPage = React.lazy(() =>
+  import('./pages/EconomistBitesPage').then((m) => ({ default: m.EconomistBitesPage }))
 );
 const ComparisonsPage = React.lazy(() =>
   import('./pages/ComparisonsPage').then((m) => ({ default: m.ComparisonsPage }))
@@ -111,6 +118,7 @@ export default function App() {
   // Monotonic sequence counters to prevent stale overlapping responses from overwriting newer state
   const marketRequestSeqRef = useRef<number>(0);
   const newsRequestSeqRef = useRef<number>(0);
+  const bitesRequestSeqRef = useRef<number>(0);
 
   // Official MoSPI CPI Data State (kept separate from UI components via cpiDataService)
   const [officialCpiIndicator, setOfficialCpiIndicator] = useState<EconomicIndicator | null>(null);
@@ -200,6 +208,13 @@ export default function App() {
   const [newsStaleCache, setNewsStaleCache] = useState<boolean>(false);
   const [newsAutoRefresh, setNewsAutoRefresh] = useState<boolean>(true);
 
+  // Economists' Latest Bites State
+  const [bitesData, setBitesData] = useState<EconomistBitesResponse | null>(null);
+  const [bitesLoading, setBitesLoading] = useState<boolean>(true);
+  const [bitesError, setBitesError] = useState<string | null>(null);
+  const [bitesStaleCache, setBitesStaleCache] = useState<boolean>(false);
+  const [bitesAutoRefresh, setBitesAutoRefresh] = useState<boolean>(true);
+
   const baseIndicators = useMemo(() => getIndicatorsSync(), []);
   const sources = useMemo(() => getDataSourcesSync(), []);
   const sectorGva = useMemo(() => getSectorGvaSync(), []);
@@ -286,6 +301,39 @@ export default function App() {
         );
       }
       setNewsLoading(false);
+    },
+    []
+  );
+
+  const handleFetchEconomistBites = useCallback(
+    async (options?: { forceRefresh?: boolean; simulateError?: boolean }) => {
+      const reqSeq = ++bitesRequestSeqRef.current;
+      setBitesLoading(true);
+      if (options?.simulateError === false) {
+        setBitesError(null);
+      }
+      const res = await fetchEconomistBites({
+        forceRefresh: options?.forceRefresh,
+        simulateError: options?.simulateError,
+      });
+
+      if (reqSeq !== bitesRequestSeqRef.current) return;
+
+      if (res.status === 'success' && res.data) {
+        setBitesData(res.data);
+        setBitesStaleCache(res.isStaleClientCache);
+        setBitesError(null);
+      } else {
+        if (res.data) {
+          setBitesData(res.data);
+          setBitesStaleCache(true);
+        }
+        setBitesError(
+          res.errorMessage ||
+            "Failed to retrieve source-verified Economists' Latest Bites."
+        );
+      }
+      setBitesLoading(false);
     },
     []
   );
@@ -430,6 +478,7 @@ export default function App() {
     handleFetchOfficialTrade(false);
     handleFetchMarketIndices({ forceRefresh: false, simulateError: false });
     handleFetchEconomicNews({ forceRefresh: false, simulateError: false });
+    handleFetchEconomistBites({ forceRefresh: false, simulateError: false });
   }, [
     handleFetchOfficialCpi,
     handleFetchOfficialGdp,
@@ -440,7 +489,38 @@ export default function App() {
     handleFetchOfficialTrade,
     handleFetchMarketIndices,
     handleFetchEconomicNews,
+    handleFetchEconomistBites,
   ]);
+
+  // Safe automatic polling for Economists' Latest Bites (configurable via VITE_ECONOMIST_BITES_POLL_INTERVAL_MS, default 300,000ms = 5m)
+  useEffect(() => {
+    if (!bitesAutoRefresh || bitesError) return;
+    const bitesPollMs = Math.max(
+      60000,
+      Number(import.meta.env.VITE_ECONOMIST_BITES_POLL_INTERVAL_MS) || 300000
+    );
+
+    const timerId = window.setInterval(() => {
+      if (document.visibilityState === 'visible') {
+        handleFetchEconomistBites({ forceRefresh: false, simulateError: false });
+      }
+    }, bitesPollMs);
+
+    const handleBitesVisibilityChange = () => {
+      if (document.visibilityState === 'visible') {
+        const lastFetchedMs = bitesData?.fetchedAtMs || 0;
+        if (Date.now() - lastFetchedMs >= bitesPollMs) {
+          handleFetchEconomistBites({ forceRefresh: false, simulateError: false });
+        }
+      }
+    };
+
+    document.addEventListener('visibilitychange', handleBitesVisibilityChange);
+    return () => {
+      window.clearInterval(timerId);
+      document.removeEventListener('visibilitychange', handleBitesVisibilityChange);
+    };
+  }, [bitesAutoRefresh, bitesError, bitesData?.fetchedAtMs, handleFetchEconomistBites]);
 
   // Safe automatic polling for Live Economic News (configurable via VITE_ECONOMIC_NEWS_POLL_INTERVAL_MS, default 300,000ms = 5m)
   useEffect(() => {
@@ -1048,6 +1128,18 @@ export default function App() {
             onSimulateNewsError={(simErr) =>
               handleFetchEconomicNews({ forceRefresh: false, simulateError: simErr })
             }
+            bitesData={bitesData}
+            bitesLoading={bitesLoading}
+            bitesError={bitesError}
+            bitesStaleCache={bitesStaleCache}
+            bitesAutoRefresh={bitesAutoRefresh}
+            onToggleBitesAutoRefresh={() => setBitesAutoRefresh((prev) => !prev)}
+            onRefreshBitesNow={(force) =>
+              handleFetchEconomistBites({ forceRefresh: Boolean(force), simulateError: false })
+            }
+            onSimulateBitesError={(simErr) =>
+              handleFetchEconomistBites({ forceRefresh: false, simulateError: simErr })
+            }
           />
         );
       case 'gdp-growth':
@@ -1180,6 +1272,24 @@ export default function App() {
             }
             onSelectPage={handleSelectPage}
             theme={theme}
+          />
+        );
+      case 'economist-bites':
+        return (
+          <EconomistBitesPage
+            data={bitesData}
+            loading={bitesLoading}
+            error={bitesError}
+            isStaleCache={bitesStaleCache}
+            autoRefreshEnabled={bitesAutoRefresh}
+            onToggleAutoRefresh={() => setBitesAutoRefresh((prev) => !prev)}
+            onRefresh={(force) =>
+              handleFetchEconomistBites({ forceRefresh: Boolean(force), simulateError: false })
+            }
+            onSimulateError={(simErr) =>
+              handleFetchEconomistBites({ forceRefresh: false, simulateError: simErr })
+            }
+            onNavigate={handleSelectPage}
           />
         );
       case 'comparisons':
@@ -1414,6 +1524,13 @@ export default function App() {
               <span>Understand the Economy. Discover the Data.</span>
             </div>
             <div className="flex flex-wrap items-center gap-4">
+              <button
+                type="button"
+                onClick={() => handleSelectPage('economist-bites')}
+                className="hover:text-emerald-400 transition-colors cursor-pointer"
+              >
+                Economists&apos; Latest Bites
+              </button>
               <button
                 type="button"
                 onClick={() => handleSelectPage('data-sources')}

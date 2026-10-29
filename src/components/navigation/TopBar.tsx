@@ -40,6 +40,7 @@ const PAGE_LABELS: Record<PageId, string> = {
   'currency-oil': 'Currency, Oil & Trade',
   'financial-markets': 'Financial Markets',
   'economic-news': 'Economic News & Current Affairs',
+  'economist-bites': "Economists' Latest Bites",
   comparisons: 'Economic Comparisons',
   'data-sources': 'Data Sources',
   about: 'About ArthNiti',

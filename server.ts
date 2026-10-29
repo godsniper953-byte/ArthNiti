@@ -7,6 +7,7 @@ import marketIndicesHandler, {
   ARTHNITI_CSP_HEADER,
 } from './api/market-indices.ts';
 import economicNewsHandler from './api/economic-news.ts';
+import economistBitesHandler from './api/economist-bites.ts';
 import healthHandler from './api/health.ts';
 
 dotenv.config();
@@ -50,6 +51,11 @@ async function startServer() {
   // Mount server-side Economic News & Current Affairs Intelligence API route
   app.all('/api/economic-news', async (req, res) => {
     await economicNewsHandler(req, res);
+  });
+
+  // Mount server-side Economists' Latest Bites Discovery & Verification API route
+  app.all('/api/economist-bites', async (req, res) => {
+    await economistBitesHandler(req, res);
   });
 
   if (process.env.NODE_ENV !== 'production') {

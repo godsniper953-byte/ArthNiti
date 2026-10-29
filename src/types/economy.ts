@@ -6,6 +6,7 @@ export type PageId =
   | 'currency-oil'
   | 'financial-markets'
   | 'economic-news'
+  | 'economist-bites'
   | 'comparisons'
   | 'data-sources'
   | 'about';

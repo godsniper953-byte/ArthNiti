@@ -19,6 +19,7 @@ export interface HealthCheckResponse {
   endpoints: {
     marketIndices: string;
     economicNews: string;
+    economistBites: string;
     health: string;
   };
   officialCsvDatasetsCount: number;
@@ -37,6 +38,7 @@ export function getHealthCheckPayload(): HealthCheckResponse {
     endpoints: {
       marketIndices: '/api/market-indices',
       economicNews: '/api/economic-news',
+      economistBites: '/api/economist-bites',
       health: '/api/health',
     },
     officialCsvDatasetsCount: 8,

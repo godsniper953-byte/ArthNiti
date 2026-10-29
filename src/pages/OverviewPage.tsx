@@ -24,6 +24,8 @@ import { LiveIndianMarketsSection } from '../components/visualizations/LiveIndia
 import { IndianMarketIndicesResponse } from '../services/indianMarketService';
 import { EconomicNewsSection } from '../components/news/EconomicNewsSection';
 import { EconomicNewsResponse } from '../services/economicNewsService';
+import { EconomistBitesSection } from '../components/bites/EconomistBitesSection';
+import { EconomistBitesResponse } from '../services/economistBitesService';
 import { ErrorBoundary } from '../components/common/ErrorBoundary';
 
 const LazyIndiaEconomicGlobe = React.lazy(() =>
@@ -79,6 +81,14 @@ interface OverviewPageProps {
   onToggleNewsAutoRefresh?: () => void;
   onRefreshNewsNow?: () => void;
   onSimulateNewsError?: (simulate: boolean) => void;
+  bitesData?: EconomistBitesResponse | null;
+  bitesLoading?: boolean;
+  bitesError?: string | null;
+  bitesStaleCache?: boolean;
+  bitesAutoRefresh?: boolean;
+  onToggleBitesAutoRefresh?: () => void;
+  onRefreshBitesNow?: (force?: boolean) => void;
+  onSimulateBitesError?: (simulate: boolean) => void;
 }
 
 export const OverviewPage: React.FC<OverviewPageProps> = ({
@@ -128,6 +138,14 @@ export const OverviewPage: React.FC<OverviewPageProps> = ({
   onToggleNewsAutoRefresh = () => {},
   onRefreshNewsNow = () => {},
   onSimulateNewsError = () => {},
+  bitesData = null,
+  bitesLoading = false,
+  bitesError = null,
+  bitesStaleCache = false,
+  bitesAutoRefresh = true,
+  onToggleBitesAutoRefresh = () => {},
+  onRefreshBitesNow = () => {},
+  onSimulateBitesError = () => {},
 }) => {
   const kpiSectionRef = useRef<HTMLDivElement | null>(null);
 
@@ -581,6 +599,22 @@ export const OverviewPage: React.FC<OverviewPageProps> = ({
           onSelectPage={onSelectPage}
           theme={theme}
           mode="overview-preview"
+        />
+      </ErrorBoundary>
+
+      {/* 4C. Economists' Latest Bites Preview Section */}
+      <ErrorBoundary sectionName="Economists' Latest Bites Preview" theme={theme}>
+        <EconomistBitesSection
+          data={bitesData}
+          loading={bitesLoading}
+          error={bitesError}
+          isStaleCache={bitesStaleCache}
+          autoRefreshEnabled={bitesAutoRefresh}
+          onToggleAutoRefresh={onToggleBitesAutoRefresh}
+          onRefresh={onRefreshBitesNow}
+          onSimulateError={onSimulateBitesError}
+          mode="overview-preview"
+          onNavigate={onSelectPage}
         />
       </ErrorBoundary>
 

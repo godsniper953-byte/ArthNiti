@@ -80,6 +80,22 @@ import {
 import { getHealthCheckPayload, default as healthHandler } from '../api/health.ts';
 import { ARTHNITI_NAV_ITEMS } from '../src/components/navigation/Sidebar.tsx';
 import { ARTHNITI_METHODOLOGY_REVISION_DATE } from '../src/pages/DataSourcesPage.tsx';
+import {
+  GLOBE_COUNTRY_CENTROIDS,
+  GLOBE_DEFAULT_CAMERA_POS,
+  INDIA_HUB_LAT,
+  INDIA_HUB_LON,
+  QUICK_FOCUS_COUNTRY_KEYS,
+  computeCountryAngleToCameraDeg,
+  computeGlobeTransitionTarget,
+  computeTargetRotationForLatLon,
+  getCountryWorldNormal,
+  greatCircleDistanceDeg,
+  latLonToVec3,
+  normalizeLongitudeDeg,
+  shortestAngleTarget,
+  vec3ToLatLon,
+} from '../src/components/visualizations/IndiaEconomicGlobe.tsx';
 
 const PUBLIC_DATA_DIR = path.resolve(process.cwd(), 'public/data');
 
@@ -1143,4 +1159,226 @@ test("9. Economists' Latest Bites: Source Verification, Quick Summary Gate, Secu
     resetEconomistBitesCacheForTest();
   }
 });
+
+test('10. 3D Globe Geographic Coordinate Mapping, Camera-Facing Orientation, Shortest-Path Seam Handling, and Required Country Edge Cases', () => {
+  // 1. Verify exact round-trip consistency between latLonToVec3 and vec3ToLatLon across all longitudes & latitudes
+  const testCoordinates: { label: string; lat: number; lon: number }[] = [
+    { label: 'India Hub', lat: INDIA_HUB_LAT, lon: INDIA_HUB_LON },
+    { label: 'United States', lat: 38.9, lon: -77.04 },
+    { label: 'United Kingdom (Prime Meridian)', lat: 51.51, lon: -0.13 },
+    { label: 'Brazil (Southern & Western Hemisphere)', lat: -15.79, lon: -47.88 },
+    { label: 'Japan', lat: 35.68, lon: 139.69 },
+    { label: 'Australia (Southern & Eastern Hemisphere)', lat: -35.28, lon: 149.13 },
+    { label: 'Canada', lat: 56.13, lon: -106.35 },
+    { label: 'Russia', lat: 55.75, lon: 37.62 },
+    { label: 'New Zealand', lat: -41.29, lon: 174.78 },
+    { label: 'Date Line East (+179.9°E)', lat: -17.71, lon: 179.9 },
+    { label: 'Date Line West (-179.9°W)', lat: -13.76, lon: -179.9 },
+    { label: 'Exact International Date Line (+180°)', lat: 0, lon: 180 },
+    { label: 'Exact International Date Line (-180°)', lat: 0, lon: -180 },
+    { label: 'High-Latitude Arctic (78.22°N)', lat: 78.22, lon: 15.63 },
+    { label: 'High-Latitude Antarctic (-77.85°S)', lat: -77.85, lon: 166.67 },
+  ];
+
+  for (const pt of testCoordinates) {
+    const vec = latLonToVec3(pt.lat, pt.lon, 1.66);
+    const recovered = vec3ToLatLon(vec);
+    assert.ok(
+      Math.abs(recovered.lat - pt.lat) < 1e-6,
+      `Round-trip latitude mismatch for ${pt.label}: expected ${pt.lat}, got ${recovered.lat}`
+    );
+    const distDeg = greatCircleDistanceDeg(pt.lat, pt.lon, recovered.lat, recovered.lon);
+    assert.ok(
+      distDeg < 1e-5,
+      `Round-trip great-circle distance error for ${pt.label}: ${distDeg}°`
+    );
+  }
+
+  // Verify +180° and -180° map to the exact same 3D point on the sphere seam
+  const vEast180 = latLonToVec3(12.5, 180, 1.66);
+  const vWest180 = latLonToVec3(12.5, -180, 1.66);
+  assert.ok(
+    vEast180.distanceTo(vWest180) < 1e-12,
+    '+180° and -180° must map to the identical 3D point on the International Date Line seam'
+  );
+
+  // 2. Verify all 9 required benchmark countries + Date Line + High-Latitude regions rotate directly
+  //    in front of the camera (angleDeg < 0.5°, dotProduct > 0.999, strictly on the visible front hemisphere)
+  const requiredCountryKeys = [
+    ...QUICK_FOCUS_COUNTRY_KEYS, // india, usa, uk, brazil, japan, australia, canada, russia, new-zealand
+    'china',
+    'uae',
+    'saudi-arabia',
+    'singapore',
+    'indonesia',
+    'south-korea',
+    'switzerland',
+    'south-africa',
+    'mexico',
+    'dateline-east',
+    'dateline-west',
+    'high-arctic',
+    'high-antarctic',
+  ];
+
+  for (const key of requiredCountryKeys) {
+    const c = GLOBE_COUNTRY_CENTROIDS[key];
+    assert.ok(c, `Missing centroid definition for ${key}`);
+
+    const targetRot = computeTargetRotationForLatLon(c.lat, c.lon, GLOBE_DEFAULT_CAMERA_POS);
+    const diag = computeCountryAngleToCameraDeg(
+      c.lat,
+      c.lon,
+      targetRot.rotX,
+      targetRot.rotY,
+      GLOBE_DEFAULT_CAMERA_POS
+    );
+
+    assert.equal(
+      diag.isFrontHemisphere,
+      true,
+      `${c.name} (${c.lat}°, ${c.lon}°) must land on the visible front hemisphere (z=${diag.worldNormal.z.toFixed(4)})`
+    );
+    assert.ok(
+      diag.dotProduct > 0.999,
+      `${c.name} outward surface normal must align with camera direction (dot=${diag.dotProduct.toFixed(6)})`
+    );
+    assert.ok(
+      diag.angleDeg < 0.5,
+      `${c.name} angular error to camera must be < 0.5°, got ${diag.angleDeg.toFixed(4)}°`
+    );
+  }
+
+  // 3. Verify all 27 bilateral partners from official TRADESTAT CSV rotate accurately to face the camera
+  const bilateralCsv = fs.readFileSync(
+    path.join(PUBLIC_DATA_DIR, 'moci_tradestat_bilateral_partners.csv'),
+    'utf-8'
+  );
+  const partners = parseBilateralTradeCsv(bilateralCsv);
+  for (const partner of partners) {
+    const targetRot = computeTargetRotationForLatLon(
+      partner.lat,
+      partner.lon,
+      GLOBE_DEFAULT_CAMERA_POS
+    );
+    const diag = computeCountryAngleToCameraDeg(
+      partner.lat,
+      partner.lon,
+      targetRot.rotX,
+      targetRot.rotY,
+      GLOBE_DEFAULT_CAMERA_POS
+    );
+    assert.equal(
+      diag.isFrontHemisphere,
+      true,
+      `Partner ${partner.name} must rotate to the visible front hemisphere`
+    );
+    assert.ok(
+      diag.angleDeg < 0.5,
+      `Partner ${partner.name} angle to camera must be < 0.5°, got ${diag.angleDeg.toFixed(4)}°`
+    );
+  }
+
+  // 4. Verify opposite-side switching, International Date Line seam crossing, and rapid consecutive selections
+  const sequenceKeys = [
+    'india',        // 20.59°N, 78.96°E
+    'usa',          // 38.90°N, -77.04°W (opposite hemisphere from India)
+    'japan',        // 35.68°N, 139.69°E (across Pacific)
+    'brazil',       // -15.79°S, -47.88°W (opposite hemisphere from Japan)
+    'uk',           // 51.51°N, -0.13°W (Prime Meridian)
+    'new-zealand',  // -41.29°S, 174.78°E (antipodal to UK/Spain)
+    'dateline-east',// -17.71°S, +179.9°E
+    'dateline-west',// -13.76°S, -179.9°W (0.2° across ±180° International Date Line!)
+    'canada',       // 56.13°N, -106.35°W
+    'australia',    // -35.28°S, 149.13°E
+    'russia',       // 55.75°N, 37.62°E
+    'high-arctic',  // 78.22°N, 15.63°E
+    'high-antarctic', // -77.85°S, 166.67°E
+    'india',        // Return to India
+  ];
+
+  let currentRot = computeTargetRotationForLatLon(INDIA_HUB_LAT, INDIA_HUB_LON, GLOBE_DEFAULT_CAMERA_POS);
+
+  for (let i = 0; i < sequenceKeys.length; i++) {
+    const key = sequenceKeys[i];
+    const country = GLOBE_COUNTRY_CENTROIDS[key];
+    const nextTarget = computeGlobeTransitionTarget(
+      currentRot,
+      country.lat,
+      country.lon,
+      GLOBE_DEFAULT_CAMERA_POS
+    );
+
+    // Shortest path guarantee: longitudinal rotation step must never exceed PI radians (180°)
+    const deltaRotY = Math.abs(nextTarget.rotY - currentRot.rotY);
+    assert.ok(
+      deltaRotY <= Math.PI + 1e-9,
+      `Transition to ${country.name} exceeded 180° shortest path: ${(deltaRotY * (180 / Math.PI)).toFixed(2)}°`
+    );
+
+    // Date line seam check: transitioning from +179.9°E (dateline-east) to -179.9°W (dateline-west)
+    // is a 0.2° geographic step and must NOT spin 359.8° the wrong way around the globe!
+    if (i > 0 && sequenceKeys[i - 1] === 'dateline-east' && key === 'dateline-west') {
+      assert.ok(
+        deltaRotY < (1.0 * Math.PI) / 180,
+        `Crossing ±180° Date Line (+179.9°E -> -179.9°W) must rotate < 1°, got ${(deltaRotY * (180 / Math.PI)).toFixed(4)}°`
+      );
+    }
+
+    // Simulate frame damping mid-transition (rapid consecutive click at 35% progress) and completion
+    if (i % 2 === 1 && i + 1 < sequenceKeys.length) {
+      // Partial damping step (simulating user clicking next country before previous rotation finishes)
+      currentRot = {
+        rotX: currentRot.rotX + (nextTarget.rotX - currentRot.rotX) * 0.35,
+        rotY: currentRot.rotY + (nextTarget.rotY - currentRot.rotY) * 0.35,
+      };
+    } else {
+      // Completed transition: verify final orientation places country directly in front of camera
+      currentRot = nextTarget;
+      const finalDiag = computeCountryAngleToCameraDeg(
+        country.lat,
+        country.lon,
+        currentRot.rotX,
+        currentRot.rotY,
+        GLOBE_DEFAULT_CAMERA_POS
+      );
+      assert.equal(finalDiag.isFrontHemisphere, true);
+      assert.ok(finalDiag.angleDeg < 0.5);
+    }
+  }
+
+  // 5. Verify selecting the same country twice is idempotent and produces 0° additional rotation
+  const usa = GLOBE_COUNTRY_CENTROIDS.usa;
+  const firstUsaTarget = computeGlobeTransitionTarget(currentRot, usa.lat, usa.lon, GLOBE_DEFAULT_CAMERA_POS);
+  const secondUsaTarget = computeGlobeTransitionTarget(firstUsaTarget, usa.lat, usa.lon, GLOBE_DEFAULT_CAMERA_POS);
+  assert.ok(Math.abs(secondUsaTarget.rotX - firstUsaTarget.rotX) < 1e-12);
+  assert.ok(Math.abs(secondUsaTarget.rotY - firstUsaTarget.rotY) < 1e-12);
+
+  // 6. Verify selecting a country after arbitrary manual drag rotation or at zoomed-in/zoomed-out camera distances
+  const arbitraryDragRot = { rotX: -0.61, rotY: 14.82 }; // Multiple full manual spins
+  for (const zoomZ of [3.1, 4.85, 6.6]) {
+    const camPos = { x: 0, y: 0.15, z: zoomZ };
+    for (const key of QUICK_FOCUS_COUNTRY_KEYS) {
+      const c = GLOBE_COUNTRY_CENTROIDS[key];
+      const targetAfterDrag = computeGlobeTransitionTarget(arbitraryDragRot, c.lat, c.lon, camPos);
+      assert.ok(
+        Math.abs(targetAfterDrag.rotY - arbitraryDragRot.rotY) <= Math.PI + 1e-9,
+        `Shortest path violated after manual drag for ${c.name} at zoom ${zoomZ}`
+      );
+      const diag = computeCountryAngleToCameraDeg(
+        c.lat,
+        c.lon,
+        targetAfterDrag.rotX,
+        targetAfterDrag.rotY,
+        camPos
+      );
+      assert.equal(diag.isFrontHemisphere, true);
+      assert.ok(
+        diag.angleDeg < 0.5,
+        `${c.name} failed camera alignment at zoom=${zoomZ}: angle=${diag.angleDeg.toFixed(4)}°`
+      );
+    }
+  }
+});
+
 

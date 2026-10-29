@@ -40,8 +40,139 @@ interface IndiaEconomicGlobeProps {
   onOpenMerchandiseTradePage?: () => void;
 }
 
-const INDIA_HUB_LAT = 20.59;
-const INDIA_HUB_LON = 78.96;
+export const INDIA_HUB_LAT = 20.59;
+export const INDIA_HUB_LON = 78.96;
+
+export const GLOBE_DEFAULT_CAMERA_POS = {
+  x: 0,
+  y: 0.15,
+  z: 4.85,
+} as const;
+
+export interface GlobeCountryCentroid {
+  id: string;
+  name: string;
+  shortName: string;
+  lat: number;
+  lon: number;
+  partnerId?: string;
+}
+
+export const GLOBE_COUNTRY_CENTROIDS: Record<string, GlobeCountryCentroid> = {
+  india: { id: 'india', name: 'India', shortName: 'India', lat: INDIA_HUB_LAT, lon: INDIA_HUB_LON },
+  usa: { id: 'usa', name: 'United States', shortName: 'USA', lat: 38.9, lon: -77.04, partnerId: 'usa' },
+  uk: { id: 'uk', name: 'United Kingdom', shortName: 'UK', lat: 51.51, lon: -0.13, partnerId: 'uk' },
+  brazil: { id: 'brazil', name: 'Brazil', shortName: 'Brazil', lat: -15.79, lon: -47.88, partnerId: 'brazil' },
+  japan: { id: 'japan', name: 'Japan', shortName: 'Japan', lat: 35.68, lon: 139.69, partnerId: 'japan' },
+  australia: {
+    id: 'australia',
+    name: 'Australia',
+    shortName: 'Australia',
+    lat: -35.28,
+    lon: 149.13,
+    partnerId: 'australia',
+  },
+  canada: { id: 'canada', name: 'Canada', shortName: 'Canada', lat: 56.13, lon: -106.35 },
+  russia: { id: 'russia', name: 'Russia', shortName: 'Russia', lat: 55.75, lon: 37.62, partnerId: 'russia' },
+  'new-zealand': {
+    id: 'new-zealand',
+    name: 'New Zealand',
+    shortName: 'New Zealand',
+    lat: -41.29,
+    lon: 174.78,
+  },
+  china: { id: 'china', name: 'China', shortName: 'China', lat: 39.9, lon: 116.4, partnerId: 'china' },
+  uae: { id: 'uae', name: 'United Arab Emirates', shortName: 'UAE', lat: 24.45, lon: 54.38, partnerId: 'uae' },
+  'saudi-arabia': {
+    id: 'saudi-arabia',
+    name: 'Saudi Arabia',
+    shortName: 'Saudi Arabia',
+    lat: 24.71,
+    lon: 46.68,
+    partnerId: 'saudi-arabia',
+  },
+  singapore: {
+    id: 'singapore',
+    name: 'Singapore',
+    shortName: 'Singapore',
+    lat: 1.35,
+    lon: 103.82,
+    partnerId: 'singapore',
+  },
+  indonesia: {
+    id: 'indonesia',
+    name: 'Indonesia',
+    shortName: 'Indonesia',
+    lat: -6.21,
+    lon: 106.85,
+    partnerId: 'indonesia',
+  },
+  'south-korea': {
+    id: 'south-korea',
+    name: 'South Korea',
+    shortName: 'South Korea',
+    lat: 37.57,
+    lon: 126.98,
+    partnerId: 'south-korea',
+  },
+  switzerland: {
+    id: 'switzerland',
+    name: 'Switzerland',
+    shortName: 'Switzerland',
+    lat: 46.95,
+    lon: 7.45,
+    partnerId: 'switzerland',
+  },
+  'south-africa': {
+    id: 'south-africa',
+    name: 'South Africa',
+    shortName: 'South Africa',
+    lat: -25.75,
+    lon: 28.19,
+    partnerId: 'south-africa',
+  },
+  mexico: { id: 'mexico', name: 'Mexico', shortName: 'Mexico', lat: 19.43, lon: -99.13, partnerId: 'mexico' },
+  'dateline-east': {
+    id: 'dateline-east',
+    name: 'Fiji (Date Line East +179.9°E)',
+    shortName: 'Fiji (+179.9°E)',
+    lat: -17.71,
+    lon: 179.9,
+  },
+  'dateline-west': {
+    id: 'dateline-west',
+    name: 'Samoa (Date Line West -179.9°W)',
+    shortName: 'Samoa (-179.9°W)',
+    lat: -13.76,
+    lon: -179.9,
+  },
+  'high-arctic': {
+    id: 'high-arctic',
+    name: 'Svalbard (High-Latitude North 78.22°N)',
+    shortName: 'Svalbard (78.2°N)',
+    lat: 78.22,
+    lon: 15.63,
+  },
+  'high-antarctic': {
+    id: 'high-antarctic',
+    name: 'Ross Shelf (High-Latitude South -77.85°S)',
+    shortName: 'Ross (-77.9°S)',
+    lat: -77.85,
+    lon: 166.67,
+  },
+};
+
+export const QUICK_FOCUS_COUNTRY_KEYS: string[] = [
+  'india',
+  'usa',
+  'uk',
+  'brazil',
+  'japan',
+  'australia',
+  'canada',
+  'russia',
+  'new-zealand',
+];
 
 const REGION_FILTERS: TradeRegionFilter[] = [
   'All',
@@ -62,36 +193,171 @@ const DISPLAY_MODES: { id: TradeRouteDisplayMode; label: string }[] = [
   { id: 'balance', label: 'Trade Balance' },
 ];
 
-// Convert geographic (lat, lon) in degrees to 3D sphere cartesian coordinates
-// Note: Three.js SphereGeometry UV mapping places lon = -180 at u=0 and lon = +180 at u=1
-function latLonToVec3(
+/**
+ * Normalize any longitude in degrees into [-180, 180].
+ */
+export function normalizeLongitudeDeg(lon: number): number {
+  const wrapped = ((((lon + 180) % 360) + 360) % 360) - 180;
+  return wrapped === -180 && lon > 0 ? 180 : wrapped;
+}
+
+/**
+ * Convert geographic (lat, lon) in degrees to 3D sphere Cartesian coordinates.
+ * Matches Three.js SphereGeometry UV mapping where lon = -180 is at u = 0 and lon = +180 is at u = 1:
+ *   x = -r * sin(phi) * cos(theta) = +r * cos(lat) * cos(lon)
+ *   y =  r * cos(phi)              = +r * sin(lat)
+ *   z =  r * sin(phi) * sin(theta) = -r * cos(lat) * sin(lon)
+ */
+export function latLonToVec3(
   lat: number,
   lon: number,
   radius: number,
   target = new THREE.Vector3()
 ): THREE.Vector3 {
-  const phi = (90 - lat) * (Math.PI / 180);
-  const theta = (lon + 180) * (Math.PI / 180);
+  const clampedLat = THREE.MathUtils.clamp(lat, -90, 90);
+  const normLon = normalizeLongitudeDeg(lon);
+  const phi = (90 - clampedLat) * (Math.PI / 180);
+  const theta = (normLon + 180) * (Math.PI / 180);
   const x = -(radius * Math.sin(phi) * Math.cos(theta));
   const z = radius * Math.sin(phi) * Math.sin(theta);
   const y = radius * Math.cos(phi);
   return target.set(x, y, z);
 }
 
-// Compute globe rotation (rotX, rotY) that brings a given (lat, lon) to face the camera (+Z axis)
-function computeTargetRotationForLatLon(lat: number, lon: number): { rotX: number; rotY: number } {
-  const theta = (lon + 180) * (Math.PI / 180);
-  // At rotY = theta - Math.PI / 2, the point lies on the +Z half of the YZ plane
-  const rotY = theta - Math.PI / 2;
-  const rotX = THREE.MathUtils.clamp((lat * Math.PI) / 180 * 0.72, -0.68, 0.78);
+/**
+ * Exact inverse mapping: convert a 3D point on the globe sphere back to geographic (lat, lon) in degrees.
+ */
+export function vec3ToLatLon(vec: THREE.Vector3): { lat: number; lon: number } {
+  const r = vec.length();
+  if (r < 1e-9) {
+    return { lat: 0, lon: 0 };
+  }
+  const sinLat = THREE.MathUtils.clamp(vec.y / r, -1, 1);
+  const lat = Math.asin(sinLat) * (180 / Math.PI);
+  const lon = Math.atan2(-vec.z, vec.x) * (180 / Math.PI);
+  return { lat, lon: normalizeLongitudeDeg(lon) };
+}
+
+/**
+ * Compute great-circle angular distance in degrees between two (lat, lon) coordinates.
+ */
+export function greatCircleDistanceDeg(
+  lat1: number,
+  lon1: number,
+  lat2: number,
+  lon2: number
+): number {
+  const v1 = latLonToVec3(lat1, lon1, 1).normalize();
+  const v2 = latLonToVec3(lat2, lon2, 1).normalize();
+  const dot = THREE.MathUtils.clamp(v1.dot(v2), -1, 1);
+  return Math.acos(dot) * (180 / Math.PI);
+}
+
+/**
+ * Compute globe Euler rotation (rotX, rotY) with order 'XYZ' that rotates a given (lat, lon)
+ * so its outward surface normal points directly at the camera position (default (0, 0.15, 4.85)).
+ *
+ * Mathematical derivation:
+ * 1. Local point: x = -r*cos(lat)*cos(theta), y = r*sin(lat), z = r*cos(lat)*sin(theta).
+ * 2. Under R_y(rotY):
+ *      x_1 = -r*cos(lat)*cos(theta + rotY)
+ *      z_1 = +r*cos(lat)*sin(theta + rotY)
+ *    Setting theta + rotY = PI / 2 => rotY = PI / 2 - theta guarantees x_1 = 0 and z_1 = +r*cos(lat) > 0.
+ * 3. Under R_x(rotX) applied after R_y(rotY) (Three.js 'XYZ' matrix order M = R_x(rotX) * R_y(rotY)):
+ *      y_2 = r*sin(lat_rad - rotX)
+ *      z_2 = r*cos(lat_rad - rotX)
+ *    Aligning (0, y_2, z_2) with camera direction (0, sin(alpha_cam), cos(alpha_cam)) where
+ *    alpha_cam = atan2(cameraPos.y, cameraPos.z) yields:
+ *      rotX = lat_rad - alpha_cam.
+ */
+export function computeTargetRotationForLatLon(
+  lat: number,
+  lon: number,
+  cameraPos: { x: number; y: number; z: number } = GLOBE_DEFAULT_CAMERA_POS
+): { rotX: number; rotY: number } {
+  const clampedLat = THREE.MathUtils.clamp(lat, -89.5, 89.5);
+  const normLon = normalizeLongitudeDeg(lon);
+  const theta = (normLon + 180) * (Math.PI / 180);
+  const rotY = Math.PI / 2 - theta;
+
+  const latRad = clampedLat * (Math.PI / 180);
+  const cameraElevationRad = Math.atan2(cameraPos.y, cameraPos.z);
+  const maxTiltRad = Math.PI / 2 - 0.02;
+  const rotX = THREE.MathUtils.clamp(latRad - cameraElevationRad, -maxTiltRad, maxTiltRad);
+
   return { rotX, rotY };
 }
 
-// Normalize angle difference so rotation always takes the shortest spherical path
-function shortestAngleTarget(currentAngle: number, desiredAngle: number): number {
+/**
+ * Normalize angle difference so rotation always takes the shortest spherical path (|diff| <= PI).
+ */
+export function shortestAngleTarget(currentAngle: number, desiredAngle: number): number {
   const twoPi = Math.PI * 2;
   const diff = ((((desiredAngle - currentAngle) % twoPi) + twoPi + Math.PI) % twoPi) - Math.PI;
   return currentAngle + diff;
+}
+
+/**
+ * Compute the shortest-path target globe rotation from the globe's current instantaneous rotation
+ * to face a target country at (targetLat, targetLon).
+ */
+export function computeGlobeTransitionTarget(
+  currentGlobeRot: { rotX: number; rotY: number },
+  targetLat: number,
+  targetLon: number,
+  cameraPos: { x: number; y: number; z: number } = GLOBE_DEFAULT_CAMERA_POS
+): { rotX: number; rotY: number } {
+  const desired = computeTargetRotationForLatLon(targetLat, targetLon, cameraPos);
+  return {
+    rotX: desired.rotX,
+    rotY: shortestAngleTarget(currentGlobeRot.rotY, desired.rotY),
+  };
+}
+
+/**
+ * Compute the world-space outward surface normal of a geographic coordinate (lat, lon)
+ * when the globe has rotation (rotX, rotY) in Three.js 'XYZ' Euler order.
+ */
+export function getCountryWorldNormal(
+  lat: number,
+  lon: number,
+  rotX: number,
+  rotY: number
+): THREE.Vector3 {
+  const localNormal = latLonToVec3(lat, lon, 1).normalize();
+  const euler = new THREE.Euler(rotX, rotY, 0, 'XYZ');
+  return localNormal.applyEuler(euler).normalize();
+}
+
+/**
+ * Diagnostic helper: compute the angle (in degrees) and dot product between a country's
+ * rotated world-space outward surface normal and the camera direction vector.
+ * When properly aligned, angleDeg is ~0° and dotProduct is ~1.0 (strictly > 0 on the visible front hemisphere).
+ */
+export function computeCountryAngleToCameraDeg(
+  lat: number,
+  lon: number,
+  rotX: number,
+  rotY: number,
+  cameraPos: { x: number; y: number; z: number } = GLOBE_DEFAULT_CAMERA_POS
+): {
+  angleDeg: number;
+  dotProduct: number;
+  isFrontHemisphere: boolean;
+  worldNormal: THREE.Vector3;
+  cameraDirection: THREE.Vector3;
+} {
+  const worldNormal = getCountryWorldNormal(lat, lon, rotX, rotY);
+  const cameraDirection = new THREE.Vector3(cameraPos.x, cameraPos.y, cameraPos.z).normalize();
+  const dotProduct = THREE.MathUtils.clamp(worldNormal.dot(cameraDirection), -1, 1);
+  const angleDeg = Math.acos(dotProduct) * (180 / Math.PI);
+  return {
+    angleDeg,
+    dotProduct,
+    isFrontHemisphere: dotProduct > 0 && worldNormal.z > 0,
+    worldNormal,
+    cameraDirection,
+  };
 }
 
 // Create a spherical great-circle elevated CubicBezierCurve3 between two surface points
@@ -695,12 +961,13 @@ export const IndiaEconomicGlobe: React.FC<IndiaEconomicGlobeProps> = ({
   const [displayMode, setDisplayMode] = useState<TradeRouteDisplayMode>('all');
   const [searchQuery, setSearchQuery] = useState<string>('');
   const [selectedPartnerId, setSelectedPartnerId] = useState<string | null>('usa');
+  const [focusedCountryKey, setFocusedCountryKey] = useState<string>('india');
   const [hoveredPartnerId, setHoveredPartnerId] = useState<string | null>(null);
   const [hoverScreenPos, setHoverScreenPos] = useState<{ x: number; y: number } | null>(null);
 
   // Camera & Animation Controls State
   const [isRotating, setIsRotating] = useState<boolean>(true);
-  const [zoomDistance, setZoomDistance] = useState<number>(4.85);
+  const [zoomDistance, setZoomDistance] = useState<number>(GLOBE_DEFAULT_CAMERA_POS.z);
   const [useStaticFallback, setUseStaticFallback] = useState<boolean>(false);
   const [webglSupported, setWebglSupported] = useState<boolean>(true);
   const [mobileSheetOpen, setMobileSheetOpen] = useState<boolean>(true);
@@ -713,13 +980,18 @@ export const IndiaEconomicGlobe: React.FC<IndiaEconomicGlobeProps> = ({
   const displayModeRef = useRef<TradeRouteDisplayMode>(displayMode);
   const isRotatingRef = useRef<boolean>(isRotating);
   const zoomDistanceRef = useRef<number>(zoomDistance);
+  const cancelDragRef = useRef<() => void>(() => {});
 
-  // Imperative camera rotation target ref (allowing click-to-focus on any country or Reset to India)
+  // Imperative camera rotation target ref and instantaneous globe orientation ref
   const INITIAL_INDIA_ROT = useMemo(
-    () => computeTargetRotationForLatLon(INDIA_HUB_LAT, INDIA_HUB_LON),
+    () => computeTargetRotationForLatLon(INDIA_HUB_LAT, INDIA_HUB_LON, GLOBE_DEFAULT_CAMERA_POS),
     []
   );
   const cameraTargetRotRef = useRef<{ rotX: number; rotY: number }>({
+    rotX: INITIAL_INDIA_ROT.rotX,
+    rotY: INITIAL_INDIA_ROT.rotY,
+  });
+  const currentGlobeRotRef = useRef<{ rotX: number; rotY: number }>({
     rotX: INITIAL_INDIA_ROT.rotX,
     rotY: INITIAL_INDIA_ROT.rotY,
   });
@@ -812,51 +1084,83 @@ export const IndiaEconomicGlobe: React.FC<IndiaEconomicGlobeProps> = ({
     [allPartners, hoveredPartnerId]
   );
 
-  // Smoothly focus camera on a selected partner (orienting between India and the partner)
+  // Smoothly rotate the globe directly to any geographic (lat, lon) so that coordinate faces the camera
+  const focusGlobeOnCoordinates = useCallback((targetLat: number, targetLon: number) => {
+    cancelDragRef.current();
+    setIsRotating(false);
+    isRotatingRef.current = false;
+
+    const nextTarget = computeGlobeTransitionTarget(
+      currentGlobeRotRef.current,
+      targetLat,
+      targetLon,
+      {
+        x: GLOBE_DEFAULT_CAMERA_POS.x,
+        y: GLOBE_DEFAULT_CAMERA_POS.y,
+        z: zoomDistanceRef.current,
+      }
+    );
+    cameraTargetRotRef.current = nextTarget;
+  }, []);
+
+  // Smoothly focus camera directly on a selected partner's true geographic coordinates
   const handleSelectPartner = useCallback(
     (partner: GlobalTradePartnerNode) => {
       setSelectedPartnerId(partner.id);
-      setIsRotating(false);
-      isRotatingRef.current = false;
-
-      // Focus camera slightly weighted toward the destination partner while keeping the arc from India visible
-      const focusLat = partner.lat * 0.65 + INDIA_HUB_LAT * 0.35;
-      // Handle dateline wrap when averaging longitude with India (78.96E)
-      let deltaLon = partner.lon - INDIA_HUB_LON;
-      if (deltaLon > 180) deltaLon -= 360;
-      if (deltaLon < -180) deltaLon += 360;
-      const focusLon = INDIA_HUB_LON + deltaLon * 0.58;
-
-      const desired = computeTargetRotationForLatLon(focusLat, focusLon);
-      cameraTargetRotRef.current = {
-        rotX: desired.rotX,
-        rotY: shortestAngleTarget(cameraTargetRotRef.current.rotY, desired.rotY),
-      };
+      setFocusedCountryKey(partner.id);
+      focusGlobeOnCoordinates(partner.lat, partner.lon);
     },
-    []
+    [focusGlobeOnCoordinates]
   );
 
-  // Reset camera to India-centered overview
+  // Reset camera to India-centered overview (20.59°N, 78.96°E) and hold focus on India
   const handleResetToIndia = useCallback(() => {
+    cancelDragRef.current();
     setSelectedPartnerId(null);
+    setFocusedCountryKey('india');
     setHoveredPartnerId(null);
-    cameraTargetRotRef.current = {
-      rotX: INITIAL_INDIA_ROT.rotX,
-      rotY: shortestAngleTarget(cameraTargetRotRef.current.rotY, INITIAL_INDIA_ROT.rotY),
-    };
-    setZoomDistance(4.85);
-    setIsRotating(true);
-    isRotatingRef.current = true;
-  }, [INITIAL_INDIA_ROT]);
+    setHoverScreenPos(null);
+    setIsRotating(false);
+    isRotatingRef.current = false;
+    setZoomDistance(GLOBE_DEFAULT_CAMERA_POS.z);
+    zoomDistanceRef.current = GLOBE_DEFAULT_CAMERA_POS.z;
 
-  //When region filter changes, if current selected partner is not in filtered list, focus first matching partner
+    cameraTargetRotRef.current = computeGlobeTransitionTarget(
+      currentGlobeRotRef.current,
+      INDIA_HUB_LAT,
+      INDIA_HUB_LON,
+      GLOBE_DEFAULT_CAMERA_POS
+    );
+  }, []);
+
+  // Focus any country by key from GLOBE_COUNTRY_CENTROIDS or partner list
+  const handleFocusCountryByKey = useCallback(
+    (countryKey: string) => {
+      if (countryKey === 'india') {
+        handleResetToIndia();
+        return;
+      }
+      const centroid = GLOBE_COUNTRY_CENTROIDS[countryKey];
+      const matchingPartner = partnersRef.current.find(
+        (p) => p.id === countryKey || (centroid?.partnerId && p.id === centroid.partnerId)
+      );
+      if (matchingPartner) {
+        handleSelectPartner(matchingPartner);
+        return;
+      }
+      if (centroid) {
+        setFocusedCountryKey(countryKey);
+        focusGlobeOnCoordinates(centroid.lat, centroid.lon);
+      }
+    },
+    [focusGlobeOnCoordinates, handleResetToIndia, handleSelectPartner]
+  );
+
+  // When region filter changes, if current selected partner is not in filtered list, focus first matching partner
   const handleSelectRegionFilter = (nextFilter: TradeRegionFilter) => {
     setRegionFilter(nextFilter);
     if (nextFilter === 'All') {
-      cameraTargetRotRef.current = {
-        rotX: INITIAL_INDIA_ROT.rotX,
-        rotY: shortestAngleTarget(cameraTargetRotRef.current.rotY, INITIAL_INDIA_ROT.rotY),
-      };
+      handleResetToIndia();
       return;
     }
     const matching = allPartners.filter((p) => matchesTradeRegionFilter(p, nextFilter));
@@ -921,7 +1225,11 @@ export const IndiaEconomicGlobe: React.FC<IndiaEconomicGlobeProps> = ({
     pmremGenerator.dispose();
 
     const camera = new THREE.PerspectiveCamera(38, width / height, 0.1, 120);
-    camera.position.set(0, 0.15, zoomDistanceRef.current);
+    camera.position.set(
+      GLOBE_DEFAULT_CAMERA_POS.x,
+      GLOBE_DEFAULT_CAMERA_POS.y,
+      zoomDistanceRef.current
+    );
     camera.lookAt(0, 0, 0);
 
     // 2. Studio Lighting Rig (Warm key light + Cool hemisphere fill + Emerald/Cyan rim lights)
@@ -963,8 +1271,9 @@ export const IndiaEconomicGlobe: React.FC<IndiaEconomicGlobeProps> = ({
     const starField = new THREE.Points(starGeo, starMat);
     scene.add(starField);
 
-    // 4. Root Globe Group
+    // 4. Root Globe Group (Explicit 'XYZ' Euler order so R_y spins longitude first, R_x pitches latitude toward camera)
     const globeGroup = new THREE.Group();
+    globeGroup.rotation.order = 'XYZ';
     scene.add(globeGroup);
 
     const GLOBE_RADIUS = 1.66;
@@ -1040,7 +1349,6 @@ export const IndiaEconomicGlobe: React.FC<IndiaEconomicGlobeProps> = ({
     });
     const indiaCoreMesh = new THREE.Mesh(indiaCoreGeo, indiaCoreMat);
     indiaHubGroup.add(indiaCoreMesh);
-    globeGroup.add(indiaHubGroup);
 
     // Part E: Partner Beacons, Curved 3D Trade Arcs, and Travelling Particles
     interface RouteVisualObject {
@@ -1064,6 +1372,16 @@ export const IndiaEconomicGlobe: React.FC<IndiaEconomicGlobeProps> = ({
     const sharedMarkerRingGeo = new THREE.RingGeometry(0.032, 0.048, 20);
     const sharedHitGeo = new THREE.SphereGeometry(0.085, 10, 10);
     const sharedParticleGeo = new THREE.SphereGeometry(0.015, 8, 8);
+
+    // Interactive hit-proxy sphere for the India Hub beacon itself
+    const indiaHitMat = new THREE.MeshBasicMaterial({ visible: false });
+    const indiaHitMesh = new THREE.Mesh(sharedHitGeo, indiaHitMat);
+    indiaHitMesh.userData.countryKey = 'india';
+    indiaHitMesh.userData.lat = INDIA_HUB_LAT;
+    indiaHitMesh.userData.lon = INDIA_HUB_LON;
+    indiaHubGroup.add(indiaHitMesh);
+    hitMeshes.push(indiaHitMesh);
+    globeGroup.add(indiaHubGroup);
 
     allPartners.forEach((partner, idx) => {
       const hexColor = getRouteHexColor(partner, displayModeRef.current);
@@ -1097,6 +1415,8 @@ export const IndiaEconomicGlobe: React.FC<IndiaEconomicGlobeProps> = ({
       const hitMat = new THREE.MeshBasicMaterial({ visible: false });
       const hitMesh = new THREE.Mesh(sharedHitGeo, hitMat);
       hitMesh.userData.partnerId = partner.id;
+      hitMesh.userData.lat = partner.lat;
+      hitMesh.userData.lon = partner.lon;
       markerGroup.add(hitMesh);
       hitMeshes.push(hitMesh);
 
@@ -1163,9 +1483,11 @@ export const IndiaEconomicGlobe: React.FC<IndiaEconomicGlobeProps> = ({
       });
     });
 
-    // Orient globe initially toward India
+    // Orient globe initially toward current target
     globeGroup.rotation.x = cameraTargetRotRef.current.rotX;
     globeGroup.rotation.y = cameraTargetRotRef.current.rotY;
+    currentGlobeRotRef.current.rotX = globeGroup.rotation.x;
+    currentGlobeRotRef.current.rotY = globeGroup.rotation.y;
 
     if (!isSoftwareGl) {
       renderer.compile(scene, camera);
@@ -1192,11 +1514,54 @@ export const IndiaEconomicGlobe: React.FC<IndiaEconomicGlobeProps> = ({
     let prevY = 0;
     let lastRaycastTime = 0;
 
+    cancelDragRef.current = () => {
+      isDragging = false;
+      dragDistance = 0;
+    };
+
     const updatePointerNdc = (clientX: number, clientY: number) => {
       const rect = renderer.domElement.getBoundingClientRect();
       pointerNdc.x = ((clientX - rect.left) / rect.width) * 2 - 1;
       pointerNdc.y = -((clientY - rect.top) / rect.height) * 2 + 1;
       return rect;
+    };
+
+    // Helper: pick only front-hemisphere marker hits that are not occluded behind the solid Earth sphere
+    const findFrontHemisphereMarkerHit = () => {
+      const earthHits = raycaster.intersectObject(earthMesh, false);
+      const maxAllowedDist = earthHits.length > 0 ? earthHits[0].distance + 0.08 : Infinity;
+      const intersects = raycaster.intersectObjects(hitMeshes, false);
+
+      return {
+        earthHit: earthHits[0] || null,
+        markerHit:
+          intersects.find((item) => {
+            if (item.distance > maxAllowedDist) return false;
+            const hitLat = item.object.userData.lat;
+            const hitLon = item.object.userData.lon;
+            if (typeof hitLat === 'number' && typeof hitLon === 'number') {
+              const diag = computeCountryAngleToCameraDeg(
+                hitLat,
+                hitLon,
+                globeGroup.rotation.x,
+                globeGroup.rotation.y,
+                {
+                  x: camera.position.x,
+                  y: camera.position.y,
+                  z: camera.position.z,
+                }
+              );
+              if (!diag.isFrontHemisphere || diag.dotProduct < 0.05) {
+                return false;
+              }
+            }
+            if (item.object.userData.countryKey === 'india') {
+              return true;
+            }
+            const pid = item.object.userData.partnerId;
+            return Boolean(pid && visibleIdsRef.current.has(pid));
+          }) || null,
+      };
     };
 
     const onPointerDown = (e: PointerEvent) => {
@@ -1213,16 +1578,23 @@ export const IndiaEconomicGlobe: React.FC<IndiaEconomicGlobeProps> = ({
         dragDistance += Math.abs(dx) + Math.abs(dy);
         prevX = e.clientX;
         prevY = e.clientY;
+
+        if (dragDistance >= 4 && isRotatingRef.current) {
+          isRotatingRef.current = false;
+          setIsRotating(false);
+        }
+
+        const maxTilt = Math.PI / 2 - 0.04;
         cameraTargetRotRef.current.rotY += dx * 0.0065;
         cameraTargetRotRef.current.rotX = THREE.MathUtils.clamp(
           cameraTargetRotRef.current.rotX + dy * 0.005,
-          -0.72,
-          0.78
+          -maxTilt,
+          maxTilt
         );
         return;
       }
 
-      // Throttled hover raycast on partner markers
+      // Throttled hover raycast on front-hemisphere partner markers
       const now = performance.now();
       if (now - lastRaycastTime < 45) return;
       lastRaycastTime = now;
@@ -1242,14 +1614,10 @@ export const IndiaEconomicGlobe: React.FC<IndiaEconomicGlobeProps> = ({
       }
 
       raycaster.setFromCamera(pointerNdc, camera);
-      const intersects = raycaster.intersectObjects(hitMeshes, false);
-      const hit = intersects.find((item) => {
-        const pid = item.object.userData.partnerId;
-        return pid && visibleIdsRef.current.has(pid);
-      });
+      const { markerHit } = findFrontHemisphereMarkerHit();
 
-      if (hit) {
-        const pid = hit.object.userData.partnerId as string;
+      if (markerHit && markerHit.object.userData.partnerId) {
+        const pid = markerHit.object.userData.partnerId as string;
         setHoveredPartnerId(pid);
         setHoverScreenPos({
           x: e.clientX - rect.left,
@@ -1269,20 +1637,66 @@ export const IndiaEconomicGlobe: React.FC<IndiaEconomicGlobeProps> = ({
       if (!isDragging) return;
       isDragging = false;
 
-      // If pointer barely moved, treat as a click and check if a partner beacon was clicked
+      // If pointer barely moved, treat as a click and check front-hemisphere marker or country surface hit
       if (dragDistance < 6) {
         updatePointerNdc(e.clientX, e.clientY);
         raycaster.setFromCamera(pointerNdc, camera);
-        const intersects = raycaster.intersectObjects(hitMeshes, false);
-        const hit = intersects.find((item) => {
-          const pid = item.object.userData.partnerId;
-          return pid && visibleIdsRef.current.has(pid);
-        });
-        if (hit) {
-          const pid = hit.object.userData.partnerId as string;
+        const { earthHit, markerHit } = findFrontHemisphereMarkerHit();
+
+        if (markerHit) {
+          if (markerHit.object.userData.countryKey === 'india') {
+            handleResetToIndia();
+            return;
+          }
+          const pid = markerHit.object.userData.partnerId as string;
           const found = partnersRef.current.find((p) => p.id === pid);
           if (found) {
             handleSelectPartner(found);
+            return;
+          }
+        }
+
+        // If clicked directly on the 3D globe surface, convert 3D hit point to local (lat, lon)
+        if (earthHit) {
+          const localPoint = globeGroup.worldToLocal(earthHit.point.clone());
+          const { lat: clickedLat, lon: clickedLon } = vec3ToLatLon(localPoint);
+
+          // 1. Check if click is within 12° of India Hub
+          if (greatCircleDistanceDeg(clickedLat, clickedLon, INDIA_HUB_LAT, INDIA_HUB_LON) <= 12) {
+            handleResetToIndia();
+            return;
+          }
+
+          // 2. Check if click is within 14° of any visible trade partner
+          let closestPartner: GlobalTradePartnerNode | null = null;
+          let minPartnerDist = 14;
+          partnersRef.current.forEach((p) => {
+            if (!visibleIdsRef.current.has(p.id)) return;
+            const d = greatCircleDistanceDeg(clickedLat, clickedLon, p.lat, p.lon);
+            if (d < minPartnerDist) {
+              minPartnerDist = d;
+              closestPartner = p;
+            }
+          });
+
+          if (closestPartner) {
+            handleSelectPartner(closestPartner);
+            return;
+          }
+
+          // 3. Check if click is within 16° of any canonical country centroid (e.g. Canada, New Zealand)
+          let closestCentroid: GlobeCountryCentroid | null = null;
+          let minCentroidDist = 16;
+          Object.values(GLOBE_COUNTRY_CENTROIDS).forEach((c) => {
+            const d = greatCircleDistanceDeg(clickedLat, clickedLon, c.lat, c.lon);
+            if (d < minCentroidDist) {
+              minCentroidDist = d;
+              closestCentroid = c;
+            }
+          });
+
+          if (closestCentroid) {
+            handleFocusCountryByKey((closestCentroid as GlobeCountryCentroid).id);
           }
         }
       }
@@ -1360,12 +1774,16 @@ export const IndiaEconomicGlobe: React.FC<IndiaEconomicGlobeProps> = ({
           delta
         );
 
+        currentGlobeRotRef.current.rotX = globeGroup.rotation.x;
+        currentGlobeRotRef.current.rotY = globeGroup.rotation.y;
+
         camera.position.z = THREE.MathUtils.damp(
           camera.position.z,
           zoomDistanceRef.current,
           6,
           delta
         );
+        camera.lookAt(0, 0, 0);
 
         // Update route colors, visibility, selection dimming, and travelling particles
         const activeId = selectedIdRef.current;
@@ -1461,6 +1879,11 @@ export const IndiaEconomicGlobe: React.FC<IndiaEconomicGlobeProps> = ({
       atmoMat.dispose();
       indiaTubeGeo.dispose();
       indiaTubeMat.dispose();
+      indiaRingGeo.dispose();
+      indiaRingMat.dispose();
+      indiaCoreGeo.dispose();
+      indiaCoreMat.dispose();
+      indiaHitMat.dispose();
       sharedMarkerCoreGeo.dispose();
       sharedMarkerRingGeo.dispose();
       sharedHitGeo.dispose();
@@ -1469,7 +1892,7 @@ export const IndiaEconomicGlobe: React.FC<IndiaEconomicGlobeProps> = ({
       starMat.dispose();
       renderer.dispose();
     };
-  }, [allPartners, handleSelectPartner, useStaticFallback]);
+  }, [allPartners, handleFocusCountryByKey, handleResetToIndia, handleSelectPartner, useStaticFallback]);
 
   const showFallback = !webglSupported || useStaticFallback;
 
@@ -1644,6 +2067,35 @@ export const IndiaEconomicGlobe: React.FC<IndiaEconomicGlobeProps> = ({
           </div>
         </div>
 
+        {/* Quick Country Focus Bar (Direct 1-Click Orientation to Benchmark Countries) */}
+        <div className="flex items-center gap-1.5 overflow-x-auto pb-0.5" aria-label="Quick country focus controls">
+          <span className="text-[11px] font-mono-tabular text-slate-400 shrink-0 mr-1">
+            Focus Country:
+          </span>
+          {QUICK_FOCUS_COUNTRY_KEYS.map((cKey) => {
+            const cInfo = GLOBE_COUNTRY_CENTROIDS[cKey];
+            if (!cInfo) return null;
+            const isFocused = focusedCountryKey === cKey;
+            return (
+              <button
+                key={cKey}
+                type="button"
+                aria-label={`Focus globe on ${cInfo.name}`}
+                onClick={() => handleFocusCountryByKey(cKey)}
+                className={`px-2.5 py-1 rounded-md text-[11px] font-medium transition-colors whitespace-nowrap shrink-0 cursor-pointer ${
+                  isFocused
+                    ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/50'
+                    : theme === 'dark'
+                    ? 'bg-[#0B1528] text-slate-300 hover:text-white border border-slate-800/90'
+                    : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
+                }`}
+              >
+                {cInfo.shortName}
+              </button>
+            );
+          })}
+        </div>
+
         {/* Error Banner if dataset failed to load */}
         {errorMsg && (
           <div className="rounded-xl border border-amber-500/40 bg-amber-950/20 p-3 flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-xs text-amber-200">
@@ -1670,9 +2122,16 @@ export const IndiaEconomicGlobe: React.FC<IndiaEconomicGlobeProps> = ({
           <div className="relative w-full h-[460px] sm:h-[560px] lg:h-[620px] rounded-xl border border-slate-800/90 bg-[#040915] overflow-hidden select-none flex flex-col justify-between">
             {/* Top Bar Inside Globe Viewport: Telemetry & Camera Controls */}
             <div className="relative z-10 flex flex-wrap items-center justify-between gap-2 px-4 pt-3.5 pointer-events-none">
-              <div className="flex flex-wrap items-center gap-2 text-xs text-slate-300 font-mono-tabular bg-[#081226]/90 border border-slate-800 px-3 py-1.5 rounded-lg">
+              <div className="flex flex-wrap items-center gap-2 text-xs text-slate-300 font-mono-tabular bg-[#081226]/90 border border-slate-800 px-3 py-1.5 rounded-lg pointer-events-auto">
                 <Compass className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
-                <span className="font-semibold text-emerald-400">India Hub: 20.59°N, 78.96°E</span>
+                <button
+                  type="button"
+                  onClick={handleResetToIndia}
+                  className="font-semibold text-emerald-400 hover:underline cursor-pointer"
+                  title="Focus globe on India (20.59°N, 78.96°E)"
+                >
+                  India Hub: 20.59°N, 78.96°E
+                </button>
                 <span aria-hidden="true">·</span>
                 <span>
                   Showing {filteredPartners.length} of {allPartners.length} Connections

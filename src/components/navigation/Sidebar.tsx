@@ -747,13 +747,17 @@ export const Sidebar: React.FC<SidebarProps> = ({
           className={`hidden lg:block fixed -translate-y-1/2 z-50 pointer-events-none px-3 py-2 rounded-lg border shadow-xl max-w-[240px] ${
             theme === 'dark'
               ? 'bg-[#0B1528] border-slate-700/90 text-slate-100'
-              : 'bg-slate-900 border-slate-800 text-white'
+              : 'bg-white border-[#CBD5E1] text-[#172033]'
           }`}
         >
           <div className="text-[10px] font-semibold tracking-wider text-emerald-400">
             {activeTooltip.groupTitle}
           </div>
-          <div className="text-xs font-semibold leading-snug mt-0.5">
+          <div
+            className={`text-xs font-semibold leading-snug mt-0.5 ${
+              theme === 'dark' ? 'text-white' : 'text-[#0F172A]'
+            }`}
+          >
             {activeTooltip.label}
           </div>
           <div className="text-[11px] text-slate-300 leading-snug mt-0.5">

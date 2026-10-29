@@ -66,6 +66,7 @@ import { TopBar } from './components/navigation/TopBar';
 import { LiveMarketTickerStrip } from './components/visualizations/LiveMarketTickerStrip';
 import { OverviewPage } from './pages/OverviewPage';
 import { ErrorBoundary } from './components/common/ErrorBoundary';
+import { syncPageSeoMetadata } from './utils/seoMetadata';
 
 const GdpGrowthPage = React.lazy(() =>
   import('./pages/GdpGrowthPage').then((m) => ({ default: m.GdpGrowthPage }))
@@ -118,7 +119,14 @@ export default function App() {
     }
   });
   const [mobileMenuOpen, setMobileMenuOpen] = useState<boolean>(false);
-  const [theme, setTheme] = useState<'dark' | 'light'>('dark');
+  const [theme, setTheme] = useState<'dark' | 'light'>(() => {
+    try {
+      const saved = window.localStorage.getItem('arthniti_theme');
+      return saved === 'light' || saved === 'dark' ? saved : 'dark';
+    } catch {
+      return 'dark';
+    }
+  });
   const shouldReduceMotion = useReducedMotion();
 
   useEffect(() => {
@@ -987,14 +995,28 @@ export default function App() {
     const htmlEl = document.documentElement;
     if (theme === 'dark') {
       htmlEl.classList.add('dark');
+      htmlEl.classList.remove('light');
+      htmlEl.setAttribute('data-theme', 'dark');
       document.body.style.backgroundColor = '#060B16';
       document.body.style.color = '#F8FAFC';
     } else {
       htmlEl.classList.remove('dark');
+      htmlEl.classList.add('light');
+      htmlEl.setAttribute('data-theme', 'light');
       document.body.style.backgroundColor = '#F8FAFC';
-      document.body.style.color = '#0F172A';
+      document.body.style.color = '#172033';
+    }
+    try {
+      window.localStorage.setItem('arthniti_theme', theme);
+    } catch {
+      // Ignore storage quota / privacy mode errors
     }
   }, [theme]);
+
+  // Synchronize page-specific title, meta description, OpenGraph, Twitter Card, and canonical URL
+  useEffect(() => {
+    syncPageSeoMetadata(activePage);
+  }, [activePage]);
 
   // Synchronize browser Back/Forward (popstate) and hashchange events with activePage & focusedIndicatorId
   useEffect(() => {
@@ -1309,6 +1331,7 @@ export default function App() {
               handleFetchEconomistBites({ forceRefresh: false, simulateError: simErr })
             }
             onNavigate={handleSelectPage}
+            theme={theme}
           />
         );
       case 'comparisons':
@@ -1339,7 +1362,7 @@ export default function App() {
       className={`min-h-screen flex transition-colors ${
         theme === 'dark'
           ? 'bg-[#060B16] text-[#F8FAFC]'
-          : 'bg-[#F8FAFC] text-[#0F172A]'
+          : 'bg-[#F8FAFC] text-[#172033]'
       }`}
     >
       {/* WCAG 2.2 AA Skip to Main Content Keyboard Link */}
@@ -1539,44 +1562,51 @@ export default function App() {
           className={`mt-auto px-4 sm:px-6 lg:px-8 py-5 border-t text-xs ${
             theme === 'dark'
               ? 'border-slate-800/80 text-slate-400 bg-[#060B16]'
-              : 'border-slate-200 text-slate-500 bg-white'
+              : 'border-[#CBD5E1] text-[#475569] bg-white'
           }`}
         >
-          <div className="max-w-[1440px] mx-auto flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-            <div className="flex items-center gap-2">
-              <span className="font-display font-bold text-emerald-400">ARTHNITI</span>
-              <span aria-hidden="true">·</span>
-              <span>Understand the Economy. Discover the Data.</span>
+          <div className="max-w-[1440px] mx-auto space-y-2.5">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+              <div className="flex items-center gap-2">
+                <span className="font-display font-bold text-emerald-400">ARTHNITI</span>
+                <span aria-hidden="true">·</span>
+                <span>Understand the Economy. Discover the Data.</span>
+              </div>
+              <div className="flex flex-wrap items-center gap-4">
+                <button
+                  type="button"
+                  onClick={() => handleSelectPage('economist-bites')}
+                  className="hover:text-emerald-400 transition-colors cursor-pointer"
+                >
+                  Economists&apos; Latest Bites
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleSelectPage('data-sources')}
+                  className="hover:text-emerald-400 transition-colors cursor-pointer"
+                >
+                  Methodology &amp; Data Sources
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleSelectPage('comparisons')}
+                  className="hover:text-emerald-400 transition-colors cursor-pointer"
+                >
+                  Comparison Engine
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleSelectPage('about')}
+                  className="hover:text-emerald-400 transition-colors cursor-pointer"
+                >
+                  About Us &amp; Disclosures
+                </button>
+              </div>
             </div>
-            <div className="flex flex-wrap items-center gap-4">
-              <button
-                type="button"
-                onClick={() => handleSelectPage('economist-bites')}
-                className="hover:text-emerald-400 transition-colors cursor-pointer"
-              >
-                Economists&apos; Latest Bites
-              </button>
-              <button
-                type="button"
-                onClick={() => handleSelectPage('data-sources')}
-                className="hover:text-emerald-400 transition-colors cursor-pointer"
-              >
-                Methodology &amp; Data Sources
-              </button>
-              <button
-                type="button"
-                onClick={() => handleSelectPage('comparisons')}
-                className="hover:text-emerald-400 transition-colors cursor-pointer"
-              >
-                Comparison Engine
-              </button>
-              <button
-                type="button"
-                onClick={() => handleSelectPage('about')}
-                className="hover:text-emerald-400 transition-colors cursor-pointer"
-              >
-                About Us
-              </button>
+            <div className="text-[11px] leading-relaxed text-slate-400 border-t border-slate-800/40 pt-2">
+              <span>
+                <strong>Educational &amp; Research Disclaimer:</strong> ArthNiti presents verified public macroeconomic statistics (MoSPI, NSO, RBI DBIE, FBIL, PPAC, MoCI TRADESTAT), delayed exchange indices (1–5 min exchange delay), and attributed economic research for educational and analytical purposes only. Nothing on this platform constitutes investment, financial, legal, or tax advice. Zero personal data or tracking cookies are collected.
+              </span>
             </div>
           </div>
         </footer>

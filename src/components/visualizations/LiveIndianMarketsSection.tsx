@@ -495,7 +495,13 @@ export const LiveIndianMarketsSection: React.FC<LiveIndianMarketsSectionProps> =
                             if (!active || !payload || !payload.length) return null;
                             const pt = payload[0].payload;
                             return (
-                              <div className="rounded-lg border border-slate-700 bg-[#060B16]/95 px-2.5 py-1.5 text-[11px] font-mono-tabular shadow-md">
+                              <div
+                                className={`rounded-lg border px-2.5 py-1.5 text-[11px] font-mono-tabular shadow-md ${
+                                  theme === 'dark'
+                                    ? 'border-slate-700 bg-[#060B16]/95 text-slate-100'
+                                    : 'border-[#CBD5E1] bg-white text-[#172033]'
+                                }`}
+                              >
                                 <div className="text-slate-400">{pt.timeLabelIst} IST</div>
                                 <div className="font-semibold text-white">
                                   {formatIndianIndexNumber(pt.price)}
@@ -672,17 +678,21 @@ export const LiveIndianMarketsSection: React.FC<LiveIndianMarketsSectionProps> =
                         />
                       </linearGradient>
                     </defs>
-                    <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" vertical={false} />
+                    <CartesianGrid
+                      strokeDasharray="3 3"
+                      stroke={theme === 'dark' ? '#1e293b' : '#cbd5e1'}
+                      vertical={false}
+                    />
                     <XAxis
                       dataKey="timeLabelIst"
-                      stroke="#64748b"
-                      tick={{ fontSize: 11, fill: '#94a3b8' }}
+                      stroke={theme === 'dark' ? '#64748b' : '#94a3b8'}
+                      tick={{ fontSize: 11, fill: theme === 'dark' ? '#94a3b8' : '#475569' }}
                       minTickGap={28}
                     />
                     <YAxis
                       domain={['auto', 'auto']}
-                      stroke="#64748b"
-                      tick={{ fontSize: 11, fill: '#94a3b8' }}
+                      stroke={theme === 'dark' ? '#64748b' : '#94a3b8'}
+                      tick={{ fontSize: 11, fill: theme === 'dark' ? '#94a3b8' : '#475569' }}
                       width={68}
                       tickFormatter={(v) => Number(v).toLocaleString('en-IN')}
                     />
@@ -691,7 +701,13 @@ export const LiveIndianMarketsSection: React.FC<LiveIndianMarketsSectionProps> =
                         if (!active || !payload || !payload.length) return null;
                         const pt = payload[0].payload;
                         return (
-                          <div className="rounded-lg border border-slate-700 bg-[#060B16]/95 p-3 text-xs font-mono-tabular shadow-xl space-y-1">
+                          <div
+                            className={`rounded-lg border p-3 text-xs font-mono-tabular shadow-xl space-y-1 ${
+                              theme === 'dark'
+                                ? 'border-slate-700 bg-[#060B16]/95 text-slate-100'
+                                : 'border-[#CBD5E1] bg-white text-[#172033]'
+                            }`}
+                          >
                             <div className="text-emerald-400 font-semibold">
                               {selectedIndex.name} · {pt.timeLabelIst} IST
                             </div>
@@ -723,11 +739,11 @@ export const LiveIndianMarketsSection: React.FC<LiveIndianMarketsSectionProps> =
                     {selectedIndex.previousClose !== null && (
                       <ReferenceLine
                         y={selectedIndex.previousClose}
-                        stroke="#f59e0b"
+                        stroke={theme === 'dark' ? '#f59e0b' : '#b45309'}
                         strokeDasharray="4 4"
                         label={{
                           value: `Prev Close: ${formatIndianIndexNumber(selectedIndex.previousClose)}`,
-                          fill: '#f59e0b',
+                          fill: theme === 'dark' ? '#f59e0b' : '#b45309',
                           fontSize: 11,
                           position: 'insideTopRight',
                         }}

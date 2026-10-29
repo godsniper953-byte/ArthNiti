@@ -1,0 +1,6 @@
+User-agent: *
+Allow: /
+Disallow: /api/
+
+# Canonical Sitemap for ArthNiti — Indian Economic Intelligence Platform
+Sitemap: https://arthniti-six.vercel.app/sitemap.xml

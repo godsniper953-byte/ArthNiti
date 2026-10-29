@@ -40,6 +40,7 @@ interface EconomistBitesSectionProps {
   onToggleAutoRefresh?: () => void;
   mode?: 'full' | 'overview-preview';
   onNavigate?: (page: PageId, indicatorId?: string) => void;
+  theme?: 'dark' | 'light';
 }
 
 const VERIFICATION_STATUS_LABELS: Record<BiteVerificationStatus, string> = {
@@ -64,6 +65,7 @@ export const EconomistBitesSection: React.FC<EconomistBitesSectionProps> = ({
   onToggleAutoRefresh,
   mode = 'full',
   onNavigate,
+  theme = 'dark',
 }) => {
   const [selectedGeography, setSelectedGeography] = useState<'ALL' | EconomistGeography>('ALL');
   const [selectedTopic, setSelectedTopic] = useState<'all' | EconomistBiteTopicId>('all');
@@ -178,10 +180,18 @@ export const EconomistBitesSection: React.FC<EconomistBitesSectionProps> = ({
   return (
     <section
       aria-labelledby="economist-bites-heading"
-      className="bg-[#0B0F19]/90 border border-slate-800/80 rounded-xl p-5 sm:p-6 shadow-2xl"
+      className={`rounded-xl p-5 sm:p-6 border ${
+        theme === 'dark'
+          ? 'bg-[#0B0F19]/90 border-slate-800/80 shadow-2xl text-slate-100'
+          : 'bg-white border-[#CBD5E1] shadow-xs text-[#172033]'
+      }`}
     >
       {/* Top Section Header */}
-      <div className="flex flex-col lg:flex-row lg:items-start lg:justify-between gap-4 pb-5 border-b border-slate-800/80">
+      <div
+        className={`flex flex-col lg:flex-row lg:items-start lg:justify-between gap-4 pb-5 border-b ${
+          theme === 'dark' ? 'border-slate-800/80' : 'border-[#CBD5E1]'
+        }`}
+      >
         <div className="space-y-1.5 max-w-3xl">
           <div className="flex flex-wrap items-center gap-2 text-[11px] font-mono uppercase tracking-widest text-amber-400/90">
             <span>RESEARCH &amp; POLICY COMMENTARY</span>
@@ -196,7 +206,9 @@ export const EconomistBitesSection: React.FC<EconomistBitesSectionProps> = ({
           </div>
           <h2
             id="economist-bites-heading"
-            className="text-xl sm:text-2xl font-display font-bold text-white tracking-tight"
+            className={`text-xl sm:text-2xl font-display font-bold tracking-tight ${
+              theme === 'dark' ? 'text-white' : 'text-[#0F172A]'
+            }`}
           >
             Economists&apos; Latest Bites
           </h2>
@@ -636,7 +648,11 @@ export const EconomistBitesSection: React.FC<EconomistBitesSectionProps> = ({
             return (
               <article
                 key={bite.id}
-                className="flex flex-col justify-between rounded-xl bg-slate-900/75 border border-slate-800/90 hover:border-slate-700/90 transition-colors p-5 space-y-4"
+                className={`flex flex-col justify-between rounded-xl border transition-colors p-5 space-y-4 ${
+                  theme === 'dark'
+                    ? 'bg-slate-900/75 border-slate-800/90 hover:border-slate-700/90'
+                    : 'bg-white border-[#CBD5E1] hover:border-slate-400 shadow-xs'
+                }`}
               >
                 <div className="space-y-3.5">
                   {/* Top Metadata Line — Unboxed Inline Typography (Zero-Pill Discipline) */}
@@ -666,7 +682,11 @@ export const EconomistBitesSection: React.FC<EconomistBitesSectionProps> = ({
                   </div>
 
                   {/* Headline */}
-                  <h3 className="text-base sm:text-lg font-display font-bold text-white leading-snug">
+                  <h3
+                    className={`text-base sm:text-lg font-display font-bold leading-snug ${
+                      theme === 'dark' ? 'text-white' : 'text-[#0F172A]'
+                    }`}
+                  >
                     {bite.headline}
                   </h3>
 
@@ -688,7 +708,11 @@ export const EconomistBitesSection: React.FC<EconomistBitesSectionProps> = ({
                   {/* Mandatory Quick Summary Box — Always Visible Without Clicking */}
                   <div
                     aria-label="Quick Summary"
-                    className="rounded-lg bg-slate-950/90 border border-slate-800/90 p-4 space-y-2.5"
+                    className={`rounded-lg border p-4 space-y-2.5 ${
+                      theme === 'dark'
+                        ? 'bg-slate-950/90 border-slate-800/90'
+                        : 'bg-[#F8FAFC] border-[#CBD5E1]'
+                    }`}
                   >
                     <div className="flex items-center justify-between text-[10px] font-mono uppercase tracking-widest text-amber-400/90">
                       <span>QUICK SUMMARY (PARAPHRASED · SOURCE-VERIFIED)</span>

@@ -2123,7 +2123,10 @@ export const IndiaEconomicGlobe: React.FC<IndiaEconomicGlobeProps> = ({
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 items-stretch">
         {/* Left/Center 8 Columns: Interactive 3D Earth Canvas */}
         <div className="lg:col-span-8 flex flex-col">
-          <div className="relative w-full h-[460px] sm:h-[560px] lg:h-[620px] rounded-xl border border-slate-800/90 bg-[#040915] overflow-hidden select-none flex flex-col justify-between">
+          <div
+            data-dark-viewport="true"
+            className="arth-dark-viewport relative w-full h-[460px] sm:h-[560px] lg:h-[620px] rounded-xl border border-slate-800/90 bg-[#040915] overflow-hidden select-none flex flex-col justify-between"
+          >
             {/* Top Bar Inside Globe Viewport: Telemetry & Camera Controls */}
             <div className="relative z-10 flex flex-wrap items-center justify-between gap-2 px-4 pt-3.5 pointer-events-none">
               <div className="flex flex-wrap items-center gap-2 text-xs text-slate-300 font-mono-tabular bg-[#081226]/90 border border-slate-800 px-3 py-1.5 rounded-lg pointer-events-auto">
@@ -2455,11 +2458,21 @@ export const IndiaEconomicGlobe: React.FC<IndiaEconomicGlobeProps> = ({
                   selectedPartner.tradeBalanceUsdBn !== null ? (
                     <div className="space-y-3">
                       <div className="grid grid-cols-2 gap-2.5 font-mono-tabular">
-                        <div className="p-2.5 rounded-lg bg-[#060C1A] border border-slate-800/90">
+                        <div
+                          className={`p-2.5 rounded-lg border ${
+                            theme === 'dark'
+                              ? 'bg-[#060C1A] border-slate-800/90'
+                              : 'bg-white border-[#CBD5E1]'
+                          }`}
+                        >
                           <div className="text-[10px] text-slate-400">
                             Total Merchandise Trade
                           </div>
-                          <div className="text-base font-semibold text-white mt-0.5">
+                          <div
+                            className={`text-base font-semibold mt-0.5 ${
+                              theme === 'dark' ? 'text-white' : 'text-[#0F172A]'
+                            }`}
+                          >
                             ${selectedPartner.totalTradeUsdBn.toFixed(2)}B
                           </div>
                           <div className="text-[10px] text-cyan-400">
@@ -2467,7 +2480,13 @@ export const IndiaEconomicGlobe: React.FC<IndiaEconomicGlobeProps> = ({
                           </div>
                         </div>
 
-                        <div className="p-2.5 rounded-lg bg-[#060C1A] border border-slate-800/90">
+                        <div
+                          className={`p-2.5 rounded-lg border ${
+                            theme === 'dark'
+                              ? 'bg-[#060C1A] border-slate-800/90'
+                              : 'bg-white border-[#CBD5E1]'
+                          }`}
+                        >
                           <div className="text-[10px] text-slate-400">
                             Bilateral Trade Balance
                           </div>
@@ -2488,7 +2507,13 @@ export const IndiaEconomicGlobe: React.FC<IndiaEconomicGlobeProps> = ({
                           </div>
                         </div>
 
-                        <div className="p-2.5 rounded-lg bg-[#060C1A] border border-slate-800/90">
+                        <div
+                          className={`p-2.5 rounded-lg border ${
+                            theme === 'dark'
+                              ? 'bg-[#060C1A] border-slate-800/90'
+                              : 'bg-white border-[#CBD5E1]'
+                          }`}
+                        >
                           <div className="text-[10px] text-slate-400">
                             Indian Exports to {selectedPartner.shortName}
                           </div>
@@ -2497,7 +2522,13 @@ export const IndiaEconomicGlobe: React.FC<IndiaEconomicGlobeProps> = ({
                           </div>
                         </div>
 
-                        <div className="p-2.5 rounded-lg bg-[#060C1A] border border-slate-800/90">
+                        <div
+                          className={`p-2.5 rounded-lg border ${
+                            theme === 'dark'
+                              ? 'bg-[#060C1A] border-slate-800/90'
+                              : 'bg-white border-[#CBD5E1]'
+                          }`}
+                        >
                           <div className="text-[10px] text-slate-400">
                             Indian Imports from {selectedPartner.shortName}
                           </div>
@@ -2667,8 +2698,12 @@ export const IndiaEconomicGlobe: React.FC<IndiaEconomicGlobeProps> = ({
                           onClick={() => handleSelectPartner(partner)}
                           className={`w-full py-2 px-2.5 text-left transition-colors flex items-center justify-between gap-2 rounded-md cursor-pointer ${
                             isSel
-                              ? 'bg-emerald-500/15 text-white'
-                              : 'hover:bg-slate-800/50 text-slate-300'
+                              ? theme === 'dark'
+                                ? 'bg-emerald-500/15 text-white'
+                                : 'bg-emerald-50 text-[#0F172A] border border-emerald-200'
+                              : theme === 'dark'
+                              ? 'hover:bg-slate-800/50 text-slate-300'
+                              : 'hover:bg-slate-100 text-[#172033]'
                           }`}
                         >
                           <div className="min-w-0">

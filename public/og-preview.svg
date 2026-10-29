@@ -1,0 +1,45 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="630" viewBox="0 0 1200 630" role="img" aria-label="ArthNiti — Indian Economic Intelligence Platform">
+  <defs>
+    <linearGradient id="bg" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#060B16" />
+      <stop offset="55%" stop-color="#0B1325" />
+      <stop offset="100%" stop-color="#071A1E" />
+    </linearGradient>
+    <linearGradient id="accent" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" stop-color="#10B981" />
+      <stop offset="50%" stop-color="#F59E0B" />
+      <stop offset="100%" stop-color="#06B6D4" />
+    </linearGradient>
+  </defs>
+  <rect width="1200" height="630" fill="url(#bg)" />
+  <rect x="0" y="0" width="1200" height="6" fill="url(#accent)" />
+  <g transform="translate(80, 90)">
+    <rect x="0" y="0" width="380" height="36" rx="8" fill="#10B981" fill-opacity="0.14" stroke="#10B981" stroke-opacity="0.4" />
+    <text x="18" y="24" fill="#34D399" font-family="monospace" font-size="15" font-weight="600" letter-spacing="1.5">ARTHNITI · ECONOMIC INTELLIGENCE</text>
+    <text x="0" y="110" fill="#F8FAFC" font-family="Georgia, serif" font-size="56" font-weight="700">See the Forces Shaping</text>
+    <text x="0" y="176" fill="#F8FAFC" font-family="Georgia, serif" font-size="56" font-weight="700">India's Economy &amp; Global Trade.</text>
+    <text x="0" y="232" fill="#94A3B8" font-family="sans-serif" font-size="22">Official MoSPI GDP &amp; CPI · RBI Monetary Policy · PLFS Labour · TRADESTAT 3D Globe · Live Indian Markets</text>
+    <g transform="translate(0, 285)">
+      <rect x="0" y="0" width="240" height="125" rx="14" fill="#0F172A" stroke="#1E293B" stroke-width="2" />
+      <text x="24" y="38" fill="#94A3B8" font-family="monospace" font-size="14">REAL GDP (Q1 FY27)</text>
+      <text x="24" y="84" fill="#34D399" font-family="monospace" font-size="40" font-weight="700">7.8% YoY</text>
+      <text x="24" y="108" fill="#64748B" font-family="sans-serif" font-size="13">MoSPI · Base 2022–23</text>
+
+      <rect x="265" y="0" width="240" height="125" rx="14" fill="#0F172A" stroke="#1E293B" stroke-width="2" />
+      <text x="289" y="38" fill="#94A3B8" font-family="monospace" font-size="14">CPI INFLATION (SEP 26)</text>
+      <text x="289" y="84" fill="#FBBF24" font-family="monospace" font-size="40" font-weight="700">5.54% YoY</text>
+      <text x="289" y="108" fill="#64748B" font-family="sans-serif" font-size="13">MoSPI · Base 2024=100</text>
+
+      <rect x="530" y="0" width="240" height="125" rx="14" fill="#0F172A" stroke="#1E293B" stroke-width="2" />
+      <text x="554" y="38" fill="#94A3B8" font-family="monospace" font-size="14">RBI REPO RATE</text>
+      <text x="554" y="84" fill="#22D3EE" font-family="monospace" font-size="40" font-weight="700">5.50%</text>
+      <text x="554" y="108" fill="#64748B" font-family="sans-serif" font-size="13">RBI MPC · Oct 2026</text>
+
+      <rect x="795" y="0" width="245" height="125" rx="14" fill="#0F172A" stroke="#1E293B" stroke-width="2" />
+      <text x="819" y="38" fill="#94A3B8" font-family="monospace" font-size="14">TRADE BALANCE</text>
+      <text x="819" y="84" fill="#F43F5E" font-family="monospace" font-size="40" font-weight="700">-$30.21B</text>
+      <text x="819" y="108" fill="#64748B" font-family="sans-serif" font-size="13">MoCI · Sep 2026</text>
+    </g>
+    <text x="0" y="470" fill="#64748B" font-family="monospace" font-size="16">https://arthniti-six.vercel.app · Understand the Economy. Discover the Data.</text>
+  </g>
+</svg>

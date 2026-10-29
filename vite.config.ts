@@ -19,12 +19,16 @@ export default defineConfig(() => {
       watch: process.env.DISABLE_HMR === 'true' ? null : {},
     },
     build: {
+      chunkSizeWarningLimit: 600,
       rollupOptions: {
         output: {
           manualChunks(id) {
             if (!id.includes('node_modules')) return undefined;
             if (id.includes('three')) return 'three-engine';
-            if (id.includes('recharts') || id.includes('d3-') || id.includes('victory-vendor')) {
+            if (id.includes('d3-') || id.includes('victory-vendor')) {
+              return 'd3-vendor';
+            }
+            if (id.includes('recharts')) {
               return 'chart-engine';
             }
             if (id.includes('lucide-react') || id.includes('motion') || id.includes('framer-motion')) {

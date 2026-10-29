@@ -1,18 +1,87 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600;700&family=Space+Grotesk:wght@600;700&display=swap');
 @import "tailwindcss";
 
-@layer base {
-  :root {
-    --font-display: 'Fraunces', Georgia, serif;
-    --font-sans: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, sans-serif;
-    --font-mono: 'JetBrains Mono', monospace;
-  }
+@theme {
+  --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
+  --font-display: "Space Grotesk", ui-sans-serif, system-ui, sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, monospace;
+}
 
+/* ============================================================================
+   ARTHNITI CENTRALIZED THEME TOKENS (DARK & EDITORIAL LIGHT MODE)
+   WCAG 2.2 AA Verified Contrast Palette:
+   - Light Mode Primary Text:   #172033 (16.32:1 on #FFFFFF, 15.30:1 on #F8FAFC)
+   - Light Mode Secondary Text: #475569 ( 7.58:1 on #FFFFFF,  7.10:1 on #F8FAFC)
+   - Light Mode Muted Labels:   #64748B ( 4.76:1 on #FFFFFF) / #475569 on subtle panels
+   - Light Mode Headings:       #0F172A (17.85:1 on #FFFFFF, 16.73:1 on #F8FAFC)
+   - Light Mode Links:          #1D4ED8 ( 6.70:1 on #FFFFFF,  6.28:1 on #F8FAFC)
+   - Light Mode Borders:        #CBD5E1
+   - Light Mode Surfaces:       #FFFFFF (Cards), #F8FAFC (Canvas/Panels), #F1F5F9 (Table Headers)
+   ============================================================================ */
+
+:root,
+html.light,
+html[data-theme="light"] {
+  color-scheme: light;
+  --arth-bg-canvas: #F8FAFC;
+  --arth-bg-card: #FFFFFF;
+  --arth-bg-panel: #F8FAFC;
+  --arth-bg-subtle: #F1F5F9;
+  --arth-text-heading: #0F172A;
+  --arth-text-primary: #172033;
+  --arth-text-secondary: #475569;
+  --arth-text-muted: #64748B;
+  --arth-link: #1D4ED8;
+  --arth-border: #CBD5E1;
+  --arth-border-subtle: #E2E8F0;
+  --arth-input-bg: #FFFFFF;
+  --arth-input-text: #172033;
+  --arth-input-placeholder: #64748B;
+  --arth-table-header-bg: #F1F5F9;
+  --arth-table-header-text: #0F172A;
+  --arth-accent-emerald: #047857;
+  --arth-accent-amber: #B45309;
+  --arth-accent-cyan: #0E7490;
+  --arth-accent-rose: #BE123C;
+  --arth-accent-violet: #5B21B6;
+}
+
+html.dark,
+html[data-theme="dark"] {
+  color-scheme: dark;
+  --arth-bg-canvas: #060B16;
+  --arth-bg-card: #0B1325;
+  --arth-bg-panel: #091224;
+  --arth-bg-subtle: #0F172A;
+  --arth-text-heading: #FFFFFF;
+  --arth-text-primary: #F8FAFC;
+  --arth-text-secondary: #CBD5E1;
+  --arth-text-muted: #94A3B8;
+  --arth-link: #38BDF8;
+  --arth-border: #1E293B;
+  --arth-border-subtle: #1E293B;
+  --arth-input-bg: #060B16;
+  --arth-input-text: #F8FAFC;
+  --arth-input-placeholder: #64748B;
+  --arth-table-header-bg: #060B16;
+  --arth-table-header-text: #94A3B8;
+  --arth-accent-emerald: #34D399;
+  --arth-accent-amber: #FBBF24;
+  --arth-accent-cyan: #22D3EE;
+  --arth-accent-rose: #FB7185;
+  --arth-accent-violet: #A78BFA;
+}
+
+@layer base {
   body {
     font-family: var(--font-sans);
-    font-feature-settings: "cv02", "cv03", "cv04", "cv11";
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    background-color: var(--arth-bg-canvas);
+    color: var(--arth-text-primary);
   }
 
-  .font-display {
+  h1, h2, h3, h4, .font-display {
     font-family: var(--font-display);
   }
 
@@ -22,21 +91,287 @@
   }
 }
 
-/* Custom subtle scrollbars for research terminal */
-::-webkit-scrollbar {
-  width: 6px;
-  height: 6px;
+/* ============================================================================
+   GLOBAL LIGHT-MODE CONTRAST & READABILITY ENFORCEMENT
+   Applies when html does NOT have .dark (i.e. Light Mode active).
+   Excludes .arth-dark-viewport (the 3D Earth space canvas & its internal HUD)
+   and intentionally filled accent buttons (.bg-emerald-600, .bg-amber-500, etc.)
+   ============================================================================ */
+
+/* 1. Headings & Primary Typography in Light Mode */
+html:not(.dark) :is(h1, h2, h3, h4, h5, h6):not(.arth-dark-viewport *) {
+  color: var(--arth-text-heading);
 }
 
-::-webkit-scrollbar-track {
-  background: transparent;
+/* 2. Remap Dark-Only Card/Panel Backgrounds to Clean Light Surfaces */
+html:not(.dark) :is(
+  .bg-\[\#060B16\],
+  .bg-\[\#060B16\]\/70,
+  .bg-\[\#060B16\]\/80,
+  .bg-\[\#060B16\]\/90,
+  .bg-\[\#060B16\]\/95,
+  .bg-\[\#060C1A\],
+  .bg-\[\#080F1E\],
+  .bg-\[\#081020\],
+  .bg-\[\#091224\],
+  .bg-\[\#091326\],
+  .bg-\[\#0C162B\],
+  .bg-slate-950,
+  .bg-slate-950\/70,
+  .bg-slate-950\/80,
+  .bg-slate-950\/90
+):not(.arth-dark-viewport):not(.arth-dark-viewport *) {
+  background-color: var(--arth-bg-panel) !important;
 }
 
-::-webkit-scrollbar-thumb {
-  background: rgba(148, 163, 184, 0.25);
-  border-radius: 3px;
+html:not(.dark) :is(
+  .bg-\[\#0B0F19\],
+  .bg-\[\#0B0F19\]\/90,
+  .bg-\[\#0B1325\],
+  .bg-\[\#0B1528\],
+  .bg-\[\#070E1E\],
+  .bg-\[\#0D1527\],
+  .bg-\[\#0D172E\],
+  .bg-slate-900,
+  .bg-slate-900\/50,
+  .bg-slate-900\/60,
+  .bg-slate-900\/70,
+  .bg-slate-900\/75,
+  .bg-slate-900\/80,
+  .bg-slate-900\/90,
+  .bg-slate-900\/95
+):not(.arth-dark-viewport):not(.arth-dark-viewport *) {
+  background-color: var(--arth-bg-card) !important;
 }
 
-::-webkit-scrollbar-thumb:hover {
-  background: rgba(16, 185, 129, 0.5);
+html:not(.dark) :is(
+  .bg-slate-800,
+  .bg-slate-800\/50,
+  .bg-slate-800\/60,
+  .bg-slate-800\/70,
+  .bg-slate-800\/80
+):not(.arth-dark-viewport):not(.arth-dark-viewport *) {
+  background-color: var(--arth-bg-subtle) !important;
+}
+
+/* Tinted status/alert backgrounds in Light Mode */
+html:not(.dark) :is(.bg-amber-950\/40, .bg-amber-950\/25, .bg-amber-950\/20):not(.arth-dark-viewport *) {
+  background-color: #FFFBEB !important;
+}
+
+html:not(.dark) :is(.bg-emerald-950\/40, .bg-emerald-950\/30, .bg-emerald-950\/20, .bg-emerald-950\/15):not(.arth-dark-viewport *) {
+  background-color: #ECFDF5 !important;
+}
+
+html:not(.dark) :is(.bg-rose-950\/25, .bg-red-950\/20, .bg-black\/30):not(.arth-dark-viewport *) {
+  background-color: #FFF1F2 !important;
+}
+
+html:not(.dark) :is(.bg-violet-950\/30):not(.arth-dark-viewport *) {
+  background-color: #F5F3FF !important;
+}
+
+/* 3. Remap Dark Borders & Dividers to Subtle Gray (#CBD5E1 / #E2E8F0) */
+html:not(.dark) :is(
+  .border-slate-800,
+  .border-slate-800\/50,
+  .border-slate-800\/60,
+  .border-slate-800\/70,
+  .border-slate-800\/80,
+  .border-slate-800\/90,
+  .border-slate-700,
+  .border-slate-700\/50,
+  .border-slate-700\/60,
+  .border-slate-700\/70,
+  .border-slate-700\/80,
+  .border-slate-700\/90,
+  .border-slate-600\/40
+):not(.arth-dark-viewport):not(.arth-dark-viewport *) {
+  border-color: var(--arth-border) !important;
+}
+
+html:not(.dark) :is(
+  .divide-slate-800 > :not(:last-child),
+  .divide-slate-800\/50 > :not(:last-child),
+  .divide-slate-800\/60 > :not(:last-child)
+):not(.arth-dark-viewport *) {
+  border-color: var(--arth-border-subtle) !important;
+}
+
+/* 4. Remap White & Pale Text Classes to High-Contrast Light-Mode Palette */
+html:not(.dark) .text-white:not(.arth-dark-viewport *):not(:is(
+  .bg-emerald-600,
+  .bg-emerald-500,
+  .bg-cyan-600,
+  .bg-amber-600,
+  .bg-rose-600,
+  .bg-red-600,
+  .bg-blue-600,
+  .arth-filled-btn
+)):not(:is(
+  .bg-emerald-600,
+  .bg-emerald-500,
+  .bg-cyan-600,
+  .bg-amber-600,
+  .bg-rose-600,
+  .bg-red-600,
+  .bg-blue-600,
+  .arth-filled-btn
+) *) {
+  color: var(--arth-text-heading) !important;
+}
+
+html:not(.dark) :is(
+  .text-slate-100,
+  .text-slate-200,
+  .text-slate-900,
+  .text-slate-800
+):not(.arth-dark-viewport *) {
+  color: var(--arth-text-primary) !important;
+}
+
+html:not(.dark) :is(
+  .text-slate-300,
+  .text-slate-400,
+  .text-slate-600,
+  .text-slate-700
+):not(.arth-dark-viewport *) {
+  color: var(--arth-text-secondary) !important;
+}
+
+html:not(.dark) :is(
+  .text-slate-500
+):not(.arth-dark-viewport *) {
+  color: var(--arth-text-muted) !important;
+}
+
+/* 5. High-Contrast Semantic Accent Colors in Light Mode (WCAG 2.2 AA >= 4.5:1) */
+html:not(.dark) :is(
+  .text-emerald-400,
+  .text-emerald-300,
+  .text-emerald-200,
+  .text-emerald-500,
+  .text-emerald-400\/90
+):not(.arth-dark-viewport *) {
+  color: var(--arth-accent-emerald) !important;
+}
+
+html:not(.dark) :is(
+  .text-amber-400,
+  .text-amber-300,
+  .text-amber-200,
+  .text-amber-100,
+  .text-amber-500,
+  .text-amber-400\/90,
+  .text-amber-300\/90,
+  .text-amber-200\/90,
+  .text-amber-200\/80
+):not(.arth-dark-viewport *) {
+  color: var(--arth-accent-amber) !important;
+}
+
+html:not(.dark) :is(
+  .text-cyan-400,
+  .text-cyan-300,
+  .text-cyan-200,
+  .text-cyan-500
+):not(.arth-dark-viewport *) {
+  color: var(--arth-accent-cyan) !important;
+}
+
+html:not(.dark) :is(
+  .text-sky-400,
+  .text-sky-300,
+  .text-blue-400,
+  .text-blue-300
+):not(.arth-dark-viewport *) {
+  color: var(--arth-link) !important;
+}
+
+html:not(.dark) :is(
+  .text-rose-400,
+  .text-rose-300,
+  .text-rose-200,
+  .text-rose-500,
+  .text-red-400,
+  .text-red-300
+):not(.arth-dark-viewport *) {
+  color: var(--arth-accent-rose) !important;
+}
+
+html:not(.dark) :is(
+  .text-violet-400,
+  .text-violet-300,
+  .text-violet-200
+):not(.arth-dark-viewport *) {
+  color: var(--arth-accent-violet) !important;
+}
+
+/* 6. Accessible Links in Light Mode (#1D4ED8 default for unstyled/standard links) */
+html:not(.dark) a:not([class*="bg-"]):not(.arth-dark-viewport *) {
+  color: var(--arth-link);
+}
+
+html:not(.dark) a:is(
+  .text-emerald-400,
+  .text-emerald-500,
+  .text-emerald-700
+):not(.arth-dark-viewport *) {
+  color: var(--arth-accent-emerald) !important;
+}
+
+html:not(.dark) a:is(
+  .text-amber-400,
+  .text-amber-500,
+  .text-amber-700
+):not(.arth-dark-viewport *) {
+  color: var(--arth-accent-amber) !important;
+}
+
+html:not(.dark) a:is(
+  .text-cyan-400,
+  .text-cyan-500,
+  .text-cyan-700
+):not(.arth-dark-viewport *) {
+  color: var(--arth-link) !important;
+}
+
+/* 7. Form Inputs, Selects & Placeholders in Light Mode */
+html:not(.dark) :is(input, select, textarea):not(.arth-dark-viewport *) {
+  background-color: var(--arth-input-bg) !important;
+  color: var(--arth-input-text) !important;
+  border-color: var(--arth-border) !important;
+}
+
+html:not(.dark) :is(input, textarea):not(.arth-dark-viewport *)::placeholder {
+  color: var(--arth-input-placeholder) !important;
+  opacity: 1 !important;
+}
+
+/* 8. Table Headers & Cells in Light Mode */
+html:not(.dark) thead tr:not(.arth-dark-viewport *) {
+  background-color: var(--arth-table-header-bg) !important;
+  border-color: var(--arth-border) !important;
+}
+
+html:not(.dark) thead th:not(.arth-dark-viewport *) {
+  color: var(--arth-table-header-text) !important;
+  font-weight: 600;
+}
+
+html:not(.dark) tbody td:not(.arth-dark-viewport *) {
+  color: var(--arth-text-primary);
+}
+
+/* 9. Recharts Axes, Gridlines, Legends & Labels in Light Mode */
+html:not(.dark) .recharts-cartesian-axis-tick-value tspan {
+  fill: var(--arth-text-secondary) !important;
+}
+
+html:not(.dark) .recharts-legend-item-text {
+  color: var(--arth-text-primary) !important;
+}
+
+html:not(.dark) .recharts-cartesian-grid line {
+  stroke: #E2E8F0;
 }

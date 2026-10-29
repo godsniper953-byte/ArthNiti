@@ -1487,3 +1487,256 @@ test('11. Production UI Hygiene: No unwanted debug/error simulation buttons or C
     }
   }
 });
+
+test('12. Light Mode Text Contrast & Readability Verification (WCAG 2.2 AA): Semantic tokens, contrast ratios, and component theme propagation', () => {
+  // Helper to compute WCAG 2.2 relative luminance and contrast ratio from hex colors
+  const hexToRgb = (hex: string): [number, number, number] => {
+    const clean = hex.replace('#', '').trim();
+    const num = parseInt(clean, 16);
+    return [(num >> 16) & 255, (num >> 8) & 255, num & 255];
+  };
+
+  const relativeLuminance = (hex: string): number => {
+    const [r, g, b] = hexToRgb(hex).map((c) => {
+      const s = c / 255;
+      return s <= 0.03928 ? s / 12.92 : Math.pow((s + 0.055) / 1.055, 2.4);
+    });
+    return 0.2126 * r + 0.7152 * g + 0.0722 * b;
+  };
+
+  const contrastRatio = (fgHex: string, bgHex: string): number => {
+    const l1 = relativeLuminance(fgHex);
+    const l2 = relativeLuminance(bgHex);
+    const lighter = Math.max(l1, l2);
+    const darker = Math.min(l1, l2);
+    return (lighter + 0.05) / (darker + 0.05);
+  };
+
+  // 1. Verify all Light Mode palette foreground/background combinations meet WCAG 2.2 AA (>= 4.5:1 for normal text)
+  const lightBackgrounds = [
+    { name: 'Card White (#FFFFFF)', hex: '#FFFFFF' },
+    { name: 'Panel / Canvas Light (#F8FAFC)', hex: '#F8FAFC' },
+  ];
+
+  const lightForegrounds = [
+    { name: 'Headings Deep Navy (#0F172A)', hex: '#0F172A', minRatio: 15.0 },
+    { name: 'Primary Text Dark Charcoal (#172033)', hex: '#172033', minRatio: 14.0 },
+    { name: 'Secondary Text Slate Gray (#475569)', hex: '#475569', minRatio: 7.0 },
+    { name: 'Muted Labels / Input Placeholders (#64748B)', hex: '#64748B', minRatio: 4.5 },
+    { name: 'Accessible Blue Links (#1D4ED8)', hex: '#1D4ED8', minRatio: 6.0 },
+    { name: 'Emerald Positive Accent (#047857)', hex: '#047857', minRatio: 5.0 },
+    { name: 'Amber Warning Accent (#B45309)', hex: '#B45309', minRatio: 4.5 },
+    { name: 'Cyan Info Accent (#0E7490)', hex: '#0E7490', minRatio: 5.0 },
+    { name: 'Rose Negative Accent (#BE123C)', hex: '#BE123C', minRatio: 5.5 },
+    { name: 'Violet Accent (#5B21B6)', hex: '#5B21B6', minRatio: 7.0 },
+  ];
+
+  for (const bg of lightBackgrounds) {
+    for (const fg of lightForegrounds) {
+      const ratio = contrastRatio(fg.hex, bg.hex);
+      assert.ok(
+        ratio >= fg.minRatio,
+        `Light mode WCAG contrast failure: ${fg.name} on ${bg.name} = ${ratio.toFixed(2)}:1 (expected >= ${fg.minRatio}:1)`
+      );
+    }
+  }
+
+  // Verify table header contrast (#0F172A on #F1F5F9)
+  const tableHeaderRatio = contrastRatio('#0F172A', '#F1F5F9');
+  assert.ok(
+    tableHeaderRatio >= 14.0,
+    `Table header contrast (#0F172A on #F1F5F9) must exceed 14:1, got ${tableHeaderRatio.toFixed(2)}:1`
+  );
+
+  // 2. Verify Dark Mode palette foreground/background combinations remain WCAG 2.2 AA compliant
+  const darkBackgrounds = [
+    { name: 'Dark Canvas (#070B14)', hex: '#070B14' },
+    { name: 'Dark Card (#0F172A)', hex: '#0F172A' },
+  ];
+
+  const darkForegrounds = [
+    { name: 'Dark Heading (#F8FAFC)', hex: '#F8FAFC', minRatio: 15.0 },
+    { name: 'Dark Primary Text (#E2E8F0)', hex: '#E2E8F0', minRatio: 12.0 },
+    { name: 'Dark Secondary Text (#CBD5E1)', hex: '#CBD5E1', minRatio: 10.0 },
+    { name: 'Dark Muted Text (#94A3B8)', hex: '#94A3B8', minRatio: 5.5 },
+    { name: 'Dark Emerald Accent (#34D399)', hex: '#34D399', minRatio: 8.0 },
+    { name: 'Dark Amber Accent (#FBBF24)', hex: '#FBBF24', minRatio: 9.0 },
+    { name: 'Dark Cyan Accent (#22D3EE)', hex: '#22D3EE', minRatio: 8.5 },
+  ];
+
+  for (const bg of darkBackgrounds) {
+    for (const fg of darkForegrounds) {
+      const ratio = contrastRatio(fg.hex, bg.hex);
+      assert.ok(
+        ratio >= fg.minRatio,
+        `Dark mode WCAG contrast failure: ${fg.name} on ${bg.name} = ${ratio.toFixed(2)}:1 (expected >= ${fg.minRatio}:1)`
+      );
+    }
+  }
+
+  // 3. Verify centralized theme tokens and light-mode contrast rules exist in src/index.css
+  const indexCssPath = path.resolve(process.cwd(), 'src/index.css');
+  const indexCss = fs.readFileSync(indexCssPath, 'utf-8');
+  const requiredCssTokens = [
+    '--arth-bg-canvas: #F8FAFC',
+    '--arth-bg-card: #FFFFFF',
+    '--arth-text-heading: #0F172A',
+    '--arth-text-primary: #172033',
+    '--arth-text-secondary: #475569',
+    '--arth-text-muted: #64748B',
+    '--arth-link: #1D4ED8',
+    '--arth-border: #CBD5E1',
+    '--arth-input-text: #172033',
+    '--arth-input-placeholder: #64748B',
+    '--arth-table-header-bg: #F1F5F9',
+    '--arth-table-header-text: #0F172A',
+    'html:not(.dark)',
+    '.arth-dark-viewport',
+  ];
+  for (const token of requiredCssTokens) {
+    assert.ok(
+      indexCss.includes(token),
+      `src/index.css must define light-mode token or selector: ${token}`
+    );
+  }
+
+  // 4. Verify theme prop integration across key application components
+  const appTsx = fs.readFileSync(path.resolve(process.cwd(), 'src/App.tsx'), 'utf-8');
+  assert.ok(
+    appTsx.includes('<EconomistBitesPage') && appTsx.includes('onNavigate={handleSelectPage}\n            theme={theme}'),
+    'App.tsx must pass theme={theme} to EconomistBitesPage'
+  );
+  assert.ok(
+    appTsx.includes('text-[#172033]'),
+    'App.tsx must apply dark charcoal #172033 primary text in light mode'
+  );
+
+  const bitesSectionTsx = fs.readFileSync(
+    path.resolve(process.cwd(), 'src/components/bites/EconomistBitesSection.tsx'),
+    'utf-8'
+  );
+  assert.ok(
+    bitesSectionTsx.includes("theme?: 'dark' | 'light'"),
+    'EconomistBitesSection.tsx must accept theme prop'
+  );
+
+  const globeTsx = fs.readFileSync(
+    path.resolve(process.cwd(), 'src/components/visualizations/IndiaEconomicGlobe.tsx'),
+    'utf-8'
+  );
+  assert.ok(
+    globeTsx.includes('arth-dark-viewport'),
+    'IndiaEconomicGlobe.tsx must mark the 3D WebGL space canvas with arth-dark-viewport while theming surrounding cards for light mode'
+  );
+
+  const tickerTsx = fs.readFileSync(
+    path.resolve(process.cwd(), 'src/components/visualizations/LiveMarketTickerStrip.tsx'),
+    'utf-8'
+  );
+  assert.ok(
+    tickerTsx.includes("theme === 'dark'") && tickerTsx.includes('bg-white border-[#CBD5E1] text-[#172033]'),
+    'LiveMarketTickerStrip.tsx must render high-contrast light mode surface and text'
+  );
+});
+
+test('13. Global Presentation Readiness: SEO Metadata, Sitemap, Robots.txt, Schema.org JSON-LD, Theme Persistence, Executive Quick Summary & Legal Disclosures', () => {
+  // 1. Verify robots.txt and sitemap.xml exist and reference production canonical domain
+  const robotsPath = path.resolve(process.cwd(), 'public/robots.txt');
+  const sitemapPath = path.resolve(process.cwd(), 'public/sitemap.xml');
+  const ogImagePath = path.resolve(process.cwd(), 'public/og-preview.svg');
+
+  assert.ok(fs.existsSync(robotsPath), 'public/robots.txt must exist');
+  assert.ok(fs.existsSync(sitemapPath), 'public/sitemap.xml must exist');
+  assert.ok(fs.existsSync(ogImagePath), 'public/og-preview.svg must exist');
+
+  const robotsTxt = fs.readFileSync(robotsPath, 'utf-8');
+  assert.ok(robotsTxt.includes('Allow: /'), 'robots.txt must allow indexing of public pages');
+  assert.ok(robotsTxt.includes('Disallow: /api/'), 'robots.txt must disallow /api/ routes');
+  assert.ok(
+    robotsTxt.includes('Sitemap: https://arthniti-six.vercel.app/sitemap.xml'),
+    'robots.txt must point to canonical sitemap.xml'
+  );
+
+  const sitemapXml = fs.readFileSync(sitemapPath, 'utf-8');
+  const expectedRoutes = [
+    'https://arthniti-six.vercel.app/',
+    'https://arthniti-six.vercel.app/#gdp-growth',
+    'https://arthniti-six.vercel.app/#inflation',
+    'https://arthniti-six.vercel.app/#labour-market',
+    'https://arthniti-six.vercel.app/#currency-oil',
+    'https://arthniti-six.vercel.app/#financial-markets',
+    'https://arthniti-six.vercel.app/#economic-news',
+    'https://arthniti-six.vercel.app/#economist-bites',
+    'https://arthniti-six.vercel.app/#comparisons',
+    'https://arthniti-six.vercel.app/#data-sources',
+    'https://arthniti-six.vercel.app/#about',
+  ];
+  for (const url of expectedRoutes) {
+    assert.ok(
+      sitemapXml.includes(`<loc>${url}</loc>`),
+      `sitemap.xml must include canonical route ${url}`
+    );
+  }
+
+  // 2. Verify index.html has canonical URL, OpenGraph, Twitter Card, and valid JSON-LD structured data
+  const indexHtml = fs.readFileSync(path.resolve(process.cwd(), 'index.html'), 'utf-8');
+  assert.ok(
+    indexHtml.includes('<link rel="canonical" id="canonical-link" href="https://arthniti-six.vercel.app/" />'),
+    'index.html must include canonical link'
+  );
+  assert.ok(indexHtml.includes('property="og:image"'), 'index.html must include og:image');
+  assert.ok(indexHtml.includes('name="twitter:image"'), 'index.html must include twitter:image');
+  assert.ok(
+    indexHtml.includes('application/ld+json'),
+    'index.html must embed Schema.org JSON-LD structured data'
+  );
+
+  // 3. Verify route-specific SEO metadata registry covers all 11 PageIds
+  const seoMetaTs = fs.readFileSync(path.resolve(process.cwd(), 'src/utils/seoMetadata.ts'), 'utf-8');
+  const allPageIds = [
+    'overview',
+    'gdp-growth',
+    'inflation',
+    'labour-market',
+    'currency-oil',
+    'financial-markets',
+    'economic-news',
+    'economist-bites',
+    'comparisons',
+    'data-sources',
+    'about',
+  ];
+  for (const pid of allPageIds) {
+    assert.ok(
+      seoMetaTs.includes(`pageId: '${pid}'`),
+      `PAGE_SEO_REGISTRY must define metadata for route ${pid}`
+    );
+  }
+
+  // 4. Verify theme persistence in localStorage and SEO sync in App.tsx
+  const appTsx = fs.readFileSync(path.resolve(process.cwd(), 'src/App.tsx'), 'utf-8');
+  assert.ok(
+    appTsx.includes("window.localStorage.getItem('arthniti_theme')") &&
+      appTsx.includes("window.localStorage.setItem('arthniti_theme', theme)"),
+    'App.tsx must persist theme preference in localStorage under arthniti_theme'
+  );
+  assert.ok(
+    appTsx.includes('syncPageSeoMetadata(activePage)'),
+    'App.tsx must synchronize SEO metadata when activePage changes'
+  );
+
+  // 5. Verify Executive Quick Summary on OverviewPage.tsx and Legal/Privacy Disclosures on AboutPage.tsx
+  const overviewTsx = fs.readFileSync(path.resolve(process.cwd(), 'src/pages/OverviewPage.tsx'), 'utf-8');
+  assert.ok(
+    overviewTsx.includes('QUICK SUMMARY · VERIFIED MACROECONOMIC SNAPSHOT'),
+    'OverviewPage.tsx must include Executive Quick Summary snapshot'
+  );
+
+  const aboutTsx = fs.readFileSync(path.resolve(process.cwd(), 'src/pages/AboutPage.tsx'), 'utf-8');
+  assert.ok(
+    aboutTsx.includes('Data Governance, Privacy &amp; Financial-Information Limitations'),
+    'AboutPage.tsx must include Legal, Privacy, and Financial-Information Disclosures'
+  );
+});
+
+

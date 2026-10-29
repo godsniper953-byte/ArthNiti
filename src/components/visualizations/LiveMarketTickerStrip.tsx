@@ -42,7 +42,7 @@ export const LiveMarketTickerStrip: React.FC<LiveMarketTickerStripProps> = ({
       className={`px-4 sm:px-6 py-2 border-b text-xs transition-colors ${
         theme === 'dark'
           ? 'bg-[#070E1E] border-slate-800/90 text-slate-300'
-          : 'bg-slate-900 border-slate-800 text-slate-100'
+          : 'bg-white border-[#CBD5E1] text-[#172033]'
       }`}
       role="region"
       aria-label="Live Indian Stock Market Indices Ticker"
@@ -51,7 +51,11 @@ export const LiveMarketTickerStrip: React.FC<LiveMarketTickerStripProps> = ({
         {/* Left: Market Status & 5 Index Quotes */}
         <div className="flex items-center gap-3 overflow-x-auto no-scrollbar py-0.5">
           {/* Session Status Indicator */}
-          <div className="flex items-center gap-1.5 shrink-0 pr-2 border-r border-slate-800">
+          <div
+            className={`flex items-center gap-1.5 shrink-0 pr-2 border-r ${
+              theme === 'dark' ? 'border-slate-800' : 'border-[#CBD5E1]'
+            }`}
+          >
             <span
               className={`w-2 h-2 rounded-full ${
                 sessionStatus === 'OPEN'

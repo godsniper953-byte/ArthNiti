@@ -13,6 +13,7 @@ interface EconomistBitesPageProps {
   autoRefreshEnabled?: boolean;
   onToggleAutoRefresh?: () => void;
   onNavigate?: (page: PageId, indicatorId?: string) => void;
+  theme?: 'dark' | 'light';
 }
 
 export const EconomistBitesPage: React.FC<EconomistBitesPageProps> = ({
@@ -25,6 +26,7 @@ export const EconomistBitesPage: React.FC<EconomistBitesPageProps> = ({
   autoRefreshEnabled = true,
   onToggleAutoRefresh,
   onNavigate,
+  theme = 'dark',
 }) => {
   return (
     <div className="space-y-6">
@@ -39,6 +41,7 @@ export const EconomistBitesPage: React.FC<EconomistBitesPageProps> = ({
         onToggleAutoRefresh={onToggleAutoRefresh}
         mode="full"
         onNavigate={onNavigate}
+        theme={theme}
       />
     </div>
   );

@@ -164,7 +164,23 @@ export const OverviewPage: React.FC<OverviewPageProps> = ({
 
   const gdpIndicator = indicators.find((i) => i.id === 'gdp-growth') || indicators[0];
   const cpiIndicator = indicators.find((i) => i.id === 'cpi-inflation') || indicators[1];
+  const plfsIndicator = indicators.find((i) => i.id === 'unemployment-rate');
+  const usdInrIndicator = indicators.find((i) => i.id === 'usd-inr');
+  const crudeIndicator = indicators.find((i) => i.id === 'crude-oil');
+  const repoIndicator = indicators.find((i) => i.id === 'rbi-repo-rate');
   const tradeIndicator = indicators.find((i) => i.id === 'merchandise-trade');
+
+  const anyMacroLoading =
+    gdpLoading || cpiLoading || repoLoading || plfsLoading || usdInrLoading || crudeLoading || tradeLoading;
+  const macroErrorCount = [
+    gdpError,
+    cpiError,
+    repoError,
+    plfsError,
+    usdInrError,
+    crudeError,
+    tradeError,
+  ].filter(Boolean).length;
 
   const globeSectionRef = useRef<HTMLDivElement | null>(null);
 
@@ -287,6 +303,180 @@ export const OverviewPage: React.FC<OverviewPageProps> = ({
           theme={theme}
         />
       </ErrorBoundary>
+
+      {/* 1C. Executive Quick Summary — Verified Macroeconomic & Policy Overview */}
+      <section
+        aria-label="Executive Quick Summary of Verified Indian Macroeconomic Data"
+        className={`rounded-xl border p-5 sm:p-6 space-y-4 ${
+          theme === 'dark'
+            ? 'bg-[#0B1325] border-slate-800/90 text-slate-100'
+            : 'bg-white border-[#CBD5E1] text-[#172033] shadow-xs'
+        }`}
+      >
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-3 border-b border-slate-800/60">
+          <div>
+            <div className="text-xs font-mono-tabular text-emerald-400">
+              QUICK SUMMARY · VERIFIED MACROECONOMIC SNAPSHOT
+            </div>
+            <h2
+              className={`font-display text-lg sm:text-xl font-semibold tracking-tight mt-0.5 ${
+                theme === 'dark' ? 'text-white' : 'text-[#0F172A]'
+              }`}
+            >
+              India Macroeconomic Pulse At a Glance
+            </h2>
+          </div>
+          <div className="flex flex-wrap items-center gap-2 text-xs font-mono-tabular">
+            <span
+              className={`px-2.5 py-1 rounded-md border ${
+                macroErrorCount > 0
+                  ? 'border-amber-500/40 bg-amber-500/10 text-amber-400'
+                  : anyMacroLoading
+                  ? 'border-cyan-500/40 bg-cyan-500/10 text-cyan-400'
+                  : 'border-emerald-500/40 bg-emerald-500/10 text-emerald-400'
+              }`}
+            >
+              {macroErrorCount > 0
+                ? `${7 - macroErrorCount}/7 Official Series Active`
+                : anyMacroLoading
+                ? 'Refreshing Official Series…'
+                : '7/7 Official Series Verified'}
+            </span>
+            <button
+              type="button"
+              onClick={() => onSelectPage('data-sources')}
+              className="px-2.5 py-1 rounded-md border border-slate-700 hover:border-emerald-500/50 text-emerald-400 cursor-pointer"
+            >
+              Provenance &amp; Sources →
+            </button>
+          </div>
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-xs leading-relaxed">
+          <div
+            className={`p-4 rounded-lg border space-y-1.5 ${
+              theme === 'dark'
+                ? 'bg-[#060B16]/80 border-slate-800'
+                : 'bg-[#F8FAFC] border-[#CBD5E1]'
+            }`}
+          >
+            <div className="font-mono-tabular font-semibold text-emerald-400">
+              THE BIG POINT · GROWTH &amp; PRICES
+            </div>
+            <p className="text-slate-300">
+              India&apos;s Real GDP expanded by{' '}
+              <strong className="font-mono-tabular text-emerald-400">
+                {gdpIndicator.currentValue}% YoY
+              </strong>{' '}
+              in <strong>{gdpIndicator.reportingPeriod}</strong> (MoSPI Base 2022–23; Nominal GDP{' '}
+              <strong className="font-mono-tabular">10.3% YoY</strong>), while All-India Combined CPI stood at{' '}
+              <strong className="font-mono-tabular text-amber-400">
+                {cpiIndicator.currentValue}% YoY
+              </strong>{' '}
+              in <strong>{cpiIndicator.reportingPeriod}</strong> (Base 2024=100; Food CFPI{' '}
+              <strong className="font-mono-tabular">7.74%</strong>).
+            </p>
+            <div className="pt-1 flex flex-wrap items-center gap-3 font-mono-tabular text-[11px]">
+              <button
+                type="button"
+                onClick={() => onSelectPage('gdp-growth', 'gdp-growth')}
+                className="text-emerald-400 hover:underline cursor-pointer"
+              >
+                MoSPI GDP Release →
+              </button>
+              <button
+                type="button"
+                onClick={() => onSelectPage('inflation', 'cpi-inflation')}
+                className="text-amber-400 hover:underline cursor-pointer"
+              >
+                MoSPI CPI Release →
+              </button>
+            </div>
+          </div>
+
+          <div
+            className={`p-4 rounded-lg border space-y-1.5 ${
+              theme === 'dark'
+                ? 'bg-[#060B16]/80 border-slate-800'
+                : 'bg-[#F8FAFC] border-[#CBD5E1]'
+            }`}
+          >
+            <div className="font-mono-tabular font-semibold text-cyan-400">
+              WHY IT MATTERS · MONETARY &amp; LABOUR
+            </div>
+            <p className="text-slate-300">
+              To anchor inflation expectations within the 4% ± 2% band, the RBI MPC set the Policy Repo Rate at{' '}
+              <strong className="font-mono-tabular text-cyan-400">
+                {repoIndicator ? `${repoIndicator.currentValue.toFixed(2)}%` : '5.50%'}
+              </strong>{' '}
+              (<strong>{repoIndicator?.reportingPeriod || '07 Oct 2026'}</strong>, SDF 5.25%, MSF 5.75%). Meanwhile, All-India PLFS Unemployment (CWS Age 15+) held at{' '}
+              <strong className="font-mono-tabular text-emerald-400">
+                {plfsIndicator ? `${plfsIndicator.currentValue.toFixed(1)}%` : '5.0%'}
+              </strong>{' '}
+              in <strong>{plfsIndicator?.reportingPeriod || 'Sep 2026'}</strong> (LFPR 55.5%).
+            </p>
+            <div className="pt-1 flex flex-wrap items-center gap-3 font-mono-tabular text-[11px]">
+              <button
+                type="button"
+                onClick={() => onSelectPage('financial-markets', 'rbi-repo-rate')}
+                className="text-cyan-400 hover:underline cursor-pointer"
+              >
+                RBI MPC Corridor →
+              </button>
+              <button
+                type="button"
+                onClick={() => onSelectPage('labour-market', 'unemployment-rate')}
+                className="text-emerald-400 hover:underline cursor-pointer"
+              >
+                MoSPI PLFS Bulletin →
+              </button>
+            </div>
+          </div>
+
+          <div
+            className={`p-4 rounded-lg border space-y-1.5 ${
+              theme === 'dark'
+                ? 'bg-[#060B16]/80 border-slate-800'
+                : 'bg-[#F8FAFC] border-[#CBD5E1]'
+            }`}
+          >
+            <div className="font-mono-tabular font-semibold text-amber-400">
+              KEY TAKEAWAY · EXTERNAL &amp; FX BALANCE
+            </div>
+            <p className="text-slate-300">
+              Sep 2026 Merchandise Trade recorded a signed balance of{' '}
+              <strong className="font-mono-tabular text-amber-400">
+                {tradeIndicator ? `-$${Math.abs(tradeIndicator.currentValue).toFixed(2)}B` : '-$30.21B'}
+              </strong>{' '}
+              (Exports $44.40B, Imports $74.61B; MoCI), alongside a PPAC Crude Oil monthly average of{' '}
+              <strong className="font-mono-tabular">
+                ${crudeIndicator ? crudeIndicator.currentValue.toFixed(2) : '116.09'}/bbl
+              </strong>{' '}
+              and FBIL USD/INR reference rate of{' '}
+              <strong className="font-mono-tabular">
+                ₹{usdInrIndicator ? usdInrIndicator.currentValue.toFixed(4) : '94.6986'}
+              </strong>{' '}
+              ({usdInrIndicator?.reportingPeriod || '22 Oct 2026'}).
+            </p>
+            <div className="pt-1 flex flex-wrap items-center gap-3 font-mono-tabular text-[11px]">
+              <button
+                type="button"
+                onClick={() => onSelectPage('currency-oil', 'merchandise-trade')}
+                className="text-amber-400 hover:underline cursor-pointer"
+              >
+                MoCI Trade, PPAC &amp; FBIL →
+              </button>
+              <button
+                type="button"
+                onClick={() => onSelectPage('economist-bites')}
+                className="text-emerald-400 hover:underline cursor-pointer"
+              >
+                Economists&apos; Bites →
+              </button>
+            </div>
+          </div>
+        </div>
+      </section>
 
       {/* 2. Headline KPI Cards Section */}
       <section ref={kpiSectionRef} className="space-y-4 scroll-mt-20">
@@ -615,6 +805,7 @@ export const OverviewPage: React.FC<OverviewPageProps> = ({
           onSimulateError={onSimulateBitesError}
           mode="overview-preview"
           onNavigate={onSelectPage}
+          theme={theme}
         />
       </ErrorBoundary>
 

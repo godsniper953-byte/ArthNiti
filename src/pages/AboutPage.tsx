@@ -409,6 +409,55 @@ export const AboutPage: React.FC<AboutPageProps> = ({ theme, onSelectPage }) => 
           </button>
         </section>
       </div>
+
+      {/* 6. Legal, Privacy, Third-Party Services & Financial-Information Disclosures */}
+      <section
+        aria-label="Legal, Privacy, and Financial Information Disclosures"
+        className={`rounded-xl border p-6 space-y-5 ${cardSurfaceClass}`}
+      >
+        <div className="space-y-1">
+          <div className="flex items-center gap-2 text-xs font-mono-tabular text-emerald-400">
+            <ShieldCheck className="w-4 h-4" />
+            <span>TRUST, PRIVACY &amp; REGULATORY TRANSPARENCY</span>
+          </div>
+          <h2 className="text-lg sm:text-xl font-display font-semibold">
+            Data Governance, Privacy &amp; Financial-Information Limitations
+          </h2>
+          <p className="text-xs sm:text-sm text-slate-400">
+            Transparent disclosure of how ArthNiti handles public statistical sources, third-party feeds, browser storage, and analytical content:
+          </p>
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-xs leading-relaxed">
+          <div className={`p-4 rounded-xl border space-y-1.5 ${subCardClass}`}>
+            <h3 className="text-sm font-semibold text-white">1. Data Sources &amp; Attribution</h3>
+            <p className="text-slate-400">
+              Core Indian macroeconomic indicators are compiled from official public releases by the Ministry of Statistics and Programme Implementation (MoSPI / NSO), Reserve Bank of India (RBI DBIE), Financial Benchmarks India Pvt. Ltd. (FBIL), Petroleum Planning &amp; Analysis Cell (PPAC), and Ministry of Commerce &amp; Industry (TRADESTAT). Research bites link directly to original speeches, working papers, and institutional reports (RBI, IMF, World Bank, BIS, Federal Reserve, NBER, PIIE, Bruegel). ArthNiti is an independent educational platform and is not affiliated with or endorsed by these institutions.
+            </p>
+          </div>
+
+          <div className={`p-4 rounded-xl border space-y-1.5 ${subCardClass}`}>
+            <h3 className="text-sm font-semibold text-white">2. Third-Party Services &amp; Exchange Feeds</h3>
+            <p className="text-slate-400">
+              Indian equity benchmark indices (NIFTY 50, BSE SENSEX, BANK NIFTY, NIFTY IT, NIFTY MIDCAP 100), live economic news headlines, and economist RSS feeds are fetched via ArthNiti&apos;s server-side proxy endpoints (<span className="font-mono-tabular">/api/market-indices</span>, <span className="font-mono-tabular">/api/economic-news</span>, <span className="font-mono-tabular">/api/economist-bites</span>). Upstream market quotes are retrieved from public exchange feed aggregators (Yahoo Finance v8 / optional Twelve Data) and carry an inherent 1–5 minute exchange dissemination delay.
+            </p>
+          </div>
+
+          <div className={`p-4 rounded-xl border space-y-1.5 ${subCardClass}`}>
+            <h3 className="text-sm font-semibold text-white">3. Privacy, Cookies &amp; Local Browser Storage</h3>
+            <p className="text-slate-400">
+              ArthNiti does <strong>not</strong> require user registration, does <strong>not</strong> collect personal information, and sets <strong>zero</strong> third-party advertising or behavioral tracking cookies. The application uses standard browser <span className="font-mono-tabular">localStorage</span> solely on your device to remember your display theme (<span className="font-mono-tabular">arthniti_theme</span>), sidebar layout (<span className="font-mono-tabular">arthniti_sidebar_collapsed</span>, <span className="font-mono-tabular">arthniti_sidebar_groups</span>), and any optional custom CSV datasets you upload locally for inspection.
+            </p>
+          </div>
+
+          <div className={`p-4 rounded-xl border space-y-1.5 ${subCardClass}`}>
+            <h3 className="text-sm font-semibold text-white">4. Financial-Information &amp; Non-Advisory Notice</h3>
+            <p className="text-slate-400">
+              All data, charts, Quick Summaries, and Economist Bites on ArthNiti are provided strictly for academic, educational, and informational purposes. Nothing on this website constitutes financial, investment, trading, legal, or tax advice. Users should verify primary institutional publications before making financial or policy decisions.
+            </p>
+          </div>
+        </div>
+      </section>
     </div>
   );
 };

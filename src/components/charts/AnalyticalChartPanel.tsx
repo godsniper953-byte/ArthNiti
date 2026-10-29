@@ -129,8 +129,8 @@ export const AnalyticalChartPanel: React.FC<AnalyticalChartPanelProps> = ({
     window.setTimeout(() => setExportConfirmed(false), 2200);
   };
 
-  const gridStroke = theme === 'dark' ? '#1e293b' : '#e2e8f0';
-  const axisTickColor = theme === 'dark' ? '#94a3b8' : '#64748b';
+  const gridStroke = theme === 'dark' ? '#1e293b' : '#cbd5e1';
+  const axisTickColor = theme === 'dark' ? '#94a3b8' : '#475569';
 
   const CustomTooltip = ({ active, payload }: { active?: boolean; payload?: any[] }) => {
     if (!active || !payload || !payload.length) return null;
@@ -140,10 +140,14 @@ export const AnalyticalChartPanel: React.FC<AnalyticalChartPanelProps> = ({
         className={`rounded-lg p-3 border shadow-xl text-xs max-w-xs ${
           theme === 'dark'
             ? 'bg-[#060B16]/95 border-slate-700 text-slate-100'
-            : 'bg-white/95 border-slate-200 text-slate-900'
+            : 'bg-white border-[#CBD5E1] text-[#172033]'
         }`}
       >
-        <div className="flex items-center justify-between gap-4 pb-1.5 mb-1.5 border-b border-slate-700/50">
+        <div
+          className={`flex items-center justify-between gap-4 pb-1.5 mb-1.5 border-b ${
+            theme === 'dark' ? 'border-slate-700/50' : 'border-[#CBD5E1]'
+          }`}
+        >
           <span className="font-mono-tabular font-semibold">{point.label}</span>
           <span className="text-[11px] text-slate-400">{point.status}</span>
         </div>
@@ -151,7 +155,19 @@ export const AnalyticalChartPanel: React.FC<AnalyticalChartPanelProps> = ({
           {payload.map((entry: any) => (
             <div key={entry.dataKey} className="flex items-center justify-between gap-4">
               <span className="text-slate-400">{entry.name}:</span>
-              <span className="font-mono-tabular font-semibold" style={{ color: entry.color }}>
+              <span
+                className="font-mono-tabular font-semibold"
+                style={{
+                  color:
+                    theme === 'light' && entry.color === '#10b981'
+                      ? '#047857'
+                      : theme === 'light' && entry.color === '#f59e0b'
+                      ? '#b45309'
+                      : theme === 'light' && entry.color === '#06b6d4'
+                      ? '#0e7490'
+                      : entry.color,
+                }}
+              >
                 {Number(entry.value).toLocaleString('en-IN')} {unit}
               </span>
             </div>

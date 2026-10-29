@@ -130,8 +130,8 @@ export const RelationshipExplorer: React.FC<RelationshipExplorerProps> = ({
     return `Across the ${points.length} aligned sample observations (${range} window), ${indicatorA.shortName} (${indicatorA.unit}) and ${indicatorB.shortName} (${indicatorB.unit}) exhibit a sample Pearson correlation of r = ${pearsonR > 0 ? `+${pearsonR}` : pearsonR} (${strength} ${direction}). Because macroeconomic variables respond to shared external shocks, policy lags, and structural shifts, statistical correlation never establishes direct causation.`;
   }, [indicatorA, indicatorB, pearsonR, points.length, range]);
 
-  const gridStroke = theme === 'dark' ? '#1e293b' : '#e2e8f0';
-  const tickColor = theme === 'dark' ? '#94a3b8' : '#64748b';
+  const gridStroke = theme === 'dark' ? '#1e293b' : '#cbd5e1';
+  const tickColor = theme === 'dark' ? '#94a3b8' : '#475569';
 
   return (
     <div
@@ -208,10 +208,12 @@ export const RelationshipExplorer: React.FC<RelationshipExplorerProps> = ({
                 onClick={() => setRange(r)}
                 className={`px-2.5 py-1 text-xs font-mono-tabular font-medium rounded-md transition-colors cursor-pointer whitespace-nowrap shrink-0 ${
                   range === r
-                    ? 'bg-slate-800 text-amber-400'
+                    ? theme === 'dark'
+                      ? 'bg-slate-800 text-amber-400'
+                      : 'bg-white border border-[#CBD5E1] text-[#0F172A] shadow-2xs'
                     : theme === 'dark'
                     ? 'text-slate-400 hover:text-slate-200'
-                    : 'text-slate-600 hover:text-slate-900'
+                    : 'text-[#475569] hover:text-[#0F172A]'
                 }`}
               >
                 {r}
@@ -357,7 +359,11 @@ export const RelationshipExplorer: React.FC<RelationshipExplorerProps> = ({
             />
             <YAxis
               yAxisId="left"
-              tick={{ fill: '#10b981', fontSize: 11, fontFamily: 'JetBrains Mono, monospace' }}
+              tick={{
+                fill: theme === 'dark' ? '#10b981' : '#047857',
+                fontSize: 11,
+                fontFamily: 'JetBrains Mono, monospace',
+              }}
               tickLine={false}
               axisLine={false}
               width={48}
@@ -367,7 +373,11 @@ export const RelationshipExplorer: React.FC<RelationshipExplorerProps> = ({
               <YAxis
                 yAxisId="right"
                 orientation="right"
-                tick={{ fill: '#f59e0b', fontSize: 11, fontFamily: 'JetBrains Mono, monospace' }}
+                tick={{
+                  fill: theme === 'dark' ? '#f59e0b' : '#b45309',
+                  fontSize: 11,
+                  fontFamily: 'JetBrains Mono, monospace',
+                }}
                 tickLine={false}
                 axisLine={false}
                 width={52}

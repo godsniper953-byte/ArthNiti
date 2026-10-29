@@ -79,6 +79,7 @@ import {
 } from '../api/economist-bites.ts';
 import { getHealthCheckPayload, default as healthHandler } from '../api/health.ts';
 import { ARTHNITI_NAV_ITEMS } from '../src/components/navigation/Sidebar.tsx';
+import { ARTHNITI_METHODOLOGY_REVISION_DATE } from '../src/pages/DataSourcesPage.tsx';
 
 const PUBLIC_DATA_DIR = path.resolve(process.cwd(), 'public/data');
 
@@ -398,6 +399,18 @@ test('3. Navigation routes, deep-linking, hash aliases (#audit, #methodology, #t
     pageId: 'economist-bites',
     indicatorId: null,
   });
+  assert.deepEqual(resolvePageFromLocation('#about-us', ''), {
+    pageId: 'about',
+    indicatorId: null,
+  });
+  assert.deepEqual(resolvePageFromLocation('#aboutus', ''), {
+    pageId: 'about',
+    indicatorId: null,
+  });
+  assert.ok(
+    ARTHNITI_METHODOLOGY_REVISION_DATE.length >= 10,
+    'Methodology page must expose a visible revision date'
+  );
   assert.deepEqual(resolvePageFromLocation('', '?page=economic-news'), {
     pageId: 'economic-news',
     indicatorId: null,

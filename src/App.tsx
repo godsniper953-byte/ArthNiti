@@ -1301,7 +1301,13 @@ export default function App() {
           />
         );
       case 'data-sources':
-        return <DataSourcesPage sources={sources} theme={theme} />;
+        return (
+          <DataSourcesPage
+            sources={sources}
+            theme={theme}
+            onSelectPage={handleSelectPage}
+          />
+        );
       case 'about':
         return <AboutPage theme={theme} onSelectPage={handleSelectPage} />;
       default:
@@ -1536,7 +1542,7 @@ export default function App() {
                 onClick={() => handleSelectPage('data-sources')}
                 className="hover:text-emerald-400 transition-colors cursor-pointer"
               >
-                Data Sources &amp; Methodology
+                Methodology &amp; Data Sources
               </button>
               <button
                 type="button"
@@ -1550,7 +1556,7 @@ export default function App() {
                 onClick={() => handleSelectPage('about')}
                 className="hover:text-emerald-400 transition-colors cursor-pointer"
               >
-                About &amp; FastAPI Setup
+                About Us
               </button>
             </div>
           </div>

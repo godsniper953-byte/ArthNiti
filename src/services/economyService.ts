@@ -57,6 +57,8 @@ const HASH_PAGE_ALIASES: Record<string, { pageId: PageId; defaultIndicatorId?: s
   methodology: { pageId: 'data-sources' },
   provenance: { pageId: 'data-sources' },
   sources: { pageId: 'data-sources' },
+  'about-us': { pageId: 'about' },
+  aboutus: { pageId: 'about' },
   trade: { pageId: 'currency-oil', defaultIndicatorId: 'merchandise-trade' },
   'merchandise-trade': { pageId: 'currency-oil', defaultIndicatorId: 'merchandise-trade' },
   'crude-oil': { pageId: 'currency-oil', defaultIndicatorId: 'crude-oil' },

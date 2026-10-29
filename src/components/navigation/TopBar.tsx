@@ -42,8 +42,8 @@ const PAGE_LABELS: Record<PageId, string> = {
   'economic-news': 'Economic News & Current Affairs',
   'economist-bites': "Economists' Latest Bites",
   comparisons: 'Economic Comparisons',
-  'data-sources': 'Data Sources',
-  about: 'About ArthNiti',
+  'data-sources': 'Methodology & Data Sources',
+  about: 'About Us',
 };
 
 // Highlight matching substring cleanly without dangerouslySetInnerHTML

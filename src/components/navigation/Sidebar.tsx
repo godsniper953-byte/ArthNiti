@@ -83,14 +83,14 @@ export const ARTHNITI_NAV_ITEMS: NavItemConfig[] = [
   },
   {
     id: 'data-sources',
-    label: 'Data Sources',
-    shortDesc: 'MoSPI, RBI & Methodology',
+    label: 'Methodology & Sources',
+    shortDesc: 'Provenance, Standards & QA',
     icon: Database,
   },
   {
     id: 'about',
-    label: 'About ArthNiti',
-    shortDesc: 'Architecture & Mission',
+    label: 'About Us',
+    shortDesc: 'Mission, Vision & Principles',
     icon: BookOpen,
   },
 ];

@@ -1,179 +1,413 @@
 import React from 'react';
 import {
+  ArrowUpRight,
   BookOpen,
-  Code2,
-  Cpu,
+  CheckCircle2,
+  Compass,
   Database,
+  ExternalLink,
+  Globe,
+  GraduationCap,
   Layers,
   ShieldCheck,
-  Terminal,
+  Target,
+  Users,
 } from 'lucide-react';
 import { getServiceStatus } from '../services/economyService';
 import { PageId } from '../types/economy';
 
 interface AboutPageProps {
   theme: 'dark' | 'light';
-  onSelectPage: (pageId: PageId) => void;
+  onSelectPage: (pageId: PageId, indicatorId?: string) => void;
 }
+
+const WHAT_WE_COVER_ITEMS: Array<{
+  title: string;
+  description: string;
+  targetPage: PageId;
+  linkLabel: string;
+}> = [
+  {
+    title: 'Indian Macroeconomic Indicators & Policy Developments',
+    description:
+      'National output, price stability, labour force participation, merchandise trade balances, and central bank monetary policy decisions sourced from official Indian statistical releases.',
+    targetPage: 'overview',
+    linkLabel: 'Explore Macro Overview',
+  },
+  {
+    title: 'Global Economic Trends & International Institutions',
+    description:
+      'Bilateral trade corridors across 22 sovereign partners and regional blocs, multilateral policy assessments from the IMF, World Bank, BIS, and OECD, and global spillovers to India.',
+    targetPage: 'economic-news',
+    linkLabel: 'Open Global & India News',
+  },
+  {
+    title: 'Inflation, GDP Growth, Employment, Monetary Policy & Exchange Rates',
+    description:
+      'Dedicated analytical modules for MoSPI Real & Nominal GDP, CPI Inflation, PLFS Unemployment, RBI Policy Repo Rate corridors, FBIL USD/INR rates, and PPAC Crude Oil prices.',
+    targetPage: 'gdp-growth',
+    linkLabel: 'Inspect Indicator Modules',
+  },
+  {
+    title: 'Indian & Global Financial Market Indicators',
+    description:
+      'Live delayed benchmark tracking for NIFTY 50, BSE SENSEX, BANK NIFTY, NIFTY IT, and NIFTY MIDCAP 100 alongside sovereign bond yields and international market context.',
+    targetPage: 'financial-markets',
+    linkLabel: 'View Financial Markets',
+  },
+  {
+    title: 'Latest Research, Publications & Commentary from Prominent Economists',
+    description:
+      'Curated and live-discovered perspectives from leading Indian and global economists on growth, inflation, tariffs, fiscal sustainability, AI productivity, and structural reform.',
+    targetPage: 'economist-bites',
+    linkLabel: "Open Economists' Latest Bites",
+  },
+  {
+    title: 'Concise Summaries Explaining Why Developments Matter',
+    description:
+      'Structured Quick Summaries (The Big Point, Why It Matters, Key Takeaway) and normalized multi-indicator comparisons that clarify macroeconomic transmission channels.',
+    targetPage: 'comparisons',
+    linkLabel: 'Open Comparison Workbench',
+  },
+];
+
+const ARTHNITI_PRINCIPLES: Array<{
+  name: string;
+  summary: string;
+}> = [
+  {
+    name: 'Accuracy',
+    summary:
+      'Prioritize verifiable information from official statistical releases, central bank publications, and primary research.',
+  },
+  {
+    name: 'Transparency',
+    summary:
+      'Identify original sources, base years, units, reference periods, and publication vs. retrieval timestamps on every view.',
+  },
+  {
+    name: 'Clarity',
+    summary:
+      'Make complex economic developments easier to understand through structured Quick Summaries and clean visual hierarchy.',
+  },
+  {
+    name: 'Objectivity',
+    summary:
+      'Strictly distinguish observed statistical facts from reported commentary, analytical interpretation, and forecasts.',
+  },
+  {
+    name: 'Accessibility',
+    summary:
+      'Present economic intelligence in a clear, responsive, keyboard-accessible format without paywalls or jargon barriers.',
+  },
+  {
+    name: 'Continuous Improvement',
+    summary:
+      'Continuously refine indicator coverage, automated data validation, source verification, and usability over time.',
+  },
+];
+
+const AUDIENCE_GROUPS: Array<{
+  group: string;
+  howItHelps: string;
+}> = [
+  {
+    group: 'Students & Learners',
+    howItHelps:
+      'Connects textbook macroeconomic concepts—such as the GDP deflator, Repo corridor, CPI basket weights, and trade balances—directly to real Indian and global data.',
+  },
+  {
+    group: 'Researchers & Policy Analysts',
+    howItHelps:
+      'Provides transparent source provenance, base-year documentation, multi-series Z-score/indexed comparisons, and direct links to primary working papers and central bank speeches.',
+  },
+  {
+    group: 'Educators & Academic Seminars',
+    howItHelps:
+      'Offers ready-to-inspect visual charts, an interactive 3D global trade network, and balanced summaries of contrasting economic debates for classroom discussion.',
+  },
+  {
+    group: 'Economics Enthusiasts & Informed Readers',
+    howItHelps:
+      'Delivers 5–10 second Quick Summaries on why policy rate shifts, crude oil movements, inflation prints, and global tariffs matter for households and markets.',
+  },
+];
 
 export const AboutPage: React.FC<AboutPageProps> = ({ theme, onSelectPage }) => {
   const serviceStatus = getServiceStatus();
 
+  const cardSurfaceClass =
+    theme === 'dark'
+      ? 'bg-[#0B1325] border-slate-800/90 text-slate-100'
+      : 'bg-white border-slate-200 text-slate-900 shadow-xs';
+
+  const subCardClass =
+    theme === 'dark'
+      ? 'bg-[#060B16]/90 border-slate-800/80 text-slate-200'
+      : 'bg-slate-50 border-slate-200/90 text-slate-800';
+
   return (
     <div className="space-y-8">
-      {/* Header */}
-      <div className="pb-5 border-b border-slate-800/80">
-        <div className="flex items-center gap-2 text-xs font-mono-tabular text-emerald-400">
+      {/* 1. Editorial Hero — About ArthNiti */}
+      <section className={`rounded-2xl border p-6 sm:p-8 space-y-5 ${cardSurfaceClass}`}>
+        <div className="flex flex-wrap items-center gap-2 text-xs font-mono-tabular text-emerald-400">
           <BookOpen className="w-3.5 h-3.5" />
-          <span>Platform Architecture &amp; Editorial Charter</span>
+          <span>ABOUT US · PURPOSE, VISION &amp; EDITORIAL CHARTER</span>
         </div>
-        <h1
-          className={`font-display text-2xl sm:text-3xl font-semibold tracking-tight mt-1 ${
-            theme === 'dark' ? 'text-white' : 'text-slate-950'
-          }`}
-        >
-          About ArthNiti — Indian Economic Intelligence
-        </h1>
-        <p className="text-xs sm:text-sm text-slate-400 mt-1 max-w-2xl">
-          Understand the Economy. Discover the Data. Built for economists, policy researchers, analysts, and students seeking transparent Indian macroeconomic visualization.
-        </p>
-      </div>
 
-      {/* Mission & Editorial Principles */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
-        <div
-          className={`rounded-xl border p-5 sm:p-6 space-y-2.5 ${
-            theme === 'dark' ? 'bg-[#0B1325] border-slate-800/90' : 'bg-white border-slate-200'
-          }`}
-        >
-          <ShieldCheck className="w-5 h-5 text-emerald-400" />
-          <h2 className="text-base font-semibold">Econometric Honesty</h2>
-          <p className="text-xs text-slate-400 leading-relaxed">
-            ArthNiti never assumes every numerical increase is positive or every decrease is negative. Inflation, unemployment, crude import costs, and currency movements are evaluated against their real macroeconomic context and RBI policy mandates.
+        <div className="space-y-3 max-w-4xl">
+          <h1
+            className={`font-display text-2xl sm:text-3xl lg:text-4xl font-semibold tracking-tight ${
+              theme === 'dark' ? 'text-white' : 'text-slate-950'
+            }`}
+          >
+            About ArthNiti
+          </h1>
+          <p
+            className={`text-sm sm:text-base leading-relaxed ${
+              theme === 'dark' ? 'text-slate-200' : 'text-slate-700'
+            }`}
+          >
+            ArthNiti is an economic intelligence platform designed to make economic data, policy developments, financial indicators, and global economic trends easier to understand. It brings together key information on the Indian economy and the wider global economy in one accessible digital experience.
+          </p>
+          <p className="text-xs sm:text-sm text-slate-400 leading-relaxed">
+            By organizing important indicators, providing concise summaries, and highlighting research and commentary from economists, ArthNiti aims to help students, researchers, and curious readers explore the forces shaping economic outcomes.
           </p>
         </div>
 
-        <div
-          className={`rounded-xl border p-5 sm:p-6 space-y-2.5 ${
-            theme === 'dark' ? 'bg-[#0B1325] border-slate-800/90' : 'bg-white border-slate-200'
-          }`}
-        >
-          <Layers className="w-5 h-5 text-amber-400" />
-          <h2 className="text-base font-semibold">Zero Fabricated Claims</h2>
-          <p className="text-xs text-slate-400 leading-relaxed">
-            Every chart clearly distinguishes between illustrative development data and live upstream API feeds, explains why correlation does not establish causation, and enforces unit-compatibility normalization before comparing multi-series data.
-          </p>
-        </div>
-
-        <div
-          className={`rounded-xl border p-5 sm:p-6 space-y-2.5 ${
-            theme === 'dark' ? 'bg-[#0B1325] border-slate-800/90' : 'bg-white border-slate-200'
-          }`}
-        >
-          <Cpu className="w-5 h-5 text-cyan-400" />
-          <h2 className="text-base font-semibold">Modular FastAPI Readiness</h2>
-          <p className="text-xs text-slate-400 leading-relaxed">
-            All components consume data exclusively through the typed <code className="font-mono-tabular">economyService.ts</code> layer. Connecting a Python FastAPI backend requires only setting <code className="font-mono-tabular">VITE_API_BASE_URL</code> in your environment configuration.
-          </p>
-        </div>
-      </div>
-
-      {/* FastAPI Backend Integration Contract & Windows Setup */}
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
-        {/* FastAPI Contract (6 cols) */}
-        <div
-          className={`lg:col-span-6 rounded-xl border p-5 sm:p-6 space-y-4 ${
-            theme === 'dark' ? 'bg-[#0B1325] border-slate-800/90' : 'bg-white border-slate-200'
-          }`}
-        >
-          <div className="flex items-center gap-2 text-xs text-emerald-400 font-mono-tabular">
+        <div className="pt-2 flex flex-wrap items-center gap-3">
+          <button
+            type="button"
+            onClick={() => onSelectPage('data-sources')}
+            className="px-4 py-2.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-xs sm:text-sm font-semibold transition-colors inline-flex items-center gap-2 cursor-pointer"
+          >
             <Database className="w-4 h-4" />
-            <span>Service Layer &amp; Future FastAPI Integration</span>
-          </div>
-          <h2 className="text-base sm:text-lg font-semibold">
-            Configurable Backend Architecture
-          </h2>
+            <span>Read Methodology &amp; Data Sources</span>
+          </button>
+          <button
+            type="button"
+            onClick={() => onSelectPage('economist-bites')}
+            className="px-4 py-2.5 rounded-lg bg-amber-500/15 hover:bg-amber-500/25 text-amber-300 border border-amber-500/30 text-xs sm:text-sm font-medium transition-colors inline-flex items-center gap-2 cursor-pointer"
+          >
+            <GraduationCap className="w-4 h-4" />
+            <span>Explore Economists&apos; Latest Bites</span>
+          </button>
+          <button
+            type="button"
+            onClick={() => onSelectPage('overview')}
+            className={`px-4 py-2.5 rounded-lg border text-xs sm:text-sm font-medium transition-colors inline-flex items-center gap-2 cursor-pointer ${
+              theme === 'dark'
+                ? 'bg-[#060B16] border-slate-700 text-slate-200 hover:border-slate-600'
+                : 'bg-slate-100 border-slate-300 text-slate-800 hover:bg-slate-200'
+            }`}
+          >
+            <Compass className="w-4 h-4 text-cyan-400" />
+            <span>Return to Overview Dashboard</span>
+          </button>
+        </div>
+      </section>
 
-          <div className="space-y-2 text-xs text-slate-400">
-            <div className="flex items-center justify-between py-1.5 border-b border-slate-800">
-              <span>Current Data Service Mode:</span>
-              <span className="font-mono-tabular text-emerald-400 font-semibold">
-                {serviceStatus.mode === 'live_api'
-                  ? 'Connected External FastAPI'
-                  : '7 Official Macro CSVs + 2 Live Server APIs'}
-              </span>
-            </div>
-            <div className="flex items-center justify-between py-1.5 border-b border-slate-800">
-              <span>Server-Side Live Endpoints:</span>
-              <span className="font-mono-tabular text-cyan-400">
-                /api/market-indices · /api/economic-news · /api/health
-              </span>
-            </div>
-            <div className="flex items-center justify-between py-1.5 border-b border-slate-800">
-              <span>Configured VITE_API_BASE_URL:</span>
-              <span className="font-mono-tabular text-slate-300">
-                {serviceStatus.apiBaseUrl || '(Optional — using built-in verified datasets & APIs)'}
-              </span>
-            </div>
+      {/* 2. Our Mission & Our Vision */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+        <section className={`rounded-xl border p-6 space-y-3 ${cardSurfaceClass}`}>
+          <div className="flex items-center gap-2 text-xs font-mono-tabular text-emerald-400">
+            <Target className="w-4 h-4" />
+            <span>OUR MISSION</span>
           </div>
-
-          <p className="text-xs text-slate-400 leading-relaxed">
-            ArthNiti operates a resilient hybrid architecture: 7 core Indian macroeconomic indicators (MoSPI GDP, CPI, PLFS, RBI MPC Repo, FBIL USD/INR, PPAC Crude Oil, and MoCI Merchandise Trade Balance) are served from verified official CSV datasets with zero-code browser CSV updaters, while Indian Stock Market Indices and Economic News &amp; Current Affairs are aggregated via server-side API proxies (<code className="font-mono-tabular">/api/market-indices</code> and <code className="font-mono-tabular">/api/economic-news</code>).
+          <h2 className="text-lg sm:text-xl font-display font-semibold">Our Mission</h2>
+          <p className="text-sm text-slate-300 leading-relaxed">
+            To make economic information more accessible, understandable, and useful through clear presentation, transparent sourcing, and evidence-based analysis.
           </p>
+        </section>
+
+        <section className={`rounded-xl border p-6 space-y-3 ${cardSurfaceClass}`}>
+          <div className="flex items-center gap-2 text-xs font-mono-tabular text-amber-400">
+            <Globe className="w-4 h-4" />
+            <span>OUR VISION</span>
+          </div>
+          <h2 className="text-lg sm:text-xl font-display font-semibold">Our Vision</h2>
+          <p className="text-sm text-slate-300 leading-relaxed">
+            To build a reliable and accessible platform that encourages informed economic thinking and strengthens public understanding of India&apos;s economy and its relationship with the global economic system.
+          </p>
+        </section>
+      </div>
+
+      {/* 3. What We Cover */}
+      <section className={`rounded-xl border p-6 space-y-5 ${cardSurfaceClass}`}>
+        <div className="space-y-1">
+          <div className="flex items-center gap-2 text-xs font-mono-tabular text-cyan-400">
+            <Layers className="w-4 h-4" />
+            <span>SCOPE OF COVERAGE</span>
+          </div>
+          <h2 className="text-lg sm:text-xl font-display font-semibold">What We Cover</h2>
+          <p className="text-xs sm:text-sm text-slate-400">
+            ArthNiti integrates six core pillars of Indian and global economic intelligence:
+          </p>
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+          {WHAT_WE_COVER_ITEMS.map((item) => (
+            <div
+              key={item.title}
+              className={`rounded-xl border p-4 flex flex-col justify-between gap-3 ${subCardClass}`}
+            >
+              <div className="space-y-2">
+                <h3 className="text-sm font-semibold text-white leading-snug">{item.title}</h3>
+                <p className="text-xs text-slate-400 leading-relaxed">{item.description}</p>
+              </div>
+              <button
+                type="button"
+                onClick={() => onSelectPage(item.targetPage)}
+                className="inline-flex items-center gap-1 text-xs font-mono-tabular text-emerald-400 hover:text-emerald-300 self-start cursor-pointer"
+              >
+                <span>{item.linkLabel}</span>
+                <ArrowUpRight className="w-3.5 h-3.5" />
+              </button>
+            </div>
+          ))}
+        </div>
+      </section>
+
+      {/* 4. Our Principles */}
+      <section className={`rounded-xl border p-6 space-y-5 ${cardSurfaceClass}`}>
+        <div className="space-y-1">
+          <div className="flex items-center gap-2 text-xs font-mono-tabular text-emerald-400">
+            <ShieldCheck className="w-4 h-4" />
+            <span>CORE VALUES &amp; STANDARDS</span>
+          </div>
+          <h2 className="text-lg sm:text-xl font-display font-semibold">Our Principles</h2>
+          <p className="text-xs sm:text-sm text-slate-400">
+            Six foundational commitments guide how every dataset, chart, and summary is built on ArthNiti:
+          </p>
+        </div>
+
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+          {ARTHNITI_PRINCIPLES.map((principle) => (
+            <div
+              key={principle.name}
+              className={`p-4 rounded-xl border space-y-1.5 ${subCardClass}`}
+            >
+              <div className="flex items-center gap-2">
+                <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
+                <h3 className="text-sm font-semibold text-white">{principle.name}</h3>
+              </div>
+              <p className="text-xs text-slate-400 leading-relaxed">{principle.summary}</p>
+            </div>
+          ))}
+        </div>
+      </section>
+
+      {/* 5. Who Is ArthNiti For? & Documentation Links */}
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+        <section className={`lg:col-span-7 rounded-xl border p-6 space-y-4 ${cardSurfaceClass}`}>
+          <div className="flex items-center gap-2 text-xs font-mono-tabular text-amber-400">
+            <Users className="w-4 h-4" />
+            <span>READERSHIP &amp; EDUCATIONAL VALUE</span>
+          </div>
+          <h2 className="text-lg sm:text-xl font-display font-semibold">
+            Who Is ArthNiti For?
+          </h2>
+          <p className="text-xs sm:text-sm text-slate-300 leading-relaxed">
+            Students, economics enthusiasts, researchers, educators, and readers seeking a clearer understanding of Indian and global economic developments.
+          </p>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
+            {AUDIENCE_GROUPS.map((aud) => (
+              <div key={aud.group} className={`p-3.5 rounded-lg border space-y-1 ${subCardClass}`}>
+                <div className="text-xs font-semibold text-emerald-400">{aud.group}</div>
+                <p className="text-xs text-slate-400 leading-relaxed">{aud.howItHelps}</p>
+              </div>
+            ))}
+          </div>
+        </section>
+
+        {/* Primary Institutional Documentation & Architecture Links */}
+        <section className={`lg:col-span-5 rounded-xl border p-6 flex flex-col justify-between space-y-4 ${cardSurfaceClass}`}>
+          <div className="space-y-3">
+            <div className="flex items-center gap-2 text-xs font-mono-tabular text-cyan-400">
+              <Database className="w-4 h-4" />
+              <span>VERIFIED ARCHITECTURE &amp; OFFICIAL REPOSITORIES</span>
+            </div>
+            <h2 className="text-base sm:text-lg font-semibold">
+              Direct Links to Original Statistical Repositories
+            </h2>
+            <p className="text-xs text-slate-400 leading-relaxed">
+              ArthNiti encourages readers to consult primary institutional releases alongside platform visualizations. Current service mode:{' '}
+              <span className="font-mono-tabular text-emerald-400">
+                {serviceStatus.mode === 'live_api'
+                  ? 'External API Connected'
+                  : '7 Official Macro CSVs + 3 Live Server Endpoints'}
+              </span>
+              .
+            </p>
+
+            <div className={`p-3.5 rounded-lg border space-y-2 text-xs ${subCardClass}`}>
+              <a
+                href="https://mospi.gov.in/"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="flex items-center justify-between text-slate-300 hover:text-emerald-400 transition-colors"
+              >
+                <span>MoSPI &amp; National Statistical Office (NSO)</span>
+                <ExternalLink className="w-3.5 h-3.5 shrink-0" />
+              </a>
+              <a
+                href="https://dbie.rbihub.in/"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="flex items-center justify-between text-slate-300 hover:text-emerald-400 transition-colors"
+              >
+                <span>Reserve Bank of India — DBIE Data Warehouse</span>
+                <ExternalLink className="w-3.5 h-3.5 shrink-0" />
+              </a>
+              <a
+                href="https://tradestat.commerce.gov.in/"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="flex items-center justify-between text-slate-300 hover:text-emerald-400 transition-colors"
+              >
+                <span>Ministry of Commerce — TRADESTAT Portal</span>
+                <ExternalLink className="w-3.5 h-3.5 shrink-0" />
+              </a>
+              <a
+                href="https://ppac.gov.in/"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="flex items-center justify-between text-slate-300 hover:text-emerald-400 transition-colors"
+              >
+                <span>Petroleum Planning &amp; Analysis Cell (PPAC)</span>
+                <ExternalLink className="w-3.5 h-3.5 shrink-0" />
+              </a>
+              <a
+                href="https://www.imf.org/en/Publications/WEO"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="flex items-center justify-between text-slate-300 hover:text-emerald-400 transition-colors"
+              >
+                <span>IMF World Economic Outlook &amp; Research</span>
+                <ExternalLink className="w-3.5 h-3.5 shrink-0" />
+              </a>
+              <a
+                href="https://www.worldbank.org/en/research"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="flex items-center justify-between text-slate-300 hover:text-emerald-400 transition-colors"
+              >
+                <span>World Bank Development Economics Research</span>
+                <ExternalLink className="w-3.5 h-3.5 shrink-0" />
+              </a>
+            </div>
+          </div>
 
           <button
             type="button"
             onClick={() => onSelectPage('data-sources')}
-            className="px-4 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-medium transition-colors cursor-pointer"
+            className="w-full py-2.5 px-4 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-semibold transition-colors inline-flex items-center justify-center gap-1.5 cursor-pointer"
           >
-            Inspect Official Data Sources Directory
+            <span>Inspect Full Methodology &amp; Indicator Registry</span>
+            <ArrowUpRight className="w-3.5 h-3.5" />
           </button>
-        </div>
-
-        {/* Windows & Local Setup Guide (6 cols) */}
-        <div
-          className={`lg:col-span-6 rounded-xl border p-5 sm:p-6 space-y-4 ${
-            theme === 'dark' ? 'bg-[#0B1325] border-slate-800/90' : 'bg-white border-slate-200'
-          }`}
-        >
-          <div className="flex items-center gap-2 text-xs text-amber-400 font-mono-tabular">
-            <Terminal className="w-4 h-4" />
-            <span>Developer Quickstart (Windows PowerShell / CMD)</span>
-          </div>
-          <h2 className="text-base sm:text-lg font-semibold">
-            Local Installation &amp; Deployment Commands
-          </h2>
-
-          <pre
-            className={`p-4 rounded-lg border font-mono-tabular text-xs overflow-x-auto leading-relaxed ${
-              theme === 'dark'
-                ? 'bg-[#060B16] border-slate-800 text-emerald-300'
-                : 'bg-slate-900 border-slate-800 text-emerald-300'
-            }`}
-          >
-{`# 1. Clone the repository on Windows
-git clone https://github.com/your-username/arthniti-economic-intelligence.git
-cd arthniti-economic-intelligence
-
-# 2. Copy environment configuration (PowerShell)
-Copy-Item .env.example .env.local
-
-# 3. Install dependencies and start Vite dev server
-npm install
-npm run dev
-
-# 4. Create production static build for Vercel / GitHub Pages
-npm run build
-npm run preview`}
-          </pre>
-
-          <div className="flex items-center gap-2 text-xs text-slate-400">
-            <Code2 className="w-4 h-4 text-cyan-400 shrink-0" />
-            <span>
-              Repository Target: <strong className="font-mono-tabular text-slate-200">arthniti-economic-intelligence</strong> (Static-host ready for Vercel &amp; GitHub Pages).
-            </span>
-          </div>
-        </div>
+        </section>
       </div>
     </div>
   );

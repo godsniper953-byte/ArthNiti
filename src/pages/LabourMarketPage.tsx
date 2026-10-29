@@ -10,7 +10,6 @@ import {
   RefreshCw,
   ShieldCheck,
   Table,
-  Upload,
   Users,
 } from 'lucide-react';
 import { EconomicIndicator } from '../types/economy';
@@ -21,11 +20,11 @@ interface LabourMarketPageProps {
   isLoading: boolean;
   errorMessage: string | null;
   lastVerified: string;
-  dataOrigin: 'official_mospi_csv' | 'user_uploaded_csv' | 'demonstration_fallback';
+  dataOrigin?: 'official_mospi_csv' | 'user_uploaded_csv' | 'demonstration_fallback';
   onRefreshOfficialPlfs: (simulateError?: boolean) => void;
-  onUploadCustomCsv: (csvText: string) => { ok: boolean; error?: string };
-  onResetCustomCsv: () => void;
-  onActivateDemoFallback: () => void;
+  onUploadCustomCsv?: (csvText: string) => { ok: boolean; error?: string };
+  onResetCustomCsv?: () => void;
+  onActivateDemoFallback?: () => void;
   theme: 'dark' | 'light';
 }
 
@@ -34,17 +33,10 @@ export const LabourMarketPage: React.FC<LabourMarketPageProps> = ({
   isLoading,
   errorMessage,
   lastVerified,
-  dataOrigin,
   onRefreshOfficialPlfs,
-  onUploadCustomCsv,
-  onResetCustomCsv,
-  onActivateDemoFallback,
   theme,
 }) => {
   const [selectedMetric, setSelectedMetric] = useState<'ur_breakdown' | 'lfpr_wpr' | 'all'>('ur_breakdown');
-  const [showCsvUpdater, setShowCsvUpdater] = useState<boolean>(false);
-  const [csvDraft, setCsvDraft] = useState<string>('');
-  const [csvFeedback, setCsvFeedback] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
 
   const observations = indicator.observations || [];
   const latest = observations[observations.length - 1];
@@ -104,51 +96,6 @@ export const LabourMarketPage: React.FC<LabourMarketPageProps> = ({
           },
         ];
 
-  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    const reader = new FileReader();
-    reader.onload = (event) => {
-      const content = String(event.target?.result || '');
-      setCsvDraft(content);
-      const res = onUploadCustomCsv(content);
-      if (res.ok) {
-        setCsvFeedback({
-          type: 'success',
-          message: `Uploaded "${file.name}" and updated the PLFS Unemployment chart and table.`,
-        });
-      } else {
-        setCsvFeedback({
-          type: 'error',
-          message: res.error || 'Could not parse uploaded PLFS CSV file.',
-        });
-      }
-    };
-    reader.readAsText(file);
-  };
-
-  const handleApplyPastedCsv = () => {
-    if (!csvDraft.trim()) {
-      setCsvFeedback({
-        type: 'error',
-        message: 'Please paste CSV rows or choose a .csv file first.',
-      });
-      return;
-    }
-    const res = onUploadCustomCsv(csvDraft);
-    if (res.ok) {
-      setCsvFeedback({
-        type: 'success',
-        message: 'Custom MoSPI PLFS CSV dataset applied and saved in your browser.',
-      });
-    } else {
-      setCsvFeedback({
-        type: 'error',
-        message: res.error || 'Failed to parse pasted PLFS CSV.',
-      });
-    }
-  };
-
   return (
     <div className="space-y-8">
       {/* 1. Header & Official MoSPI PLFS Data Provenance Bar */}
@@ -158,20 +105,12 @@ export const LabourMarketPage: React.FC<LabourMarketPageProps> = ({
             {indicator.isOfficialData && !errorMessage ? (
               <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-md bg-emerald-500/15 text-emerald-400 border border-emerald-500/30 font-semibold">
                 <ShieldCheck className="w-3.5 h-3.5" />
-                <span>
-                  {dataOrigin === 'user_uploaded_csv'
-                    ? 'USER-UPLOADED MOSPI PLFS CSV'
-                    : 'OFFICIAL MOSPI PLFS DATA · MONTHLY CWS (AGE 15+)'}
-                </span>
+                <span>OFFICIAL MOSPI PLFS DATA · MONTHLY CWS (AGE 15+)</span>
               </span>
             ) : (
               <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-md bg-amber-500/15 text-amber-400 border border-amber-500/30 font-semibold">
                 <AlertTriangle className="w-3.5 h-3.5" />
-                <span>
-                  {errorMessage
-                    ? 'OFFICIAL PLFS DATA UNAVAILABLE'
-                    : 'DEMONSTRATION FALLBACK SERIES'}
-                </span>
+                <span>OFFICIAL PLFS DATA UNAVAILABLE</span>
               </span>
             )}
             <span className="text-slate-400">·</span>
@@ -197,7 +136,7 @@ export const LabourMarketPage: React.FC<LabourMarketPageProps> = ({
           </p>
         </div>
 
-        {/* Action Toolbar: Refresh, CSV Updater, & Error State Tester */}
+        {/* Action Toolbar: Reload Official PLFS Data */}
         <div className="flex flex-wrap items-center gap-2 self-start lg:self-auto">
           <button
             type="button"
@@ -211,24 +150,6 @@ export const LabourMarketPage: React.FC<LabourMarketPageProps> = ({
           >
             <RefreshCw className={`w-3.5 h-3.5 text-emerald-400 ${isLoading ? 'animate-spin' : ''}`} />
             <span>{isLoading ? 'Verifying PLFS Data...' : 'Reload Official PLFS Data'}</span>
-          </button>
-
-          <button
-            type="button"
-            onClick={() => setShowCsvUpdater((prev) => !prev)}
-            className="px-3 py-1.5 rounded-lg border border-emerald-500/40 bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-300 text-xs font-medium flex items-center gap-1.5 transition-colors cursor-pointer"
-          >
-            <Upload className="w-3.5 h-3.5" />
-            <span>{showCsvUpdater ? 'Hide CSV Updater' : 'Update PLFS CSV (No-Code)'}</span>
-          </button>
-
-          <button
-            type="button"
-            onClick={() => onRefreshOfficialPlfs(true)}
-            title="Simulate an official data load failure to verify that ArthNiti never silently substitutes fake data"
-            className="px-2.5 py-1.5 rounded-lg border border-amber-500/30 bg-amber-500/10 hover:bg-amber-500/20 text-amber-300 text-xs font-medium transition-colors cursor-pointer"
-          >
-            Test Error State
           </button>
         </div>
       </div>
@@ -247,7 +168,7 @@ export const LabourMarketPage: React.FC<LabourMarketPageProps> = ({
               </div>
               <p className="text-slate-300 leading-relaxed">{errorMessage}</p>
               <p className="text-slate-400">
-                <strong>Strict Data Integrity Guarantee:</strong> In accordance with ArthNiti&apos;s statistical governance standards, the platform <strong>never silently substitutes sample or stale data</strong> when official PLFS retrieval fails. You may retry loading the verified MoSPI PLFS dataset or explicitly view a clearly labelled demonstration fallback series.
+                <strong>Strict Data Integrity Guarantee:</strong> In accordance with ArthNiti&apos;s statistical governance standards, the platform <strong>never silently substitutes sample or stale data</strong> when official PLFS retrieval fails. Click &ldquo;Retry Official MoSPI PLFS Dataset&rdquo; to reload the verified dataset.
               </p>
             </div>
           </div>
@@ -260,115 +181,11 @@ export const LabourMarketPage: React.FC<LabourMarketPageProps> = ({
             >
               Retry Official MoSPI PLFS Dataset
             </button>
-            <button
-              type="button"
-              onClick={onActivateDemoFallback}
-              className="px-3.5 py-1.5 rounded-lg border border-amber-500/40 bg-amber-500/15 hover:bg-amber-500/25 text-amber-300 font-medium cursor-pointer"
-            >
-              Use Clearly Labelled Demonstration Data Instead
-            </button>
           </div>
         </div>
       )}
 
-      {/* 3. Zero-Code CSV Updater Drawer for Non-Programmers */}
-      {showCsvUpdater && (
-        <div
-          className={`rounded-xl border p-5 space-y-4 ${
-            theme === 'dark'
-              ? 'bg-[#0B1325] border-emerald-500/40 text-slate-200'
-              : 'bg-emerald-50/40 border-emerald-300 text-slate-800'
-          }`}
-        >
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
-            <div>
-              <div className="text-xs font-mono-tabular text-emerald-400 font-semibold">
-                ZERO-CODE MOSPI PLFS DATA UPDATER (FOR NON-PROGRAMMERS)
-              </div>
-              <h2 className="text-base font-semibold mt-0.5">
-                Update Monthly PLFS Unemployment Data Without Touching Code
-              </h2>
-            </div>
-            {dataOrigin === 'user_uploaded_csv' && (
-              <button
-                type="button"
-                onClick={() => {
-                  onResetCustomCsv();
-                  setCsvFeedback({
-                    type: 'success',
-                    message: 'Restored default verified MoSPI PLFS dataset (/data/mospi_plfs_official.csv).',
-                  });
-                }}
-                className="px-3 py-1.5 rounded-lg border border-rose-500/40 bg-rose-500/10 text-rose-300 text-xs font-medium cursor-pointer self-start"
-              >
-                Reset to Default Verified MoSPI PLFS CSV
-              </button>
-            )}
-          </div>
-
-          <p className="text-xs text-slate-400 leading-relaxed">
-            When MoSPI releases a new Monthly PLFS Bulletin on the 15th of the month, you can either replace{' '}
-            <code className="font-mono-tabular text-emerald-400">public/data/mospi_plfs_official.csv</code> in GitHub OR upload/paste the updated CSV right here. Required columns:{' '}
-            <code className="font-mono-tabular text-amber-300">
-              date,label,overall_ur_cws_pct,rural_ur_cws_pct,urban_ur_cws_pct,lfpr_cws_pct,wpr_cws_pct,age_group,measure,status,release_date
-            </code>
-          </p>
-
-          <div className="grid grid-cols-1 lg:grid-cols-12 gap-4">
-            <div className="lg:col-span-5 space-y-3">
-              <label className="block text-xs font-medium">
-                Option A: Choose a <code className="font-mono-tabular">.csv</code> file from your computer
-                <input
-                  type="file"
-                  accept=".csv,text/csv"
-                  onChange={handleFileUpload}
-                  className="mt-1.5 block w-full text-xs text-slate-300 file:mr-3 file:py-1.5 file:px-3 file:rounded-lg file:border-0 file:text-xs file:font-semibold file:bg-emerald-600 file:text-white hover:file:bg-emerald-500 cursor-pointer"
-                />
-              </label>
-
-              <div className="p-3 rounded-lg bg-[#060B16]/80 border border-slate-800 text-[11px] font-mono-tabular text-slate-300 space-y-1">
-                <div className="text-emerald-400 font-semibold">Example New Monthly Row (Oct 2026):</div>
-                <div className="break-all">
-                  2026-10,Oct 2026,4.9,4.1,6.8,55.6,52.9,15 years and above,CWS,Provisional,15 Nov 2026
-                </div>
-              </div>
-            </div>
-
-            <div className="lg:col-span-7 space-y-2">
-              <label className="block text-xs font-medium">
-                Option B: Paste full CSV content directly
-                <textarea
-                  rows={4}
-                  value={csvDraft}
-                  onChange={(e) => setCsvDraft(e.target.value)}
-                  placeholder="date,label,overall_ur_cws_pct,rural_ur_cws_pct,urban_ur_cws_pct,lfpr_cws_pct,wpr_cws_pct,age_group,measure,status,release_date&#10;2026-09,Sep 2026,5.0,4.2,6.9,55.5,52.7,15 years and above,CWS,Provisional,15 Oct 2026"
-                  className="mt-1.5 w-full rounded-lg border border-slate-700 bg-[#060B16] p-2.5 text-xs font-mono-tabular text-slate-100 focus:outline-2 focus:outline-emerald-500"
-                />
-              </label>
-              <div className="flex items-center justify-between gap-2">
-                <button
-                  type="button"
-                  onClick={handleApplyPastedCsv}
-                  className="px-3.5 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-semibold cursor-pointer"
-                >
-                  Apply Pasted CSV Data
-                </button>
-                {csvFeedback && (
-                  <span
-                    className={`text-xs font-medium ${
-                      csvFeedback.type === 'success' ? 'text-emerald-400' : 'text-rose-400'
-                    }`}
-                  >
-                    {csvFeedback.message}
-                  </span>
-                )}
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* 4. Official MoSPI PLFS Verification Strip (4 Cards) */}
+      {/* 3. Official MoSPI PLFS Verification Strip (4 Cards) */}
       {!errorMessage && latest && (
         <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
           {/* Card 1: Headline All-India CWS Unemployment Rate */}

@@ -16,7 +16,6 @@ import {
   ShieldCheck,
   Ship,
   Table,
-  Upload,
 } from 'lucide-react';
 import { EconomicIndicator } from '../types/economy';
 import { AnalyticalChartPanel } from '../components/charts/AnalyticalChartPanel';
@@ -31,27 +30,27 @@ interface CurrencyOilPageProps {
   usdInrError: string | null;
   usdInrEmpty: boolean;
   usdInrRetrievalTimestamp: string;
-  usdInrDataOrigin: 'official_rbi_fbil_csv' | 'user_uploaded_csv' | 'demonstration_fallback';
+  usdInrDataOrigin?: 'official_rbi_fbil_csv' | 'user_uploaded_csv' | 'demonstration_fallback';
   onRefreshOfficialUsdInr: (options?: { simulateError?: boolean; simulateEmpty?: boolean }) => void;
-  onUploadCustomUsdInrCsv: (csvText: string) => { ok: boolean; error?: string };
-  onResetCustomUsdInrCsv: () => void;
-  onActivateUsdInrDemoFallback: () => void;
+  onUploadCustomUsdInrCsv?: (csvText: string) => { ok: boolean; error?: string };
+  onResetCustomUsdInrCsv?: () => void;
+  onActivateUsdInrDemoFallback?: () => void;
   crudeLoading: boolean;
   crudeError: string | null;
   crudeRetrievalTimestamp: string;
-  crudeDataOrigin: 'official_ppac_csv' | 'user_uploaded_csv' | 'demonstration_fallback';
+  crudeDataOrigin?: 'official_ppac_csv' | 'user_uploaded_csv' | 'demonstration_fallback';
   onRefreshOfficialCrude: (simulateError?: boolean) => void;
-  onUploadCustomCrudeCsv: (csvText: string) => { ok: boolean; error?: string };
-  onResetCustomCrudeCsv: () => void;
-  onActivateCrudeDemoFallback: () => void;
+  onUploadCustomCrudeCsv?: (csvText: string) => { ok: boolean; error?: string };
+  onResetCustomCrudeCsv?: () => void;
+  onActivateCrudeDemoFallback?: () => void;
   tradeLoading: boolean;
   tradeError: string | null;
   tradeRetrievalTimestamp: string;
-  tradeDataOrigin: 'official_moci_csv' | 'user_uploaded_csv' | 'demonstration_fallback';
+  tradeDataOrigin?: 'official_moci_csv' | 'user_uploaded_csv' | 'demonstration_fallback';
   onRefreshOfficialTrade: (simulateError?: boolean) => void;
-  onUploadCustomTradeCsv: (csvText: string) => { ok: boolean; error?: string };
-  onResetCustomTradeCsv: () => void;
-  onActivateTradeDemoFallback: () => void;
+  onUploadCustomTradeCsv?: (csvText: string) => { ok: boolean; error?: string };
+  onResetCustomTradeCsv?: () => void;
+  onActivateTradeDemoFallback?: () => void;
   theme: 'dark' | 'light';
 }
 
@@ -64,50 +63,17 @@ export const CurrencyOilPage: React.FC<CurrencyOilPageProps> = ({
   usdInrError,
   usdInrEmpty,
   usdInrRetrievalTimestamp,
-  usdInrDataOrigin,
   onRefreshOfficialUsdInr,
-  onUploadCustomUsdInrCsv,
-  onResetCustomUsdInrCsv,
-  onActivateUsdInrDemoFallback,
   crudeLoading,
   crudeError,
   crudeRetrievalTimestamp,
-  crudeDataOrigin,
   onRefreshOfficialCrude,
-  onUploadCustomCrudeCsv,
-  onResetCustomCrudeCsv,
-  onActivateCrudeDemoFallback,
   tradeLoading,
   tradeError,
   tradeRetrievalTimestamp,
-  tradeDataOrigin,
   onRefreshOfficialTrade,
-  onUploadCustomTradeCsv,
-  onResetCustomTradeCsv,
-  onActivateTradeDemoFallback,
   theme,
 }) => {
-  const [showUsdInrCsvUpdater, setShowUsdInrCsvUpdater] = useState<boolean>(false);
-  const [usdInrCsvDraft, setUsdInrCsvDraft] = useState<string>('');
-  const [usdInrCsvFeedback, setUsdInrCsvFeedback] = useState<{
-    type: 'success' | 'error';
-    message: string;
-  } | null>(null);
-
-  const [showCrudeCsvUpdater, setShowCrudeCsvUpdater] = useState<boolean>(false);
-  const [crudeCsvDraft, setCrudeCsvDraft] = useState<string>('');
-  const [crudeCsvFeedback, setCrudeCsvFeedback] = useState<{
-    type: 'success' | 'error';
-    message: string;
-  } | null>(null);
-
-  const [showTradeCsvUpdater, setShowTradeCsvUpdater] = useState<boolean>(false);
-  const [tradeCsvDraft, setTradeCsvDraft] = useState<string>('');
-  const [tradeCsvFeedback, setTradeCsvFeedback] = useState<{
-    type: 'success' | 'error';
-    message: string;
-  } | null>(null);
-
   const [crudeChartMode, setCrudeChartMode] = useState<'price_only' | 'price_and_mom'>('price_only');
   const [tradeBalanceChartMode, setTradeBalanceChartMode] = useState<
     'signed_balance' | 'deficit_magnitude' | 'yoy_growth'
@@ -185,142 +151,6 @@ export const CurrencyOilPage: React.FC<CurrencyOilPageProps> = ({
     latestCrude && previousCrude && previousCrude.value > 0
       ? Number((((latestCrude.value - previousCrude.value) / previousCrude.value) * 100).toFixed(2))
       : 28.72;
-
-  // CSV Upload Handlers
-  const handleTradeFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    const reader = new FileReader();
-    reader.onload = (event) => {
-      const content = String(event.target?.result || '');
-      setTradeCsvDraft(content);
-      const res = onUploadCustomTradeCsv(content);
-      if (res.ok) {
-        setTradeCsvFeedback({
-          type: 'success',
-          message: `Uploaded "${file.name}" and updated the Merchandise Trade Balance charts and table.`,
-        });
-      } else {
-        setTradeCsvFeedback({
-          type: 'error',
-          message: res.error || 'Could not parse uploaded Merchandise Trade CSV file.',
-        });
-      }
-    };
-    reader.readAsText(file);
-  };
-
-  const handleApplyPastedTradeCsv = () => {
-    if (!tradeCsvDraft.trim()) {
-      setTradeCsvFeedback({
-        type: 'error',
-        message: 'Please paste CSV rows or choose a .csv file first.',
-      });
-      return;
-    }
-    const res = onUploadCustomTradeCsv(tradeCsvDraft);
-    if (res.ok) {
-      setTradeCsvFeedback({
-        type: 'success',
-        message: 'Custom MoCI Merchandise Trade CSV dataset applied and saved in your browser.',
-      });
-    } else {
-      setTradeCsvFeedback({
-        type: 'error',
-        message: res.error || 'Failed to parse pasted Merchandise Trade CSV.',
-      });
-    }
-  };
-
-  const handleUsdInrFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    const reader = new FileReader();
-    reader.onload = (event) => {
-      const content = String(event.target?.result || '');
-      setUsdInrCsvDraft(content);
-      const res = onUploadCustomUsdInrCsv(content);
-      if (res.ok) {
-        setUsdInrCsvFeedback({
-          type: 'success',
-          message: `Uploaded "${file.name}" and updated the USD/INR Reference Rate chart and table.`,
-        });
-      } else {
-        setUsdInrCsvFeedback({
-          type: 'error',
-          message: res.error || 'Could not parse uploaded USD/INR CSV file.',
-        });
-      }
-    };
-    reader.readAsText(file);
-  };
-
-  const handleApplyPastedUsdInrCsv = () => {
-    if (!usdInrCsvDraft.trim()) {
-      setUsdInrCsvFeedback({
-        type: 'error',
-        message: 'Please paste CSV rows or choose a .csv file first.',
-      });
-      return;
-    }
-    const res = onUploadCustomUsdInrCsv(usdInrCsvDraft);
-    if (res.ok) {
-      setUsdInrCsvFeedback({
-        type: 'success',
-        message: 'Custom FBIL / RBI DBIE USD/INR CSV dataset applied and saved in your browser.',
-      });
-    } else {
-      setUsdInrCsvFeedback({
-        type: 'error',
-        message: res.error || 'Failed to parse pasted USD/INR CSV.',
-      });
-    }
-  };
-
-  const handleCrudeFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    const reader = new FileReader();
-    reader.onload = (event) => {
-      const content = String(event.target?.result || '');
-      setCrudeCsvDraft(content);
-      const res = onUploadCustomCrudeCsv(content);
-      if (res.ok) {
-        setCrudeCsvFeedback({
-          type: 'success',
-          message: `Uploaded "${file.name}" and updated the PPAC Crude Oil chart and table.`,
-        });
-      } else {
-        setCrudeCsvFeedback({
-          type: 'error',
-          message: res.error || 'Could not parse uploaded PPAC Crude Oil CSV file.',
-        });
-      }
-    };
-    reader.readAsText(file);
-  };
-
-  const handleApplyPastedCrudeCsv = () => {
-    if (!crudeCsvDraft.trim()) {
-      setCrudeCsvFeedback({
-        type: 'error',
-        message: 'Please paste CSV rows or choose a .csv file first.',
-      });
-      return;
-    }
-    const res = onUploadCustomCrudeCsv(crudeCsvDraft);
-    if (res.ok) {
-      setCrudeCsvFeedback({
-        type: 'success',
-        message: 'Custom PPAC Crude Oil CSV dataset applied and saved in your browser.',
-      });
-    } else {
-      setCrudeCsvFeedback({
-        type: 'error',
-        message: res.error || 'Failed to parse pasted PPAC Crude Oil CSV.',
-      });
-    }
-  };
 
   const transmissionSteps = [
     {
@@ -402,38 +232,30 @@ export const CurrencyOilPage: React.FC<CurrencyOilPageProps> = ({
 
           <button
             type="button"
-            onClick={() => setShowTradeCsvUpdater((prev) => !prev)}
-            className="px-3 py-1.5 rounded-lg border border-cyan-500/40 bg-cyan-500/10 hover:bg-cyan-500/20 text-cyan-300 text-xs font-medium flex items-center gap-1.5 transition-colors cursor-pointer"
+            onClick={() => onRefreshOfficialCrude(false)}
+            disabled={crudeLoading}
+            className={`px-3 py-1.5 rounded-lg border text-xs font-medium flex items-center gap-1.5 transition-colors cursor-pointer ${
+              theme === 'dark'
+                ? 'bg-[#0B1325] border-slate-700 text-slate-200 hover:border-amber-500/50'
+                : 'bg-white border-slate-300 text-slate-800 hover:bg-slate-100'
+            }`}
           >
-            <Upload className="w-3.5 h-3.5" />
-            <span>{showTradeCsvUpdater ? 'Hide Trade CSV Updater' : 'Update Trade CSV'}</span>
+            <RefreshCw className={`w-3.5 h-3.5 text-amber-400 ${crudeLoading ? 'animate-spin' : ''}`} />
+            <span>{crudeLoading ? 'Verifying PPAC...' : 'Reload PPAC Crude'}</span>
           </button>
 
           <button
             type="button"
-            onClick={() => onRefreshOfficialTrade(true)}
-            title="Simulate an official MoCI Trade data load failure to verify stale/error handling"
-            className="px-2.5 py-1.5 rounded-lg border border-rose-500/30 bg-rose-500/10 hover:bg-rose-500/20 text-rose-300 text-xs font-medium transition-colors cursor-pointer"
+            onClick={() => onRefreshOfficialUsdInr({ simulateError: false, simulateEmpty: false })}
+            disabled={usdInrLoading}
+            className={`px-3 py-1.5 rounded-lg border text-xs font-medium flex items-center gap-1.5 transition-colors cursor-pointer ${
+              theme === 'dark'
+                ? 'bg-[#0B1325] border-slate-700 text-slate-200 hover:border-cyan-500/50'
+                : 'bg-white border-slate-300 text-slate-800 hover:bg-slate-100'
+            }`}
           >
-            Test Trade Error
-          </button>
-
-          <button
-            type="button"
-            onClick={() => setShowCrudeCsvUpdater((prev) => !prev)}
-            className="px-3 py-1.5 rounded-lg border border-amber-500/40 bg-amber-500/10 hover:bg-amber-500/20 text-amber-300 text-xs font-medium flex items-center gap-1.5 transition-colors cursor-pointer"
-          >
-            <Upload className="w-3.5 h-3.5" />
-            <span>{showCrudeCsvUpdater ? 'Hide PPAC Updater' : 'Update PPAC CSV'}</span>
-          </button>
-
-          <button
-            type="button"
-            onClick={() => setShowUsdInrCsvUpdater((prev) => !prev)}
-            className="px-3 py-1.5 rounded-lg border border-emerald-500/40 bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-300 text-xs font-medium flex items-center gap-1.5 transition-colors cursor-pointer"
-          >
-            <Upload className="w-3.5 h-3.5" />
-            <span>{showUsdInrCsvUpdater ? 'Hide USD/INR Updater' : 'Update USD/INR CSV'}</span>
+            <RefreshCw className={`w-3.5 h-3.5 text-cyan-400 ${usdInrLoading ? 'animate-spin' : ''}`} />
+            <span>{usdInrLoading ? 'Verifying FBIL...' : 'Reload USD/INR'}</span>
           </button>
         </div>
       </div>
@@ -560,107 +382,6 @@ export const CurrencyOilPage: React.FC<CurrencyOilPageProps> = ({
               >
                 Retry Official MoCI / RBI DBIE Dataset
               </button>
-              <button
-                type="button"
-                onClick={onActivateTradeDemoFallback}
-                className="px-3.5 py-1.5 rounded-lg border border-amber-500/40 bg-amber-500/15 hover:bg-amber-500/25 text-amber-300 font-medium cursor-pointer"
-              >
-                Display Last Verified Reference Period (Sep 2026) with Explicit Label
-              </button>
-            </div>
-          </div>
-        )}
-
-        {/* Zero-Code Merchandise Trade CSV Updater */}
-        {showTradeCsvUpdater && (
-          <div
-            className={`rounded-xl border p-5 space-y-4 ${
-              theme === 'dark'
-                ? 'bg-[#0B1325] border-cyan-500/40 text-slate-200'
-                : 'bg-cyan-50/40 border-cyan-300 text-slate-800'
-            }`}
-          >
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
-              <div>
-                <div className="text-xs font-mono-tabular text-cyan-400 font-semibold">
-                  ZERO-CODE MERCHANDISE TRADE CSV UPDATER (FOR NON-PROGRAMMERS)
-                </div>
-                <h3 className="text-base font-semibold mt-0.5">
-                  Update Official Monthly Merchandise Exports &amp; Imports Without Touching Code
-                </h3>
-              </div>
-              {tradeDataOrigin === 'user_uploaded_csv' && (
-                <button
-                  type="button"
-                  onClick={() => {
-                    onResetCustomTradeCsv();
-                    setTradeCsvFeedback({
-                      type: 'success',
-                      message:
-                        'Restored default verified MoCI dataset (/data/moci_merchandise_trade_official.csv).',
-                    });
-                  }}
-                  className="px-3 py-1.5 rounded-lg border border-rose-500/40 bg-rose-500/10 text-rose-300 text-xs font-medium cursor-pointer self-start"
-                >
-                  Reset to Default Verified MoCI CSV
-                </button>
-              )}
-            </div>
-
-            <p className="text-xs text-slate-400 leading-relaxed">
-              Because the Ministry of Commerce &amp; Industry (<code className="font-mono-tabular">commerce.gov.in</code> / <code className="font-mono-tabular">tradestat.commerce.gov.in</code>) publishes monthly trade releases as official press statements and spreadsheets rather than a public CORS JSON API, you can update <code className="font-mono-tabular text-emerald-400">public/data/moci_merchandise_trade_official.csv</code> or upload a CSV file here. ArthNiti automatically computes <code className="font-mono-tabular text-cyan-300">Trade Balance = Exports − Imports</code> and the positive deficit magnitude.
-            </p>
-
-            <div className="grid grid-cols-1 lg:grid-cols-12 gap-4">
-              <div className="lg:col-span-5 space-y-3">
-                <label className="block text-xs font-medium">
-                  Option A: Choose a <code className="font-mono-tabular">.csv</code> file from your computer
-                  <input
-                    type="file"
-                    accept=".csv,text/csv"
-                    onChange={handleTradeFileUpload}
-                    className="mt-1.5 block w-full text-xs text-slate-300 file:mr-3 file:py-1.5 file:px-3 file:rounded-lg file:border-0 file:text-xs file:font-semibold file:bg-cyan-600 file:text-white hover:file:bg-cyan-500 cursor-pointer"
-                  />
-                </label>
-
-                <div className="p-3 rounded-lg bg-[#060B16]/80 border border-slate-800 text-[11px] font-mono-tabular text-slate-300 space-y-1">
-                  <div className="text-cyan-400 font-semibold">Example Monthly Row:</div>
-                  <div className="break-all">
-                    2026-09,Sep 2026,2026-27,44.40,74.61,-30.21,30.21,23.06,8.01,16.91,-13.30,259.89,437.53,177.64,15 Oct 2026,Provisional
-                  </div>
-                </div>
-              </div>
-
-              <div className="lg:col-span-7 space-y-2">
-                <label className="block text-xs font-medium">
-                  Option B: Paste full CSV content directly
-                  <textarea
-                    rows={4}
-                    value={tradeCsvDraft}
-                    onChange={(e) => setTradeCsvDraft(e.target.value)}
-                    placeholder="year_month,period_label,financial_year,merchandise_exports_usd_bn,merchandise_imports_usd_bn,exports_yoy_pct,imports_yoy_pct,release_date,status&#10;2026-08,Aug 2026,2026-27,43.81,70.67,26.11,14.06,15 Sep 2026,Provisional&#10;2026-09,Sep 2026,2026-27,44.40,74.61,23.06,8.01,15 Oct 2026,Provisional"
-                    className="mt-1.5 w-full rounded-lg border border-slate-700 bg-[#060B16] p-2.5 text-xs font-mono-tabular text-slate-100 focus:outline-2 focus:outline-cyan-500"
-                  />
-                </label>
-                <div className="flex items-center justify-between gap-2">
-                  <button
-                    type="button"
-                    onClick={handleApplyPastedTradeCsv}
-                    className="px-3.5 py-1.5 rounded-lg bg-cyan-600 hover:bg-cyan-500 text-white text-xs font-semibold cursor-pointer"
-                  >
-                    Apply Pasted Merchandise Trade CSV
-                  </button>
-                  {tradeCsvFeedback && (
-                    <span
-                      className={`text-xs font-medium ${
-                        tradeCsvFeedback.type === 'success' ? 'text-emerald-400' : 'text-rose-400'
-                      }`}
-                    >
-                      {tradeCsvFeedback.message}
-                    </span>
-                  )}
-                </div>
-              </div>
             </div>
           </div>
         )}
@@ -1271,30 +992,8 @@ export const CurrencyOilPage: React.FC<CurrencyOilPageProps> = ({
               Completed Monthly Average vs. Daily &amp; Month-to-Date (Partial) Price
             </h2>
           </div>
-          <div className="flex items-center gap-2 text-xs font-mono-tabular">
-            <button
-              type="button"
-              onClick={() => onRefreshOfficialCrude(true)}
-              className="text-slate-400 hover:text-rose-400 underline cursor-pointer"
-            >
-              Test PPAC Error
-            </button>
-            <span className="text-slate-600">·</span>
-            <button
-              type="button"
-              onClick={() => onRefreshOfficialUsdInr({ simulateError: true })}
-              className="text-slate-400 hover:text-amber-400 underline cursor-pointer"
-            >
-              Test FX Error
-            </button>
-            <span className="text-slate-600">·</span>
-            <button
-              type="button"
-              onClick={() => onRefreshOfficialUsdInr({ simulateEmpty: true })}
-              className="text-slate-400 hover:text-cyan-400 underline cursor-pointer"
-            >
-              Test FX Empty
-            </button>
+          <div className="text-xs font-mono-tabular text-slate-400">
+            Composition: 75.6% Sour (Oman &amp; Dubai) + 24.4% Sweet (Brent)
           </div>
         </div>
 
@@ -1325,116 +1024,6 @@ export const CurrencyOilPage: React.FC<CurrencyOilPageProps> = ({
               >
                 Retry Official PPAC Dataset
               </button>
-              <button
-                type="button"
-                onClick={onActivateCrudeDemoFallback}
-                className="px-3.5 py-1.5 rounded-lg border border-amber-500/40 bg-amber-500/15 hover:bg-amber-500/25 text-amber-300 font-medium cursor-pointer"
-              >
-                Use Clearly Labelled Demonstration Data Instead
-              </button>
-            </div>
-          </div>
-        )}
-
-        {/* Zero-Code PPAC Crude Oil CSV Updater */}
-        {showCrudeCsvUpdater && (
-          <div
-            className={`rounded-xl border p-5 space-y-4 ${
-              theme === 'dark'
-                ? 'bg-[#0B1325] border-amber-500/40 text-slate-200'
-                : 'bg-amber-50/40 border-amber-300 text-slate-800'
-            }`}
-          >
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
-              <div>
-                <div className="text-xs font-mono-tabular text-amber-400 font-semibold">
-                  ZERO-CODE PPAC CRUDE OIL CSV UPDATER (FOR NON-PROGRAMMERS)
-                </div>
-                <h3 className="text-base font-semibold mt-0.5">
-                  Update Official PPAC Indian Basket Crude Prices Without Touching Code
-                </h3>
-              </div>
-              {crudeDataOrigin === 'user_uploaded_csv' && (
-                <button
-                  type="button"
-                  onClick={() => {
-                    onResetCustomCrudeCsv();
-                    setCrudeCsvFeedback({
-                      type: 'success',
-                      message:
-                        'Restored default verified PPAC dataset (/data/ppac_crude_official.csv).',
-                    });
-                  }}
-                  className="px-3 py-1.5 rounded-lg border border-rose-500/40 bg-rose-500/10 text-rose-300 text-xs font-medium cursor-pointer self-start"
-                >
-                  Reset to Default Verified PPAC CSV
-                </button>
-              )}
-            </div>
-
-            <p className="text-xs text-slate-400 leading-relaxed">
-              Because PPAC publishes international crude oil prices via web tables and downloadable spreadsheets on{' '}
-              <a
-                href="https://ppac.gov.in/prices/international-prices-of-crude-oil"
-                target="_blank"
-                rel="noopener noreferrer"
-                className="text-amber-400 underline"
-              >
-                ppac.gov.in/prices/international-prices-of-crude-oil
-              </a>{' '}
-              rather than a public CORS-enabled JSON API, you can update <code className="font-mono-tabular text-emerald-400">public/data/ppac_crude_official.csv</code> on GitHub or upload/paste a CSV right here. Set <code className="font-mono-tabular text-amber-300">Is_Completed_Month</code> to <code className="font-mono-tabular">true</code> for completed months and <code className="font-mono-tabular">false</code> for Month-to-Date partial averages.
-            </p>
-
-            <div className="grid grid-cols-1 lg:grid-cols-12 gap-4">
-              <div className="lg:col-span-5 space-y-3">
-                <label className="block text-xs font-medium">
-                  Option A: Choose a <code className="font-mono-tabular">.csv</code> file from your computer
-                  <input
-                    type="file"
-                    accept=".csv,text/csv"
-                    onChange={handleCrudeFileUpload}
-                    className="mt-1.5 block w-full text-xs text-slate-300 file:mr-3 file:py-1.5 file:px-3 file:rounded-lg file:border-0 file:text-xs file:font-semibold file:bg-amber-600 file:text-white hover:file:bg-amber-500 cursor-pointer"
-                  />
-                </label>
-
-                <div className="p-3 rounded-lg bg-[#060B16]/80 border border-slate-800 text-[11px] font-mono-tabular text-slate-300 space-y-1">
-                  <div className="text-amber-400 font-semibold">Example Completed Month Row:</div>
-                  <div className="break-all">
-                    2026-10,Oct 2026,120.08,Completed Monthly Average,true,02 Nov 2026,Sour + Sweet,Final,Official PPAC Completed Monthly Average
-                  </div>
-                </div>
-              </div>
-
-              <div className="lg:col-span-7 space-y-2">
-                <label className="block text-xs font-medium">
-                  Option B: Paste full CSV content directly
-                  <textarea
-                    rows={4}
-                    value={crudeCsvDraft}
-                    onChange={(e) => setCrudeCsvDraft(e.target.value)}
-                    placeholder="Period_Code,Period_Label,Crude_Basket_USD_Bbl,Observation_Kind,Is_Completed_Month,Source_Last_Updated&#10;2026-08,Aug 2026,90.19,Completed Monthly Average,true,01 Sep 2026&#10;2026-09,Sep 2026,116.09,Completed Monthly Average,true,01 Oct 2026"
-                    className="mt-1.5 w-full rounded-lg border border-slate-700 bg-[#060B16] p-2.5 text-xs font-mono-tabular text-slate-100 focus:outline-2 focus:outline-amber-500"
-                  />
-                </label>
-                <div className="flex items-center justify-between gap-2">
-                  <button
-                    type="button"
-                    onClick={handleApplyPastedCrudeCsv}
-                    className="px-3.5 py-1.5 rounded-lg bg-amber-600 hover:bg-amber-500 text-white text-xs font-semibold cursor-pointer"
-                  >
-                    Apply Pasted PPAC CSV Data
-                  </button>
-                  {crudeCsvFeedback && (
-                    <span
-                      className={`text-xs font-medium ${
-                        crudeCsvFeedback.type === 'success' ? 'text-emerald-400' : 'text-rose-400'
-                      }`}
-                    >
-                      {crudeCsvFeedback.message}
-                    </span>
-                  )}
-                </div>
-              </div>
             </div>
           </div>
         )}
@@ -1642,13 +1231,6 @@ export const CurrencyOilPage: React.FC<CurrencyOilPageProps> = ({
               >
                 Retry Official RBI / FBIL Dataset
               </button>
-              <button
-                type="button"
-                onClick={onActivateUsdInrDemoFallback}
-                className="px-3.5 py-1.5 rounded-lg border border-amber-500/40 bg-amber-500/15 hover:bg-amber-500/25 text-amber-300 font-medium cursor-pointer"
-              >
-                Use Clearly Labelled Demonstration Data Instead
-              </button>
             </div>
           </div>
         )}
@@ -1678,96 +1260,6 @@ export const CurrencyOilPage: React.FC<CurrencyOilPageProps> = ({
               >
                 Restore Verified Official RBI / FBIL Dataset
               </button>
-            </div>
-          </div>
-        )}
-
-        {/* Zero-Code USD/INR CSV Updater Drawer */}
-        {showUsdInrCsvUpdater && (
-          <div
-            className={`rounded-xl border p-5 space-y-4 ${
-              theme === 'dark'
-                ? 'bg-[#0B1325] border-emerald-500/40 text-slate-200'
-                : 'bg-emerald-50/40 border-emerald-300 text-slate-800'
-            }`}
-          >
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
-              <div>
-                <div className="text-xs font-mono-tabular text-emerald-400 font-semibold">
-                  ZERO-CODE RBI DBIE / FBIL USD/INR CSV UPDATER (FOR NON-PROGRAMMERS)
-                </div>
-                <h3 className="text-base font-semibold mt-0.5">
-                  Update Official USD/INR Reference Rates Without Touching Code
-                </h3>
-              </div>
-              {usdInrDataOrigin === 'user_uploaded_csv' && (
-                <button
-                  type="button"
-                  onClick={() => {
-                    onResetCustomUsdInrCsv();
-                    setUsdInrCsvFeedback({
-                      type: 'success',
-                      message:
-                        'Restored default verified FBIL / RBI DBIE dataset (/data/rbi_fbil_usdinr_official.csv).',
-                    });
-                  }}
-                  className="px-3 py-1.5 rounded-lg border border-rose-500/40 bg-rose-500/10 text-rose-300 text-xs font-medium cursor-pointer self-start"
-                >
-                  Reset to Default Verified USD/INR CSV
-                </button>
-              )}
-            </div>
-
-            <div className="grid grid-cols-1 lg:grid-cols-12 gap-4">
-              <div className="lg:col-span-5 space-y-3">
-                <label className="block text-xs font-medium">
-                  Option A: Choose a <code className="font-mono-tabular">.csv</code> file from your computer
-                  <input
-                    type="file"
-                    accept=".csv,text/csv"
-                    onChange={handleUsdInrFileUpload}
-                    className="mt-1.5 block w-full text-xs text-slate-300 file:mr-3 file:py-1.5 file:px-3 file:rounded-lg file:border-0 file:text-xs file:font-semibold file:bg-emerald-600 file:text-white hover:file:bg-emerald-500 cursor-pointer"
-                  />
-                </label>
-
-                <div className="p-3 rounded-lg bg-[#060B16]/80 border border-slate-800 text-[11px] font-mono-tabular text-slate-300 space-y-1">
-                  <div className="text-emerald-400 font-semibold">Example New Business Day Row:</div>
-                  <div className="break-all">
-                    2026-10-23,23 Oct 2026,94.6810,13:30 IST,FBIL (Post-Jul 2018),FBIL / RBI DBIE,Reference Rate (INR per 1 USD),Final,Daily Official FBIL Reference Rate
-                  </div>
-                </div>
-              </div>
-
-              <div className="lg:col-span-7 space-y-2">
-                <label className="block text-xs font-medium">
-                  Option B: Paste full CSV content directly
-                  <textarea
-                    rows={4}
-                    value={usdInrCsvDraft}
-                    onChange={(e) => setUsdInrCsvDraft(e.target.value)}
-                    placeholder="Observation_Date,Period_Label,USD_INR_Reference_Rate,Observation_Time_IST,Benchmark_Publisher&#10;2026-10-21,21 Oct 2026,94.7145,13:30 IST,FBIL (Post-Jul 2018)&#10;2026-10-22,22 Oct 2026,94.6986,13:30 IST,FBIL (Post-Jul 2018)"
-                    className="mt-1.5 w-full rounded-lg border border-slate-700 bg-[#060B16] p-2.5 text-xs font-mono-tabular text-slate-100 focus:outline-2 focus:outline-emerald-500"
-                  />
-                </label>
-                <div className="flex items-center justify-between gap-2">
-                  <button
-                    type="button"
-                    onClick={handleApplyPastedUsdInrCsv}
-                    className="px-3.5 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-semibold cursor-pointer"
-                  >
-                    Apply Pasted USD/INR CSV Data
-                  </button>
-                  {usdInrCsvFeedback && (
-                    <span
-                      className={`text-xs font-medium ${
-                        usdInrCsvFeedback.type === 'success' ? 'text-emerald-400' : 'text-rose-400'
-                      }`}
-                    >
-                      {usdInrCsvFeedback.message}
-                    </span>
-                  )}
-                </div>
-              </div>
             </div>
           </div>
         )}

@@ -192,41 +192,6 @@ export const LiveIndianMarketsSection: React.FC<LiveIndianMarketsSectionProps> =
             <RefreshCw className={`w-3.5 h-3.5 ${isLoading ? 'animate-spin' : ''}`} />
             <span>{isLoading ? 'Refreshing...' : 'Refresh Now'}</span>
           </button>
-
-          {/* Diagnostic Controls for Student Verification */}
-          <button
-            type="button"
-            onClick={() =>
-              onSimulateSingleIndexUnavailable(
-                simulatedUnavailableIndexId ? null : 'nifty-midcap-100'
-              )
-            }
-            className={`px-2.5 py-1.5 rounded-lg border text-xs font-medium transition-colors cursor-pointer ${
-              simulatedUnavailableIndexId
-                ? 'border-amber-500/60 bg-amber-500/15 text-amber-300'
-                : theme === 'dark'
-                ? 'bg-[#0B1325] border-slate-800 text-slate-400 hover:text-amber-300'
-                : 'bg-slate-100 border-slate-200 text-slate-600 hover:text-amber-800'
-            }`}
-            title="Verify that if a single index fails to load, only that card shows an unavailable state without fake numbers"
-          >
-            {simulatedUnavailableIndexId ? 'Restore 5th Index' : 'Test 1 Card Unavailable'}
-          </button>
-
-          <button
-            type="button"
-            onClick={() => onSimulateError(Boolean(!errorMessage))}
-            className={`px-2.5 py-1.5 rounded-lg border text-xs font-medium transition-colors cursor-pointer ${
-              errorMessage
-                ? 'border-rose-500/60 bg-rose-500/15 text-rose-300'
-                : theme === 'dark'
-                ? 'bg-[#0B1325] border-slate-800 text-slate-400 hover:text-rose-400'
-                : 'bg-slate-100 border-slate-200 text-slate-600 hover:text-rose-700'
-            }`}
-            title="Test how the dashboard handles a total market feed failure without fabricating prices"
-          >
-            {errorMessage ? 'Restore Live Feed' : 'Test Feed Error'}
-          </button>
         </div>
       </div>
 

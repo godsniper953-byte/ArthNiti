@@ -1428,4 +1428,62 @@ test('10. 3D Globe Geographic Coordinate Mapping, Camera-Facing Orientation, Sho
   }
 });
 
+test('11. Production UI Hygiene: No unwanted debug/error simulation buttons or CSV-management panels appear in user-facing pages or components', () => {
+  const uiFilesToAudit = [
+    'src/App.tsx',
+    'src/components/navigation/Sidebar.tsx',
+    'src/components/navigation/TopBar.tsx',
+    'src/components/visualizations/LiveIndianMarketsSection.tsx',
+    'src/components/visualizations/LiveMarketTickerStrip.tsx',
+    'src/components/news/EconomicNewsSection.tsx',
+    'src/components/bites/EconomistBitesSection.tsx',
+    'src/pages/OverviewPage.tsx',
+    'src/pages/GdpGrowthPage.tsx',
+    'src/pages/InflationPage.tsx',
+    'src/pages/LabourMarketPage.tsx',
+    'src/pages/CurrencyOilPage.tsx',
+    'src/pages/FinancialMarketsPage.tsx',
+    'src/pages/EconomicNewsPage.tsx',
+    'src/pages/EconomistBitesPage.tsx',
+    'src/pages/ComparisonsPage.tsx',
+    'src/pages/DataSourcesPage.tsx',
+    'src/pages/AboutPage.tsx',
+  ];
 
+  const forbiddenUiLabels = [
+    'Test Error State',
+    'Test Trade Error',
+    'Test PPAC Error',
+    'Test FX Error',
+    'Test FX Empty',
+    'Test 1 Card Unavailable',
+    'Test Feed Error',
+    'Test Feed Error State',
+    'Update MoSPI GDP CSV',
+    'Update MoSPI CSV',
+    'Update PLFS CSV',
+    'Update Trade CSV',
+    'Update PPAC CSV',
+    'Update USD/INR CSV',
+    'Update RBI Repo CSV',
+    'Hide CSV Updater',
+    'Hide Trade CSV Updater',
+    'Hide PPAC Updater',
+    'Hide USD/INR Updater',
+    'Switch to Labelled Demo Fallback',
+    'Switch to Explicitly Labelled Demonstration State',
+    'Use Clearly Labelled Demonstration Data Instead',
+  ];
+
+  for (const relPath of uiFilesToAudit) {
+    const absPath = path.resolve(process.cwd(), relPath);
+    assert.ok(fs.existsSync(absPath), `Expected UI file ${relPath} to exist`);
+    const source = fs.readFileSync(absPath, 'utf-8');
+    for (const forbidden of forbiddenUiLabels) {
+      assert.ok(
+        !source.includes(forbidden),
+        `Found forbidden debug/CSV-management label "${forbidden}" in user-facing file ${relPath}`
+      );
+    }
+  }
+});

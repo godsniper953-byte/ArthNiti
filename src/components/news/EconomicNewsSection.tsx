@@ -693,20 +693,6 @@ export const EconomicNewsSection: React.FC<EconomicNewsSectionProps> = ({
                 {newsData?.sourcesStatus?.length || 10} Active)
               </span>
             </button>
-
-            <button
-              type="button"
-              onClick={() => onSimulateError(!errorMessage)}
-              className={`px-3 py-2 rounded-lg border text-xs font-mono-tabular transition-colors cursor-pointer ${
-                errorMessage
-                  ? 'border-amber-500/50 bg-amber-500/20 text-amber-300'
-                  : theme === 'dark'
-                  ? 'border-slate-800 bg-[#060B16] text-slate-400 hover:text-slate-200'
-                  : 'border-slate-200 bg-white text-slate-600'
-              }`}
-            >
-              {errorMessage ? 'Restore Live Feeds' : 'Test Feed Error State'}
-            </button>
           </div>
         </div>
 
@@ -900,7 +886,10 @@ export const EconomicNewsSection: React.FC<EconomicNewsSectionProps> = ({
           </div>
           <button
             type="button"
-            onClick={() => onSimulateError(false)}
+            onClick={() => {
+              onSimulateError(false);
+              onRefreshNow();
+            }}
             className="px-4 py-2 rounded-lg bg-amber-500 hover:bg-amber-400 text-slate-950 font-semibold cursor-pointer shrink-0"
           >
             Reconnect Live Feeds

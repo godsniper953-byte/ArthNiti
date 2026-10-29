@@ -1,4 +1,4 @@
-import React, { useMemo, useRef, useState } from 'react';
+import React, { useMemo } from 'react';
 import {
   Area,
   AreaChart,
@@ -9,19 +9,13 @@ import {
   YAxis,
 } from 'recharts';
 import {
-  AlertCircle,
   AlertTriangle,
   BookOpen,
   CheckCircle2,
-  Download,
   ExternalLink,
-  FileSpreadsheet,
-  Info,
   Layers,
   RefreshCw,
-  RotateCcw,
   Scale,
-  Upload,
 } from 'lucide-react';
 import { EconomicIndicator } from '../types/economy';
 import { AnalyticalChartPanel } from '../components/charts/AnalyticalChartPanel';
@@ -31,11 +25,11 @@ interface InflationPageProps {
   isLoading: boolean;
   errorMessage: string | null;
   lastUpdated: string;
-  dataOrigin: 'official_mospi_csv' | 'user_uploaded_csv' | 'demonstration_fallback';
+  dataOrigin?: 'official_mospi_csv' | 'user_uploaded_csv' | 'demonstration_fallback';
   onRefreshOfficialCpi: (simulateError?: boolean) => void;
-  onUploadCustomCsv: (csvText: string) => { ok: boolean; error?: string };
-  onResetCustomCsv: () => void;
-  onActivateDemoFallback: () => void;
+  onUploadCustomCsv?: (csvText: string) => { ok: boolean; error?: string };
+  onResetCustomCsv?: () => void;
+  onActivateDemoFallback?: () => void;
   theme: 'dark' | 'light';
 }
 
@@ -46,17 +40,8 @@ export const InflationPage: React.FC<InflationPageProps> = ({
   lastUpdated,
   dataOrigin,
   onRefreshOfficialCpi,
-  onUploadCustomCsv,
-  onResetCustomCsv,
-  onActivateDemoFallback,
   theme,
 }) => {
-  const [uploadFeedback, setUploadFeedback] = useState<{
-    type: 'success' | 'error';
-    message: string;
-  } | null>(null);
-  const [showUpdaterPanel, setShowUpdaterPanel] = useState<boolean>(false);
-  const fileInputRef = useRef<HTMLInputElement | null>(null);
 
   const latest = indicator.observations[indicator.observations.length - 1];
   const meta = indicator.officialCpiMeta;
@@ -123,30 +108,6 @@ export const InflationPage: React.FC<InflationPageProps> = ({
     },
   ];
 
-  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-
-    const reader = new FileReader();
-    reader.onload = (event) => {
-      const text = String(event.target?.result || '');
-      const res = onUploadCustomCsv(text);
-      if (res.ok) {
-        setUploadFeedback({
-          type: 'success',
-          message: `Successfully loaded "${file.name}" into ArthNiti. All CPI charts and KPI cards are now updated!`,
-        });
-      } else {
-        setUploadFeedback({
-          type: 'error',
-          message: res.error || 'Could not parse the uploaded CSV file.',
-        });
-      }
-    };
-    reader.readAsText(file);
-    e.target.value = '';
-  };
-
   const gridStroke = theme === 'dark' ? '#1e293b' : '#e2e8f0';
   const tickColor = theme === 'dark' ? '#94a3b8' : '#64748b';
 
@@ -157,9 +118,7 @@ export const InflationPage: React.FC<InflationPageProps> = ({
         <div>
           <div className="flex flex-wrap items-center gap-2 text-xs font-mono-tabular text-emerald-400">
             <span className="font-semibold">
-              {dataOrigin === 'demonstration_fallback'
-                ? 'Labelled Demonstration Fallback Mode'
-                : 'Official MoSPI All-India Combined CPI Integrated'}
+              Official MoSPI All-India Combined CPI Integrated
             </span>
             <span aria-hidden="true">·</span>
             <span>Base Year: {meta?.activeBaseYear || '2024 = 100'} (Jan 2026+)</span>
@@ -179,7 +138,7 @@ export const InflationPage: React.FC<InflationPageProps> = ({
           </p>
         </div>
 
-        {/* Action Toolbar: Refresh, Update CSV (No-Code), Simulate Error */}
+        {/* Action Toolbar: Reload Official Data */}
         <div className="flex flex-wrap items-center gap-2 self-start lg:self-auto">
           <button
             type="button"
@@ -193,28 +152,6 @@ export const InflationPage: React.FC<InflationPageProps> = ({
           >
             <RefreshCw className={`w-3.5 h-3.5 text-emerald-400 ${isLoading ? 'animate-spin' : ''}`} />
             <span>{isLoading ? 'Loading MoSPI Data...' : 'Reload Official Data'}</span>
-          </button>
-
-          <button
-            type="button"
-            onClick={() => setShowUpdaterPanel((prev) => !prev)}
-            className="px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-medium flex items-center gap-1.5 transition-colors cursor-pointer"
-          >
-            <FileSpreadsheet className="w-3.5 h-3.5" />
-            <span>{showUpdaterPanel ? 'Hide CSV Updater' : 'Update MoSPI CSV (No-Code)'}</span>
-          </button>
-
-          <button
-            type="button"
-            onClick={() => onRefreshOfficialCpi(true)}
-            title="Test how ArthNiti handles a failed real data fetch without silently substituting fake data"
-            className={`px-2.5 py-1.5 rounded-lg border text-xs font-medium transition-colors cursor-pointer ${
-              theme === 'dark'
-                ? 'bg-[#0B1325] border-slate-800 text-slate-400 hover:text-amber-400'
-                : 'bg-slate-100 border-slate-200 text-slate-600 hover:text-amber-700'
-            }`}
-          >
-            Test Error State
           </button>
         </div>
       </div>
@@ -263,123 +200,7 @@ export const InflationPage: React.FC<InflationPageProps> = ({
         </div>
       </div>
 
-      {/* 3. No-Code CSV Updater Panel (Collapsible) */}
-      {showUpdaterPanel && (
-        <div
-          className={`rounded-xl border p-5 sm:p-6 space-y-4 ${
-            theme === 'dark'
-              ? 'bg-[#091326] border-emerald-500/40 text-slate-100'
-              : 'bg-white border-emerald-300 text-slate-900 shadow-sm'
-          }`}
-        >
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-3 border-b border-slate-800/70">
-            <div>
-              <div className="text-xs font-mono-tabular text-emerald-400 font-semibold">
-                Zero-Code Official Data Updater
-              </div>
-              <h2 className="text-base font-semibold mt-0.5">
-                How to Update CPI Data Without Coding
-              </h2>
-            </div>
-            <a
-              href="/data/mospi_cpi_official.csv"
-              download="mospi_cpi_official.csv"
-              className="px-3 py-1.5 rounded-lg border border-slate-700 hover:border-emerald-500 text-xs font-medium text-emerald-400 flex items-center gap-1.5 self-start sm:self-auto"
-            >
-              <Download className="w-3.5 h-3.5" />
-              <span>Download Current Official CSV</span>
-            </a>
-          </div>
-
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-5 text-xs">
-            <div className="space-y-2 text-slate-400 leading-relaxed">
-              <div className="font-semibold text-slate-200">
-                Option A — Instant Browser Upload (Test New Monthly Releases Immediately):
-              </div>
-              <ol className="list-decimal list-inside space-y-1">
-                <li>
-                  Click <strong>Download Current Official CSV</strong> above and open it in Microsoft Excel or Google Sheets.
-                </li>
-                <li>
-                  Add the new month&apos;s official MoSPI release at the bottom (for example: <code className="font-mono-tabular text-emerald-400">2026-10,Oct 2026,5.40,3.88,7.20,109.90,2024=100,Provisional,12 Nov 2026,MoSPI Release</code>) and save as <code className="font-mono-tabular">.csv</code>.
-                </li>
-                <li>
-                  Click <strong>Upload Updated CSV</strong> on the right—your charts and KPI cards will update immediately!
-                </li>
-              </ol>
-
-              <div className="font-semibold text-slate-200 pt-2">
-                Option B — Permanent Update on GitHub &amp; Vercel (No Coding Required):
-              </div>
-              <p>
-                On your GitHub repository website, open <code className="font-mono-tabular text-amber-400">public/data/mospi_cpi_official.csv</code>, click the pencil icon (<strong>Edit this file</strong>), paste the new monthly row at the bottom, and click <strong>Commit changes</strong>. Vercel will automatically update <code className="font-mono-tabular">arthniti-six.vercel.app</code> in ~30 seconds.
-              </p>
-            </div>
-
-            <div
-              className={`p-4 rounded-xl border flex flex-col justify-between space-y-4 ${
-                theme === 'dark' ? 'bg-[#060B16] border-slate-800' : 'bg-slate-50 border-slate-200'
-              }`}
-            >
-              <div className="space-y-2">
-                <div className="font-semibold text-sm">Upload Updated MoSPI CSV File</div>
-                <p className="text-slate-400 text-xs">
-                  Required columns: <code className="font-mono-tabular">Year_Month</code>, <code className="font-mono-tabular">Period_Label</code>, <code className="font-mono-tabular">Headline_CPI_YoY_Pct</code>, <code className="font-mono-tabular">Core_CPI_YoY_Pct</code>, <code className="font-mono-tabular">Food_CFPI_YoY_Pct</code>, <code className="font-mono-tabular">General_CPI_Index</code>, <code className="font-mono-tabular">Base_Year</code>, <code className="font-mono-tabular">Status</code>, <code className="font-mono-tabular">Release_Date</code>.
-                </p>
-              </div>
-
-              <div className="flex flex-wrap items-center gap-2.5">
-                <input
-                  ref={fileInputRef}
-                  type="file"
-                  accept=".csv,text/csv"
-                  onChange={handleFileUpload}
-                  className="hidden"
-                />
-                <button
-                  type="button"
-                  onClick={() => fileInputRef.current?.click()}
-                  className="px-4 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-semibold flex items-center gap-1.5 cursor-pointer"
-                >
-                  <Upload className="w-3.5 h-3.5" />
-                  <span>Select &amp; Upload .CSV File</span>
-                </button>
-
-                {dataOrigin === 'user_uploaded_csv' && (
-                  <button
-                    type="button"
-                    onClick={() => {
-                      onResetCustomCsv();
-                      setUploadFeedback({
-                        type: 'success',
-                        message: 'Reverted to bundled official MoSPI dataset (/data/mospi_cpi_official.csv).',
-                      });
-                    }}
-                    className="px-3 py-2 rounded-lg border border-slate-700 hover:border-slate-500 text-xs font-medium text-slate-300 flex items-center gap-1.5 cursor-pointer"
-                  >
-                    <RotateCcw className="w-3.5 h-3.5" />
-                    <span>Reset to Default Official CSV</span>
-                  </button>
-                )}
-              </div>
-
-              {uploadFeedback && (
-                <div
-                  className={`p-2.5 rounded-lg border text-xs ${
-                    uploadFeedback.type === 'success'
-                      ? 'bg-emerald-950/30 border-emerald-500/40 text-emerald-300'
-                      : 'bg-red-950/30 border-red-500/40 text-red-300'
-                  }`}
-                >
-                  {uploadFeedback.message}
-                </div>
-              )}
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* 4. Explicit Loading or Error States (Never Silently Substitute Sample Data on Failure) */}
+      {/* 3. Explicit Loading or Error States (Never Silently Substitute Sample Data on Failure) */}
       {isLoading ? (
         <div
           className={`rounded-xl border p-8 text-center space-y-3 animate-pulse ${
@@ -412,7 +233,7 @@ export const InflationPage: React.FC<InflationPageProps> = ({
               </h2>
               <p className="text-xs text-slate-300 leading-relaxed">{errorMessage}</p>
               <p className="text-xs text-slate-400">
-                To maintain statistical integrity, ArthNiti has paused the CPI charts rather than silently substituting unlabelled sample figures. You can retry loading the official dataset or explicitly open the labelled demonstration state below.
+                To maintain statistical integrity, ArthNiti has paused the CPI charts rather than silently substituting unlabelled sample figures. Click &ldquo;Retry Official MoSPI Fetch&rdquo; to reload the official dataset.
               </p>
             </div>
           </div>
@@ -425,13 +246,6 @@ export const InflationPage: React.FC<InflationPageProps> = ({
             >
               <RefreshCw className="w-3.5 h-3.5" />
               <span>Retry Official MoSPI Fetch</span>
-            </button>
-            <button
-              type="button"
-              onClick={onActivateDemoFallback}
-              className="px-4 py-2 rounded-lg border border-amber-500/50 bg-amber-500/10 hover:bg-amber-500/20 text-amber-300 text-xs font-medium cursor-pointer"
-            >
-              Switch to Explicitly Labelled Demonstration State
             </button>
           </div>
         </div>
@@ -727,10 +541,10 @@ export const InflationPage: React.FC<InflationPageProps> = ({
               >
                 <div className="flex items-center gap-1.5 font-semibold text-slate-200 mb-1">
                   <BookOpen className="w-3.5 h-3.5 text-emerald-400" />
-                  <span>Why Official CSV Instead of Direct Browser Scraping?</span>
+                  <span>Why Official Repository Series Instead of Direct Browser Scraping?</span>
                 </div>
                 <p className="leading-relaxed">
-                  MoSPI&apos;s eSankhyiki API (<code className="font-mono-tabular">api.mospi.gov.in</code>) requires user login credentials and issues 15-minute access tokens. Storing personal login secrets inside a static Vercel website would expose them publicly. Bundling the official MoSPI CSV and providing a zero-code CSV uploader ensures 100% reliability, zero cost, and full security on Vercel.
+                  MoSPI&apos;s eSankhyiki API (<code className="font-mono-tabular">api.mospi.gov.in</code>) requires user login credentials and issues 15-minute access tokens. Storing personal login secrets inside a static Vercel website would expose them publicly. Serving the verified official MoSPI CPI dataset ensures 100% reliability, zero cost, and full security in production.
                 </p>
               </div>
             </div>

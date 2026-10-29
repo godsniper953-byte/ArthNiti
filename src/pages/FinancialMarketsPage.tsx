@@ -1,16 +1,11 @@
-import React, { useRef, useState } from 'react';
+import React, { useState } from 'react';
 import {
   AlertCircle,
-  AlertTriangle,
   CheckCircle2,
   Clock,
-  Download,
   ExternalLink,
-  FileSpreadsheet,
   Landmark,
   RefreshCw,
-  RotateCcw,
-  Upload,
 } from 'lucide-react';
 import { EconomicIndicator } from '../types/economy';
 import { AnalyticalChartPanel } from '../components/charts/AnalyticalChartPanel';
@@ -23,11 +18,11 @@ interface FinancialMarketsPageProps {
   repoLoading: boolean;
   repoError: string | null;
   repoLastVerified: string;
-  repoDataOrigin: 'official_rbi_csv' | 'user_uploaded_csv' | 'demonstration_fallback';
+  repoDataOrigin?: 'official_rbi_csv' | 'user_uploaded_csv' | 'demonstration_fallback';
   onRefreshOfficialRepo: (simulateError?: boolean) => void;
-  onUploadCustomRepoCsv: (csvText: string) => { ok: boolean; error?: string };
-  onResetCustomRepoCsv: () => void;
-  onActivateRepoDemoFallback: () => void;
+  onUploadCustomRepoCsv?: (csvText: string) => { ok: boolean; error?: string };
+  onResetCustomRepoCsv?: () => void;
+  onActivateRepoDemoFallback?: () => void;
   theme: 'dark' | 'light';
   marketData?: IndianMarketIndicesResponse | null;
   marketLoading?: boolean;
@@ -49,11 +44,7 @@ export const FinancialMarketsPage: React.FC<FinancialMarketsPageProps> = ({
   repoLoading,
   repoError,
   repoLastVerified,
-  repoDataOrigin,
   onRefreshOfficialRepo,
-  onUploadCustomRepoCsv,
-  onResetCustomRepoCsv,
-  onActivateRepoDemoFallback,
   theme,
   marketData = null,
   marketLoading = false,
@@ -69,12 +60,6 @@ export const FinancialMarketsPage: React.FC<FinancialMarketsPageProps> = ({
   onSelectMarketIndexId = () => {},
 }) => {
   const [selectedBenchmark, setSelectedBenchmark] = useState<'nifty' | 'sensex' | 'gsec'>('nifty');
-  const [showRepoUpdater, setShowRepoUpdater] = useState<boolean>(false);
-  const [uploadFeedback, setUploadFeedback] = useState<{
-    type: 'success' | 'error';
-    message: string;
-  } | null>(null);
-  const fileInputRef = useRef<HTMLInputElement | null>(null);
 
   const latestMarket = marketIndicator.observations[marketIndicator.observations.length - 1];
   const latestRepo = repoIndicator.observations[repoIndicator.observations.length - 1];
@@ -115,30 +100,6 @@ export const FinancialMarketsPage: React.FC<FinancialMarketsPageProps> = ({
     },
   }[selectedBenchmark];
 
-  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-
-    const reader = new FileReader();
-    reader.onload = (event) => {
-      const text = String(event.target?.result || '');
-      const res = onUploadCustomRepoCsv(text);
-      if (res.ok) {
-        setUploadFeedback({
-          type: 'success',
-          message: `Successfully loaded "${file.name}" into ArthNiti. The RBI Policy Repo Rate card, corridor chart, and decision history table are now updated!`,
-        });
-      } else {
-        setUploadFeedback({
-          type: 'error',
-          message: res.error || 'Could not parse the uploaded RBI Repo Rate CSV file.',
-        });
-      }
-    };
-    reader.readAsText(file);
-    e.target.value = '';
-  };
-
   return (
     <div className="space-y-8">
       {/* 1. Official RBI Monetary Policy Section Header & Provenance Toolbar */}
@@ -147,9 +108,7 @@ export const FinancialMarketsPage: React.FC<FinancialMarketsPageProps> = ({
           <div className="flex flex-wrap items-center gap-2 text-xs font-mono-tabular text-emerald-400">
             <Landmark className="w-3.5 h-3.5" />
             <span className="font-semibold">
-              {repoDataOrigin === 'demonstration_fallback'
-                ? 'Labelled Demonstration Fallback Mode'
-                : 'Official RBI Monetary Policy Statement Integrated'}
+              Official RBI Monetary Policy Statement Integrated
             </span>
             <span aria-hidden="true">·</span>
             <span>Effective: {repoMeta?.effectiveDate || latestRepo.effectiveDate || '07 Oct 2026'}</span>
@@ -169,7 +128,7 @@ export const FinancialMarketsPage: React.FC<FinancialMarketsPageProps> = ({
           </p>
         </div>
 
-        {/* Action Toolbar: Reload Official RBI Data, No-Code CSV Updater, Test Error State */}
+        {/* Action Toolbar: Reload Official RBI Data */}
         <div className="flex flex-wrap items-center gap-2 self-start lg:self-auto">
           <button
             type="button"
@@ -183,28 +142,6 @@ export const FinancialMarketsPage: React.FC<FinancialMarketsPageProps> = ({
           >
             <RefreshCw className={`w-3.5 h-3.5 text-emerald-400 ${repoLoading ? 'animate-spin' : ''}`} />
             <span>{repoLoading ? 'Verifying RBI Data...' : 'Reload Official RBI Data'}</span>
-          </button>
-
-          <button
-            type="button"
-            onClick={() => setShowRepoUpdater((prev) => !prev)}
-            className="px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-medium flex items-center gap-1.5 transition-colors cursor-pointer"
-          >
-            <FileSpreadsheet className="w-3.5 h-3.5" />
-            <span>{showRepoUpdater ? 'Hide CSV Updater' : 'Update RBI Repo CSV (No-Code)'}</span>
-          </button>
-
-          <button
-            type="button"
-            onClick={() => onRefreshOfficialRepo(true)}
-            title="Test how ArthNiti handles a failed RBI repo rate fetch without silently showing stale data as current"
-            className={`px-2.5 py-1.5 rounded-lg border text-xs font-medium transition-colors cursor-pointer ${
-              theme === 'dark'
-                ? 'bg-[#0B1325] border-slate-800 text-slate-400 hover:text-amber-400'
-                : 'bg-slate-100 border-slate-200 text-slate-600 hover:text-amber-700'
-            }`}
-          >
-            Test Error State
           </button>
         </div>
       </div>
@@ -230,7 +167,7 @@ export const FinancialMarketsPage: React.FC<FinancialMarketsPageProps> = ({
                   {repoError}
                 </p>
                 <p className="text-[11px] text-slate-400">
-                  ArthNiti never silently displays stale or unverified interest rates as current when official RBI data retrieval fails. Click &ldquo;Retry Official RBI Fetch&rdquo; or explicitly switch to a clearly labelled demonstration state.
+                  ArthNiti never silently displays stale or unverified interest rates as current when official RBI data retrieval fails. Click &ldquo;Retry Official RBI Fetch&rdquo; to reload the verified dataset.
                 </p>
               </div>
             </div>
@@ -244,187 +181,12 @@ export const FinancialMarketsPage: React.FC<FinancialMarketsPageProps> = ({
                 <RefreshCw className="w-3.5 h-3.5" />
                 <span>Retry Official RBI Fetch</span>
               </button>
-              <button
-                type="button"
-                onClick={onActivateRepoDemoFallback}
-                className={`px-3.5 py-2 rounded-lg border text-xs font-medium cursor-pointer ${
-                  theme === 'dark'
-                    ? 'bg-[#0B1325] border-slate-700 text-amber-300 hover:border-amber-500/50'
-                    : 'bg-white border-slate-300 text-amber-800 hover:bg-amber-50'
-                }`}
-              >
-                Switch to Labelled Demo Fallback
-              </button>
             </div>
           </div>
         </div>
       )}
 
-      {/* 3. Labelled Demonstration Fallback Warning Banner */}
-      {!repoError && repoDataOrigin === 'demonstration_fallback' && (
-        <div
-          className={`rounded-xl border p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3 ${
-            theme === 'dark'
-              ? 'bg-amber-950/25 border-amber-500/40 text-amber-200'
-              : 'bg-amber-50 border-amber-300 text-amber-900'
-          }`}
-        >
-          <div className="flex items-start gap-2.5 text-xs">
-            <AlertTriangle className="w-4 h-4 text-amber-400 shrink-0 mt-0.5" />
-            <div>
-              <span className="font-semibold">Demonstration Fallback Active: </span>
-              <span>
-                You are currently viewing a clearly labelled fallback state. Click &ldquo;Restore Official RBI MPC Dataset&rdquo; to return to the verified October 7, 2026 Monetary Policy Statement series.
-              </span>
-            </div>
-          </div>
-          <button
-            type="button"
-            onClick={() => onRefreshOfficialRepo(false)}
-            className="px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-semibold shrink-0 cursor-pointer"
-          >
-            Restore Official RBI MPC Dataset
-          </button>
-        </div>
-      )}
-
-      {/* 4. Zero-Code RBI Repo Rate CSV Updater Drawer */}
-      {showRepoUpdater && (
-        <div
-          className={`rounded-xl border p-5 sm:p-6 space-y-5 ${
-            theme === 'dark'
-              ? 'bg-[#0B1325] border-emerald-500/40 text-slate-100'
-              : 'bg-emerald-50/50 border-emerald-200 text-slate-900'
-          }`}
-        >
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-4 border-b border-slate-800/60">
-            <div>
-              <div className="text-xs font-mono-tabular text-emerald-400">
-                No-Code RBI Monetary Policy Maintenance · Student-Friendly Workflow
-              </div>
-              <h2 className="text-base sm:text-lg font-semibold mt-0.5">
-                How to Update the Official RBI Policy Repo Rate Without Coding
-              </h2>
-            </div>
-
-            <div className="flex items-center gap-2">
-              <a
-                href="/data/rbi_repo_official.csv"
-                download="rbi_repo_official.csv"
-                className="px-3 py-1.5 rounded-lg border border-emerald-500/40 bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-300 text-xs font-medium flex items-center gap-1.5"
-              >
-                <Download className="w-3.5 h-3.5" />
-                <span>Download Current RBI Repo CSV</span>
-              </a>
-
-              {repoDataOrigin === 'user_uploaded_csv' && (
-                <button
-                  type="button"
-                  onClick={() => {
-                    onResetCustomRepoCsv();
-                    setUploadFeedback({
-                      type: 'success',
-                      message: 'Reverted to the bundled official RBI Repo CSV (/data/rbi_repo_official.csv).',
-                    });
-                  }}
-                  className="px-3 py-1.5 rounded-lg border border-amber-500/40 text-amber-300 hover:bg-amber-500/10 text-xs font-medium flex items-center gap-1.5 cursor-pointer"
-                >
-                  <RotateCcw className="w-3.5 h-3.5" />
-                  <span>Reset to Bundled CSV</span>
-                </button>
-              )}
-            </div>
-          </div>
-
-          <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 text-xs leading-relaxed">
-            <div className="lg:col-span-7 space-y-3 text-slate-300">
-              <div className="font-semibold text-emerald-400">
-                Why ArthNiti Uses an Official Verified RBI MPC Dataset + Browser Uploader:
-              </div>
-              <p className="text-slate-400">
-                The Reserve Bank of India (<code className="font-mono-tabular">rbi.org.in</code>) publishes Monetary Policy Statements as official press releases and PDFs, and its DBIE portal (<code className="font-mono-tabular">data.rbi.org.in</code>) does not provide an open, CORS-enabled JSON API for static browser apps. Storing the verified MPC decision history in <code className="font-mono-tabular">/public/data/rbi_repo_official.csv</code> guarantees 100% accuracy and zero broken third-party scrapers on Vercel.
-              </p>
-
-              <div className="font-semibold text-amber-400 pt-1">
-                3 Easy Steps After Any Bi-Monthly RBI MPC Meeting (Feb, Apr, Jun, Aug, Oct, Dec):
-              </div>
-              <ol className="list-decimal list-inside space-y-1.5 text-slate-400">
-                <li>
-                  Click <strong>&ldquo;Download Current RBI Repo CSV&rdquo;</strong> above and open <code className="font-mono-tabular">rbi_repo_official.csv</code> in Excel or Google Sheets.
-                </li>
-                <li>
-                  Check the latest Monetary Policy Statement on{' '}
-                  <a
-                    href="https://www.rbi.org.in/Scripts/MPView.aspx"
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="text-emerald-400 underline"
-                  >
-                    rbi.org.in (Monetary Policy Press Releases)
-                  </a>{' '}
-                  and add one new row at the bottom with the Announcement Date, Effective Date, Repo Rate (%), SDF Rate (%), MSF Rate (%), Change in bps, and Policy Stance.
-                </li>
-                <li>
-                  <strong>Option A (Instant Browser Preview):</strong> Upload the saved CSV file on the right.{' '}
-                  <strong>Option B (Permanent Vercel Update):</strong> Edit <code className="font-mono-tabular">public/data/rbi_repo_official.csv</code> directly on GitHub and click <strong>Commit changes</strong>.
-                </li>
-              </ol>
-            </div>
-
-            <div
-              className={`lg:col-span-5 rounded-xl border border-dashed p-5 flex flex-col items-center justify-center text-center space-y-3 ${
-                theme === 'dark'
-                  ? 'bg-[#060B16]/80 border-slate-700'
-                  : 'bg-white border-slate-300'
-              }`}
-            >
-              <Upload className="w-7 h-7 text-emerald-400" />
-              <div className="space-y-1">
-                <div className="text-xs font-semibold">
-                  Upload Updated RBI Repo Rate CSV File
-                </div>
-                <p className="text-[11px] text-slate-400 max-w-xs">
-                  Columns: <code className="font-mono-tabular">Effective_Date_Code, Announcement_Date, Effective_Date, MPC_Label, Repo_Rate_Pct, SDF_Reverse_Repo_Pct, MSF_Bank_Rate_Pct, Change_Bps, Policy_Stance</code>
-                </p>
-              </div>
-
-              <input
-                ref={fileInputRef}
-                type="file"
-                accept=".csv,text/csv"
-                onChange={handleFileUpload}
-                className="hidden"
-              />
-              <button
-                type="button"
-                onClick={() => fileInputRef.current?.click()}
-                className="px-4 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-semibold cursor-pointer"
-              >
-                Choose .CSV File from Computer
-              </button>
-
-              {uploadFeedback && (
-                <div
-                  className={`p-2.5 rounded-lg text-[11px] flex items-center gap-1.5 ${
-                    uploadFeedback.type === 'success'
-                      ? 'bg-emerald-950/40 text-emerald-300 border border-emerald-500/30'
-                      : 'bg-rose-950/40 text-rose-300 border border-rose-500/30'
-                  }`}
-                >
-                  {uploadFeedback.type === 'success' ? (
-                    <CheckCircle2 className="w-3.5 h-3.5 shrink-0 text-emerald-400" />
-                  ) : (
-                    <AlertCircle className="w-3.5 h-3.5 shrink-0 text-rose-400" />
-                  )}
-                  <span>{uploadFeedback.message}</span>
-                </div>
-              )}
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* 5. Official RBI Policy Repo Rate Verification Strip (4 Cards) */}
+      {/* 3. Official RBI Policy Repo Rate Verification Strip (4 Cards) */}
       {!repoError && (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
           {/* Card 1: Current Policy Repo Rate (%) */}

@@ -1,19 +1,14 @@
-import React, { useMemo, useRef, useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import {
   AlertCircle,
-  AlertTriangle,
   BookOpen,
   Calculator,
   CheckCircle2,
-  Download,
   ExternalLink,
-  FileSpreadsheet,
   Info,
   Layers,
   RefreshCw,
-  RotateCcw,
   Scale,
-  Upload,
 } from 'lucide-react';
 import { EconomicIndicator, ObservationPoint, SectorGvaShare } from '../types/economy';
 import { AnalyticalChartPanel } from '../components/charts/AnalyticalChartPanel';
@@ -24,11 +19,11 @@ interface GdpGrowthPageProps {
   isLoading: boolean;
   errorMessage: string | null;
   lastUpdated: string;
-  dataOrigin: 'official_mospi_csv' | 'user_uploaded_csv' | 'demonstration_fallback';
+  dataOrigin?: 'official_mospi_csv' | 'user_uploaded_csv' | 'demonstration_fallback';
   onRefreshOfficialGdp: (simulateError?: boolean) => void;
-  onUploadCustomCsv: (csvText: string) => { ok: boolean; error?: string };
-  onResetCustomCsv: () => void;
-  onActivateDemoFallback: () => void;
+  onUploadCustomCsv?: (csvText: string) => { ok: boolean; error?: string };
+  onResetCustomCsv?: () => void;
+  onActivateDemoFallback?: () => void;
   theme: 'dark' | 'light';
 }
 
@@ -38,20 +33,10 @@ export const GdpGrowthPage: React.FC<GdpGrowthPageProps> = ({
   isLoading,
   errorMessage,
   lastUpdated,
-  dataOrigin,
   onRefreshOfficialGdp,
-  onUploadCustomCsv,
-  onResetCustomCsv,
-  onActivateDemoFallback,
   theme,
 }) => {
   const [cadenceView, setCadenceView] = useState<'Quarterly' | 'Annual'>('Quarterly');
-  const [showUpdaterPanel, setShowUpdaterPanel] = useState<boolean>(false);
-  const [uploadFeedback, setUploadFeedback] = useState<{
-    type: 'success' | 'error';
-    message: string;
-  } | null>(null);
-  const fileInputRef = useRef<HTMLInputElement | null>(null);
 
   const meta = indicator.officialGdpMeta;
   const latestObs = indicator.observations[indicator.observations.length - 1];
@@ -163,30 +148,6 @@ export const GdpGrowthPage: React.FC<GdpGrowthPageProps> = ({
     return -5.2;
   }, [latestObs, prevObs]);
 
-  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-
-    const reader = new FileReader();
-    reader.onload = (event) => {
-      const text = String(event.target?.result || '');
-      const res = onUploadCustomCsv(text);
-      if (res.ok) {
-        setUploadFeedback({
-          type: 'success',
-          message: `Successfully loaded "${file.name}" into ArthNiti. All Real & Nominal GDP charts and KPI cards are now updated!`,
-        });
-      } else {
-        setUploadFeedback({
-          type: 'error',
-          message: res.error || 'Could not parse the uploaded GDP CSV file.',
-        });
-      }
-    };
-    reader.readAsText(file);
-    e.target.value = '';
-  };
-
   return (
     <div className="space-y-8">
       {/* 1. Page Header, Official MoSPI Provenance & Action Toolbar */}
@@ -194,9 +155,7 @@ export const GdpGrowthPage: React.FC<GdpGrowthPageProps> = ({
         <div>
           <div className="flex flex-wrap items-center gap-2 text-xs font-mono-tabular text-emerald-400">
             <span className="font-semibold">
-              {dataOrigin === 'demonstration_fallback'
-                ? 'Labelled Demonstration Fallback Mode'
-                : 'Official MoSPI National Accounts (NAS) Integrated'}
+              Official MoSPI National Accounts (NAS) Integrated
             </span>
             <span aria-hidden="true">·</span>
             <span>Base Year: {meta?.activeBaseYear || '2022–23'} (Constant Prices)</span>
@@ -216,7 +175,7 @@ export const GdpGrowthPage: React.FC<GdpGrowthPageProps> = ({
           </p>
         </div>
 
-        {/* Toolbar: Refresh, Update CSV (No-Code), Test Error State & Cadence Toggle */}
+        {/* Toolbar: Reload Official Data & Cadence Toggle */}
         <div className="flex flex-wrap items-center gap-2 self-start lg:self-auto">
           <button
             type="button"
@@ -230,28 +189,6 @@ export const GdpGrowthPage: React.FC<GdpGrowthPageProps> = ({
           >
             <RefreshCw className={`w-3.5 h-3.5 text-emerald-400 ${isLoading ? 'animate-spin' : ''}`} />
             <span>{isLoading ? 'Loading MoSPI GDP...' : 'Reload Official Data'}</span>
-          </button>
-
-          <button
-            type="button"
-            onClick={() => setShowUpdaterPanel((prev) => !prev)}
-            className="px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-medium flex items-center gap-1.5 transition-colors cursor-pointer"
-          >
-            <FileSpreadsheet className="w-3.5 h-3.5" />
-            <span>{showUpdaterPanel ? 'Hide CSV Updater' : 'Update MoSPI GDP CSV (No-Code)'}</span>
-          </button>
-
-          <button
-            type="button"
-            onClick={() => onRefreshOfficialGdp(true)}
-            title="Test how ArthNiti handles a failed real GDP data fetch without silently substituting fake data"
-            className={`px-2.5 py-1.5 rounded-lg border text-xs font-medium transition-colors cursor-pointer ${
-              theme === 'dark'
-                ? 'bg-[#0B1325] border-slate-800 text-slate-400 hover:text-amber-400'
-                : 'bg-slate-100 border-slate-200 text-slate-600 hover:text-amber-700'
-            }`}
-          >
-            Test Error State
           </button>
 
           {/* Quarterly vs Annual View Toggle */}
@@ -301,7 +238,7 @@ export const GdpGrowthPage: React.FC<GdpGrowthPageProps> = ({
                   {errorMessage}
                 </p>
                 <p className="text-[11px] text-slate-400">
-                  In accordance with ArthNiti&apos;s data integrity standards, sample data is never silently substituted when official data fails to load. You may retry fetching the official MoSPI dataset or explicitly switch to a clearly labelled demonstration state.
+                  In accordance with ArthNiti&apos;s data integrity standards, sample data is never silently substituted when official data fails to load. Click &ldquo;Retry Official MoSPI Fetch&rdquo; to reload the verified dataset.
                 </p>
               </div>
             </div>
@@ -315,187 +252,12 @@ export const GdpGrowthPage: React.FC<GdpGrowthPageProps> = ({
                 <RefreshCw className="w-3.5 h-3.5" />
                 <span>Retry Official MoSPI Fetch</span>
               </button>
-              <button
-                type="button"
-                onClick={onActivateDemoFallback}
-                className={`px-3.5 py-2 rounded-lg border text-xs font-medium cursor-pointer ${
-                  theme === 'dark'
-                    ? 'bg-[#0B1325] border-slate-700 text-amber-300 hover:border-amber-500/50'
-                    : 'bg-white border-slate-300 text-amber-800 hover:bg-amber-50'
-                }`}
-              >
-                Switch to Labelled Demo Fallback
-              </button>
             </div>
           </div>
         </div>
       )}
 
-      {/* 3. Labelled Demonstration Fallback Warning Banner */}
-      {!errorMessage && dataOrigin === 'demonstration_fallback' && (
-        <div
-          className={`rounded-xl border p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3 ${
-            theme === 'dark'
-              ? 'bg-amber-950/25 border-amber-500/40 text-amber-200'
-              : 'bg-amber-50 border-amber-300 text-amber-900'
-          }`}
-        >
-          <div className="flex items-start gap-2.5 text-xs">
-            <AlertTriangle className="w-4 h-4 text-amber-400 shrink-0 mt-0.5" />
-            <div>
-              <span className="font-semibold">Demonstration Fallback Active: </span>
-              <span>
-                You are currently viewing clearly labelled fallback demonstration GDP data. Click &ldquo;Restore Official MoSPI GDP Dataset&rdquo; to return to the verified MoSPI National Accounts series.
-              </span>
-            </div>
-          </div>
-          <button
-            type="button"
-            onClick={() => onRefreshOfficialGdp(false)}
-            className="px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-semibold shrink-0 cursor-pointer"
-          >
-            Restore Official MoSPI GDP Dataset
-          </button>
-        </div>
-      )}
-
-      {/* 4. Zero-Code CSV Updater & API Investigation Drawer */}
-      {showUpdaterPanel && (
-        <div
-          className={`rounded-xl border p-5 sm:p-6 space-y-5 ${
-            theme === 'dark'
-              ? 'bg-[#0B1325] border-emerald-500/40 text-slate-100'
-              : 'bg-emerald-50/50 border-emerald-200 text-slate-900'
-          }`}
-        >
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-4 border-b border-slate-800/60">
-            <div>
-              <div className="text-xs font-mono-tabular text-emerald-400">
-                No-Code Quarterly GDP Dataset Maintenance · Student-Friendly Workflow
-              </div>
-              <h2 className="text-base sm:text-lg font-semibold mt-0.5">
-                How to Update Official MoSPI Quarterly GDP Data Without Coding
-              </h2>
-            </div>
-
-            <div className="flex items-center gap-2">
-              <a
-                href="/data/mospi_gdp_official.csv"
-                download="mospi_gdp_official.csv"
-                className="px-3 py-1.5 rounded-lg border border-emerald-500/40 bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-300 text-xs font-medium flex items-center gap-1.5"
-              >
-                <Download className="w-3.5 h-3.5" />
-                <span>Download Current GDP CSV</span>
-              </a>
-
-              {dataOrigin === 'user_uploaded_csv' && (
-                <button
-                  type="button"
-                  onClick={() => {
-                    onResetCustomCsv();
-                    setUploadFeedback({
-                      type: 'success',
-                      message: 'Reverted to the bundled official MoSPI GDP CSV (/data/mospi_gdp_official.csv).',
-                    });
-                  }}
-                  className="px-3 py-1.5 rounded-lg border border-amber-500/40 text-amber-300 hover:bg-amber-500/10 text-xs font-medium flex items-center gap-1.5 cursor-pointer"
-                >
-                  <RotateCcw className="w-3.5 h-3.5" />
-                  <span>Reset to Bundled CSV</span>
-                </button>
-              )}
-            </div>
-          </div>
-
-          <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 text-xs leading-relaxed">
-            <div className="lg:col-span-7 space-y-3 text-slate-300">
-              <div className="font-semibold text-emerald-400">
-                Why ArthNiti Uses an Official Downloadable MoSPI CSV + Browser Uploader:
-              </div>
-              <p className="text-slate-400">
-                MoSPI&apos;s eSankhyiki National Accounts (NAS) portal (<code className="font-mono-tabular">esankhyiki.mospi.gov.in/catalogue-main/catalogue?product=NAS</code>) and swagger API gateway require user authentication tokens that expire after 15 minutes and do not permit anonymous browser scraping. Storing the official MoSPI quarterly GDP release table in <code className="font-mono-tabular">/public/data/mospi_gdp_official.csv</code> ensures 100% reliability on Vercel with zero paid servers or broken API keys.
-              </p>
-
-              <div className="font-semibold text-amber-400 pt-1">
-                3 Easy Steps When MoSPI Releases a New Quarter (Every Feb, May/Jun, Aug, Nov):
-              </div>
-              <ol className="list-decimal list-inside space-y-1.5 text-slate-400">
-                <li>
-                  Click <strong>&ldquo;Download Current GDP CSV&rdquo;</strong> above and open <code className="font-mono-tabular">mospi_gdp_official.csv</code> in Excel or Google Sheets.
-                </li>
-                <li>
-                  Check the latest MoSPI Press Note at{' '}
-                  <a
-                    href="https://www.mospi.gov.in/themes/product/6-gross-domestic-product"
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="text-emerald-400 underline"
-                  >
-                    mospi.gov.in (GDP Product Page)
-                  </a>{' '}
-                  and add one new row at the bottom with the Quarter Code (e.g., <code className="font-mono-tabular">2026-27-Q2</code>), Real GDP YoY % (Constant 2022–23 Prices), Nominal GDP YoY %, and Release Date.
-                </li>
-                <li>
-                  <strong>Option A (Instant Browser Preview):</strong> Upload the saved CSV using the box on the right.{' '}
-                  <strong>Option B (Permanent Vercel Update):</strong> On your GitHub repository, open <code className="font-mono-tabular">public/data/mospi_gdp_official.csv</code>, click the pencil icon (Edit), paste the new row, and click <strong>Commit changes</strong>—Vercel will redeploy automatically!
-                </li>
-              </ol>
-            </div>
-
-            <div
-              className={`lg:col-span-5 rounded-xl border border-dashed p-5 flex flex-col items-center justify-center text-center space-y-3 ${
-                theme === 'dark'
-                  ? 'bg-[#060B16]/80 border-slate-700'
-                  : 'bg-white border-slate-300'
-              }`}
-            >
-              <Upload className="w-7 h-7 text-emerald-400" />
-              <div className="space-y-1">
-                <div className="text-xs font-semibold">
-                  Upload Updated MoSPI GDP CSV File
-                </div>
-                <p className="text-[11px] text-slate-400 max-w-xs">
-                  Columns: <code className="font-mono-tabular">Quarter_Code, Financial_Year, Quarter, Reference_Period, Period_Label, Real_GDP_YoY_Pct, Nominal_GDP_YoY_Pct</code>
-                </p>
-              </div>
-
-              <input
-                ref={fileInputRef}
-                type="file"
-                accept=".csv,text/csv"
-                onChange={handleFileUpload}
-                className="hidden"
-              />
-              <button
-                type="button"
-                onClick={() => fileInputRef.current?.click()}
-                className="px-4 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-semibold cursor-pointer"
-              >
-                Choose .CSV File from Computer
-              </button>
-
-              {uploadFeedback && (
-                <div
-                  className={`p-2.5 rounded-lg text-[11px] flex items-center gap-1.5 ${
-                    uploadFeedback.type === 'success'
-                      ? 'bg-emerald-950/40 text-emerald-300 border border-emerald-500/30'
-                      : 'bg-rose-950/40 text-rose-300 border border-rose-500/30'
-                  }`}
-                >
-                  {uploadFeedback.type === 'success' ? (
-                    <CheckCircle2 className="w-3.5 h-3.5 shrink-0 text-emerald-400" />
-                  ) : (
-                    <AlertCircle className="w-3.5 h-3.5 shrink-0 text-rose-400" />
-                  )}
-                  <span>{uploadFeedback.message}</span>
-                </div>
-              )}
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* 5. Official MoSPI GDP Verification Metadata Strip (4 Cards) */}
+      {/* 3. Official MoSPI GDP Verification Metadata Strip (4 Cards) */}
       {!errorMessage && (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
           {/* Card 1: Real GDP YoY Growth (Constant 2022-23 Prices) */}

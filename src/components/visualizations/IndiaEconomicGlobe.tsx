@@ -1722,6 +1722,9 @@ export const IndiaEconomicGlobe: React.FC<IndiaEconomicGlobeProps> = ({
       renderer.setSize(w, h);
     };
     window.addEventListener('resize', handleResize);
+    const resizeObserver =
+      typeof ResizeObserver !== 'undefined' ? new ResizeObserver(() => handleResize()) : null;
+    resizeObserver?.observe(container);
 
     // Paced render loop with software WebGL fence sync guard
     let frameId = 0;
@@ -1871,6 +1874,7 @@ export const IndiaEconomicGlobe: React.FC<IndiaEconomicGlobeProps> = ({
       window.removeEventListener('pointerup', onPointerUp);
       domElem.removeEventListener('wheel', onWheel);
       window.removeEventListener('resize', handleResize);
+      resizeObserver?.disconnect();
       albedoTexture.dispose();
       roughnessTexture.dispose();
       earthGeo.dispose();

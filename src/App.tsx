@@ -110,10 +110,29 @@ export default function App() {
   const [focusedIndicatorId, setFocusedIndicatorId] = useState<string | null>(
     initialRoute.indicatorId
   );
-  const [sidebarCollapsed, setSidebarCollapsed] = useState<boolean>(false);
+  const [sidebarCollapsed, setSidebarCollapsed] = useState<boolean>(() => {
+    try {
+      return window.localStorage.getItem('arthniti_sidebar_collapsed') === 'true';
+    } catch {
+      return false;
+    }
+  });
   const [mobileMenuOpen, setMobileMenuOpen] = useState<boolean>(false);
   const [theme, setTheme] = useState<'dark' | 'light'>('dark');
   const shouldReduceMotion = useReducedMotion();
+
+  useEffect(() => {
+    try {
+      window.localStorage.setItem('arthniti_sidebar_collapsed', String(sidebarCollapsed));
+    } catch {
+      // Ignore storage quota / privacy mode errors
+    }
+    window.dispatchEvent(new Event('resize'));
+    const timer = window.setTimeout(() => {
+      window.dispatchEvent(new Event('resize'));
+    }, 220);
+    return () => window.clearTimeout(timer);
+  }, [sidebarCollapsed]);
 
   // Monotonic sequence counters to prevent stale overlapping responses from overwriting newer state
   const marketRequestSeqRef = useRef<number>(0);

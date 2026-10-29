@@ -247,7 +247,11 @@ export const TopBar: React.FC<TopBarProps> = ({
           type="button"
           onClick={onOpenMobileMenu}
           aria-label="Open navigation menu"
-          className="lg:hidden p-2 rounded-lg border border-slate-800 text-slate-300 hover:text-white cursor-pointer"
+          className={`lg:hidden p-2 rounded-lg border transition-colors cursor-pointer focus-visible:outline-2 focus-visible:outline-emerald-500 ${
+            theme === 'dark'
+              ? 'border-slate-800 text-slate-300 hover:text-white hover:bg-slate-800/60'
+              : 'border-slate-200 text-slate-700 hover:text-slate-950 hover:bg-slate-100'
+          }`}
         >
           <Menu className="w-4 h-4" />
         </button>
@@ -260,6 +264,12 @@ export const TopBar: React.FC<TopBarProps> = ({
           >
             ArthNiti Terminal
           </button>
+          <span className="text-slate-600 hidden md:inline" aria-hidden="true">
+            /
+          </span>
+          <span className="text-xs text-slate-400 hidden md:inline whitespace-nowrap shrink-0">
+            {currentNav.groupTitle}
+          </span>
           <span className="text-slate-600 hidden sm:inline" aria-hidden="true">
             /
           </span>

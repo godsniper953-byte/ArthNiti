@@ -78,7 +78,15 @@ import {
   default as economistBitesHandler,
 } from '../api/economist-bites.ts';
 import { getHealthCheckPayload, default as healthHandler } from '../api/health.ts';
-import { ARTHNITI_NAV_ITEMS } from '../src/components/navigation/Sidebar.tsx';
+import {
+  ARTHNITI_NAV_GROUPS,
+  ARTHNITI_NAV_ITEMS,
+  DEFAULT_EXPANDED_NAV_GROUPS,
+  SIDEBAR_COLLAPSED_WIDTH_PX,
+  SIDEBAR_EXPANDED_WIDTH_PX,
+  getNavGroupForPage,
+  toggleNavGroupExpansion,
+} from '../src/components/navigation/Sidebar.tsx';
 import { ARTHNITI_METHODOLOGY_REVISION_DATE } from '../src/pages/DataSourcesPage.tsx';
 import {
   GLOBE_COUNTRY_CENTROIDS,
@@ -379,9 +387,48 @@ test('2. Cross-layer consistency between CSV datasets, mockEconomicData.ts, indi
   );
 });
 
-test('3. Navigation routes, deep-linking, hash aliases (#audit, #methodology, #trade, #bites), and Registry completeness', () => {
+test('3. Navigation routes, Sidebar category hierarchy, independent group controls, deep-linking, hash aliases, and Registry completeness', () => {
   assert.equal(VALID_PAGE_IDS.length, 11, 'All 11 primary routes (including economist-bites) must be registered');
   assert.equal(ARTHNITI_NAV_ITEMS.length, 11, 'Sidebar must expose all 11 routes');
+  assert.equal(ARTHNITI_NAV_GROUPS.length, 5, 'Sidebar must organize routes into 5 clear categories');
+  assert.equal(SIDEBAR_EXPANDED_WIDTH_PX, 264);
+  assert.equal(SIDEBAR_COLLAPSED_WIDTH_PX, 72);
+
+  // Verify zero duplicate routes and every sidebar destination is a valid implemented PageId
+  const uniqueSidebarIds = new Set(ARTHNITI_NAV_ITEMS.map((item) => item.id));
+  assert.equal(uniqueSidebarIds.size, 11, 'Sidebar must not contain duplicate navigation links');
+  for (const navItem of ARTHNITI_NAV_ITEMS) {
+    assert.ok(
+      VALID_PAGE_IDS.includes(navItem.id),
+      `Sidebar route ${navItem.id} must be a valid implemented PageId`
+    );
+    assert.ok(navItem.label.length > 0);
+    assert.ok(navItem.shortDesc.length > 0);
+  }
+
+  // Verify category mapping and independent collapsible group toggling
+  assert.equal(getNavGroupForPage('overview'), 'overview');
+  assert.equal(getNavGroupForPage('gdp-growth'), 'economy');
+  assert.equal(getNavGroupForPage('inflation'), 'economy');
+  assert.equal(getNavGroupForPage('labour-market'), 'economy');
+  assert.equal(getNavGroupForPage('comparisons'), 'economy');
+  assert.equal(getNavGroupForPage('financial-markets'), 'markets');
+  assert.equal(getNavGroupForPage('currency-oil'), 'markets');
+  assert.equal(getNavGroupForPage('economist-bites'), 'research');
+  assert.equal(getNavGroupForPage('economic-news'), 'research');
+  assert.equal(getNavGroupForPage('data-sources'), 'research');
+  assert.equal(getNavGroupForPage('about'), 'platform');
+
+  const collapsedEconomy = toggleNavGroupExpansion(DEFAULT_EXPANDED_NAV_GROUPS, 'economy');
+  assert.equal(collapsedEconomy.economy, false, 'Economy group should collapse independently');
+  assert.equal(collapsedEconomy.markets, true, 'Other groups must remain expanded');
+  assert.equal(collapsedEconomy.research, true, 'Other groups must remain expanded');
+  const reExpandedEconomy = toggleNavGroupExpansion(collapsedEconomy, 'economy');
+  assert.equal(reExpandedEconomy.economy, true, 'Economy group should re-expand cleanly');
+
+  // Non-collapsible single-item groups (overview, platform) must remain expanded
+  const afterOverviewToggle = toggleNavGroupExpansion(DEFAULT_EXPANDED_NAV_GROUPS, 'overview');
+  assert.equal(afterOverviewToggle.overview, true);
 
   assert.deepEqual(resolvePageFromLocation('#gdp-growth', ''), {
     pageId: 'gdp-growth',

@@ -9,6 +9,8 @@ import marketIndicesHandler, {
 import economicNewsHandler from './api/economic-news.ts';
 import economistBitesHandler from './api/economist-bites.ts';
 import healthHandler from './api/health.ts';
+import turnstileVerifyHandler from './api/turnstile-verify.ts';
+import securityMonitorHandler from './api/security-monitor.ts';
 
 dotenv.config();
 
@@ -20,11 +22,30 @@ async function startServer() {
   const PORT = Number(process.env.PORT) || 3000;
 
   app.disable('x-powered-by');
-  app.use(express.json({ limit: '256kb' }));
+  app.set('trust proxy', 1);
+  app.use(express.json({ limit: '64kb' }));
+
+  // Safe error handler for malformed JSON bodies or oversized payloads (prevents stack trace leakage)
+  app.use((err: any, _req: any, res: any, next: any) => {
+    if (err?.type === 'entity.too.large') {
+      return res.status(413).json({
+        ok: false,
+        error: 'Request payload exceeds maximum allowed size (64 KB).',
+      });
+    }
+    if (err instanceof SyntaxError && 'body' in err) {
+      return res.status(400).json({
+        ok: false,
+        error: 'Malformed JSON request payload.',
+      });
+    }
+    return next(err);
+  });
 
   // Defensive HTTP security headers across all responses
   app.use((_req, res, next) => {
     res.setHeader('X-Content-Type-Options', 'nosniff');
+    res.setHeader('X-Frame-Options', 'SAMEORIGIN');
     res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
     res.setHeader(
       'Permissions-Policy',
@@ -56,6 +77,16 @@ async function startServer() {
   // Mount server-side Economists' Latest Bites Discovery & Verification API route
   app.all('/api/economist-bites', async (req, res) => {
     await economistBitesHandler(req, res);
+  });
+
+  // Mount server-side Cloudflare Turnstile Verification API route
+  app.all('/api/turnstile-verify', async (req, res) => {
+    await turnstileVerifyHandler(req, res);
+  });
+
+  // Mount protected internal Security Monitoring API route
+  app.all('/api/security-monitor', async (req, res) => {
+    await securityMonitorHandler(req, res);
   });
 
   if (process.env.NODE_ENV !== 'production') {

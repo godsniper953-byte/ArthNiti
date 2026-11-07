@@ -22,6 +22,11 @@
  */
 
 import { applyApiSecurityAndCorsHeaders } from './market-indices.ts';
+import {
+  enforceEndpointRateLimit,
+  inspectRequestForBotAndAttacks,
+  logSecurityEvent,
+} from './security-shield.ts';
 
 export type NewsMacroCategory = 'india' | 'global' | 'current-affairs';
 
@@ -1725,16 +1730,35 @@ export async function getEconomicNewsPayload(options?: {
 }
 
 export default async function handler(req: any, res: any) {
-  applyApiSecurityAndCorsHeaders(req, res);
+  applyApiSecurityAndCorsHeaders(req, res, 'GET, OPTIONS');
 
   if (req.method === 'OPTIONS') {
     return res.status(200).end();
   }
 
   if (req.method && req.method !== 'GET') {
+    res.setHeader('Allow', 'GET, OPTIONS');
+    logSecurityEvent({
+      eventType: 'INVALID_HTTP_METHOD',
+      severity: 'WARN',
+      req,
+      endpoint: '/api/economic-news',
+      reason: `Rejected invalid HTTP method ${req.method}`,
+      statusCode: 405,
+    });
     return res.status(405).json({
       ok: false,
       error: `Method ${req.method} Not Allowed. Use GET.`,
+    });
+  }
+
+  // Enforce per-IP rate limit (30 requests/minute/IP default)
+  const rl = await enforceEndpointRateLimit(req, res, 'economic-news');
+  if (!rl.allowed) {
+    return res.status(429).json({
+      ok: false,
+      error: 'Rate limit exceeded for /api/economic-news. Please wait before retrying.',
+      retryAfterSeconds: rl.retryAfterSeconds,
     });
   }
 
@@ -1744,6 +1768,29 @@ export default async function handler(req: any, res: any) {
     req.query?.refresh === 'true';
   const simulateError =
     req.query?.simulateError === '1' || req.query?.simulateError === 'true';
+
+  // Multi-layer anti-bot and query injection inspection
+  const botCheck = inspectRequestForBotAndAttacks(req, {
+    endpoint: '/api/economic-news',
+    isForceRefresh: forceRefresh,
+    allowedQueryKeys: ['force', 'refresh', 'simulateError'],
+  });
+
+  if (botCheck.action === 'BLOCK') {
+    return res.status(botCheck.statusCode || 400).json({
+      ok: false,
+      error: botCheck.reason,
+    });
+  }
+
+  if (botCheck.action === 'CHALLENGE') {
+    return res.status(403).json({
+      ok: false,
+      code: 'TURNSTILE_CHALLENGE_REQUIRED',
+      requiresTurnstile: true,
+      error: botCheck.reason,
+    });
+  }
 
   try {
     const payload = await getEconomicNewsPayload({

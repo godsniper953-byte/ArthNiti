@@ -78,6 +78,14 @@ import {
   default as economistBitesHandler,
 } from '../api/economist-bites.ts';
 import { getHealthCheckPayload, default as healthHandler } from '../api/health.ts';
+import turnstileVerifyHandler from '../api/turnstile-verify.ts';
+import securityMonitorHandler from '../api/security-monitor.ts';
+import {
+  issueClearanceToken,
+  maskClientIpForLogging,
+  resetSecurityShieldForTest,
+  verifyClearanceToken,
+} from '../api/security-shield.ts';
 import {
   ARTHNITI_NAV_GROUPS,
   ARTHNITI_NAV_ITEMS,
@@ -111,14 +119,15 @@ const PUBLIC_DATA_DIR = path.resolve(process.cwd(), 'public/data');
 function createMockReqRes(
   method = 'GET',
   query: Record<string, string> = {},
-  reqHeaders: Record<string, string> = {}
+  reqHeaders: Record<string, string> = {},
+  body: Record<string, any> = {}
 ) {
   const headers: Record<string, string> = {};
   let statusCode = 200;
   let jsonBody: any = null;
   let ended = false;
 
-  const req = { method, query, headers: reqHeaders };
+  const req = { method, query, headers: reqHeaders, body };
   const res = {
     setHeader(k: string, v: string) {
       headers[k.toLowerCase()] = v;
@@ -1738,5 +1747,427 @@ test('13. Global Presentation Readiness: SEO Metadata, Sitemap, Robots.txt, Sche
     'AboutPage.tsx must include Legal, Privacy, and Financial-Information Disclosures'
   );
 });
+
+test('14. Complete Security & Anti-Bot Suite: Cloudflare Turnstile Siteverify, Replay Protection, Anti-Bot Progressive Challenges, Per-Endpoint Rate Limits & Security Monitoring', async () => {
+  const originalFetch = globalThis.fetch;
+  const origTurnstileSecret = process.env.TURNSTILE_SECRET_KEY;
+  const origSecMonitorToken = process.env.SECURITY_MONITOR_TOKEN;
+  const origHealthToken = process.env.HEALTH_MONITOR_TOKEN;
+  const origUpstashUrl = process.env.UPSTASH_REDIS_REST_URL;
+  const origUpstashToken = process.env.UPSTASH_REDIS_REST_TOKEN;
+
+  try {
+    resetSecurityShieldForTest();
+    process.env.TURNSTILE_SECRET_KEY = 'test-turnstile-secret-key-2026';
+    process.env.SECURITY_MONITOR_TOKEN = 'test-sec-monitor-token-2026';
+    process.env.HEALTH_MONITOR_TOKEN = 'test-health-monitor-token-2026';
+
+    // 1. Verify privacy-preserving IP masking never exposes full IP
+    const maskedIpv4 = maskClientIpForLogging('203.0.113.42');
+    assert.ok(
+      maskedIpv4.startsWith('203.0.113.xxx#') && !maskedIpv4.includes('203.0.113.42'),
+      `Masked IPv4 must redact last octet and append hash prefix, got ${maskedIpv4}`
+    );
+
+    // 2. Verify Cloudflare Turnstile CAPTCHA lifecycle:
+    //    - Missing token -> HTTP 400 (MISSING_TOKEN)
+    //    - Malformed token -> HTTP 400 (INVALID_TOKEN_FORMAT)
+    //    - Failed Siteverify -> HTTP 403 (VERIFICATION_FAILED)
+    //    - Expired token -> HTTP 403 (TOKEN_EXPIRED)
+    //    - Valid token -> HTTP 200 + clearanceToken
+    //    - Replayed token -> HTTP 403 (TOKEN_ALREADY_USED)
+    const missingTokenMock = createMockReqRes(
+      'POST',
+      {},
+      { 'x-forwarded-for': '198.51.100.10' },
+      { token: '' }
+    );
+    await turnstileVerifyHandler(missingTokenMock.req, missingTokenMock.res);
+    assert.equal(missingTokenMock.getStatusCode(), 400);
+    assert.equal(missingTokenMock.getJson()?.errorCode, 'MISSING_TOKEN');
+
+    const malformedTokenMock = createMockReqRes(
+      'POST',
+      {},
+      { 'x-forwarded-for': '198.51.100.10' },
+      { token: 'short' }
+    );
+    await turnstileVerifyHandler(malformedTokenMock.req, malformedTokenMock.res);
+    assert.equal(malformedTokenMock.getStatusCode(), 400);
+    assert.equal(malformedTokenMock.getJson()?.errorCode, 'INVALID_TOKEN_FORMAT');
+
+    // Mock Cloudflare Siteverify endpoint
+    globalThis.fetch = async (input: string | URL | Request, init?: RequestInit) => {
+      const urlStr = String(input);
+      if (urlStr.includes('challenges.cloudflare.com/turnstile/v0/siteverify')) {
+        const bodyParams = new URLSearchParams(String(init?.body || ''));
+        const submittedToken = bodyParams.get('response') || '';
+
+        if (submittedToken === 'valid_turnstile_token_1234567890') {
+          return new Response(
+            JSON.stringify({
+              success: true,
+              challenge_ts: new Date().toISOString(),
+              hostname: 'arthniti-six.vercel.app',
+            }),
+            { status: 200, headers: { 'content-type': 'application/json' } }
+          );
+        }
+        if (submittedToken === 'expired_turnstile_token_1234567890') {
+          return new Response(
+            JSON.stringify({
+              success: false,
+              'error-codes': ['timeout-or-duplicate'],
+            }),
+            { status: 200, headers: { 'content-type': 'application/json' } }
+          );
+        }
+        return new Response(
+          JSON.stringify({
+            success: false,
+            'error-codes': ['invalid-input-response'],
+          }),
+          { status: 200, headers: { 'content-type': 'application/json' } }
+        );
+      }
+      return new Response('{}', { status: 200 });
+    };
+
+    // Failed verification
+    const failedVerifyMock = createMockReqRes(
+      'POST',
+      {},
+      { 'x-forwarded-for': '198.51.100.11' },
+      { token: 'invalid_turnstile_token_1234567890' }
+    );
+    await turnstileVerifyHandler(failedVerifyMock.req, failedVerifyMock.res);
+    assert.equal(failedVerifyMock.getStatusCode(), 403);
+    assert.equal(failedVerifyMock.getJson()?.errorCode, 'VERIFICATION_FAILED');
+
+    // Expired token verification
+    const expiredVerifyMock = createMockReqRes(
+      'POST',
+      {},
+      { 'x-forwarded-for': '198.51.100.12' },
+      { token: 'expired_turnstile_token_1234567890' }
+    );
+    await turnstileVerifyHandler(expiredVerifyMock.req, expiredVerifyMock.res);
+    assert.equal(expiredVerifyMock.getStatusCode(), 403);
+    assert.equal(expiredVerifyMock.getJson()?.errorCode, 'TOKEN_EXPIRED');
+
+    // Successful verification
+    const successVerifyMock = createMockReqRes(
+      'POST',
+      {},
+      { 'x-forwarded-for': '198.51.100.15' },
+      { token: 'valid_turnstile_token_1234567890' }
+    );
+    await turnstileVerifyHandler(successVerifyMock.req, successVerifyMock.res);
+    assert.equal(successVerifyMock.getStatusCode(), 200);
+    assert.equal(successVerifyMock.getJson()?.verified, true);
+    const clearanceToken = successVerifyMock.getJson()?.clearanceToken;
+    assert.ok(typeof clearanceToken === 'string' && clearanceToken.length > 20);
+    const setCookieHeader = String(successVerifyMock.getHeaders()['set-cookie'] || '');
+    assert.ok(
+      setCookieHeader.includes('arthniti_human_session=') &&
+        setCookieHeader.includes('HttpOnly') &&
+        setCookieHeader.includes('SameSite=Lax'),
+      'POST /api/turnstile-verify must set an HttpOnly SameSite=Lax session cookie'
+    );
+    assert.equal(verifyClearanceToken(clearanceToken, '198.51.100.15'), true);
+    assert.equal(
+      verifyClearanceToken(clearanceToken, '198.51.100.99'),
+      false,
+      'Clearance token must be bound to the client IP that solved the challenge'
+    );
+
+    // Verify GET /api/turnstile-verify server-side session validation:
+    // - Unverified visitor -> verified: false
+    // - Visitor with valid X-Arthniti-Clearance header -> verified: true
+    // - Visitor with valid arthniti_human_session HttpOnly cookie -> verified: true
+    // - Visitor from different IP attempting to reuse token -> verified: false
+    const unverifiedSessionCheck = createMockReqRes(
+      'GET',
+      {},
+      { 'x-forwarded-for': '198.51.100.77' }
+    );
+    await turnstileVerifyHandler(unverifiedSessionCheck.req, unverifiedSessionCheck.res);
+    assert.equal(unverifiedSessionCheck.getStatusCode(), 200);
+    assert.equal(unverifiedSessionCheck.getJson()?.verified, false);
+
+    const headerSessionCheck = createMockReqRes(
+      'GET',
+      {},
+      {
+        'x-forwarded-for': '198.51.100.15',
+        'x-arthniti-clearance': clearanceToken,
+      }
+    );
+    await turnstileVerifyHandler(headerSessionCheck.req, headerSessionCheck.res);
+    assert.equal(headerSessionCheck.getStatusCode(), 200);
+    assert.equal(headerSessionCheck.getJson()?.verified, true);
+
+    const cookieSessionCheck = createMockReqRes(
+      'GET',
+      {},
+      {
+        'x-forwarded-for': '198.51.100.15',
+        cookie: `arthniti_human_session=${encodeURIComponent(clearanceToken)}`,
+      }
+    );
+    await turnstileVerifyHandler(cookieSessionCheck.req, cookieSessionCheck.res);
+    assert.equal(cookieSessionCheck.getStatusCode(), 200);
+    assert.equal(cookieSessionCheck.getJson()?.verified, true);
+
+    const spoofedIpSessionCheck = createMockReqRes(
+      'GET',
+      {},
+      {
+        'x-forwarded-for': '198.51.100.99',
+        cookie: `arthniti_human_session=${encodeURIComponent(clearanceToken)}`,
+      }
+    );
+    await turnstileVerifyHandler(spoofedIpSessionCheck.req, spoofedIpSessionCheck.res);
+    assert.equal(spoofedIpSessionCheck.getStatusCode(), 200);
+    assert.equal(spoofedIpSessionCheck.getJson()?.verified, false);
+
+    // Verify First-Visit HumanVerificationGate.tsx component requirements
+    const gatePath = path.resolve(
+      process.cwd(),
+      'src/components/common/HumanVerificationGate.tsx'
+    );
+    assert.ok(
+      fs.existsSync(gatePath),
+      'HumanVerificationGate.tsx must exist for first-visit human verification'
+    );
+    const gateSource = fs.readFileSync(gatePath, 'utf-8');
+    assert.ok(
+      gateSource.includes('Verify You&apos;re Human') ||
+        gateSource.includes("Verify You're Human"),
+      'HumanVerificationGate.tsx must display "Verify You\'re Human"'
+    );
+    assert.ok(
+      gateSource.includes('I&apos;m not a robot') ||
+        gateSource.includes("I'm not a robot"),
+      'HumanVerificationGate.tsx must display "I\'m not a robot"'
+    );
+    assert.ok(
+      gateSource.includes('challenges.cloudflare.com/turnstile/v0/api.js'),
+      'HumanVerificationGate.tsx must load the official Cloudflare Turnstile script'
+    );
+    assert.ok(
+      gateSource.includes('verifyTurnstileTokenWithServer'),
+      'HumanVerificationGate.tsx must validate the Turnstile token on the backend before granting access'
+    );
+    assert.ok(
+      gateSource.includes('Retry Verification'),
+      'HumanVerificationGate.tsx must provide a Retry Verification option on failure'
+    );
+
+    const appSource = fs.readFileSync(path.resolve(process.cwd(), 'src/App.tsx'), 'utf-8');
+    assert.ok(
+      appSource.includes("if (humanVerificationState !== 'verified')") &&
+        appSource.includes('<HumanVerificationGate'),
+      'App.tsx must gate access to the main dashboard behind HumanVerificationGate until verified'
+    );
+
+    // Replayed token must be rejected immediately without even calling Siteverify again
+    const replayVerifyMock = createMockReqRes(
+      'POST',
+      {},
+      { 'x-forwarded-for': '198.51.100.15' },
+      { token: 'valid_turnstile_token_1234567890' }
+    );
+    await turnstileVerifyHandler(replayVerifyMock.req, replayVerifyMock.res);
+    assert.equal(replayVerifyMock.getStatusCode(), 403);
+    assert.equal(replayVerifyMock.getJson()?.errorCode, 'TOKEN_ALREADY_USED');
+
+    // 3. Anti-Bot Multi-Layer Protection:
+    //    - Malicious scanner UA (sqlmap) -> HTTP 403 BLOCK
+    //    - Automated scraper UA (python-requests) -> HTTP 403 CHALLENGE (requiresTurnstile: true)
+    //    - Automated scraper UA WITH valid X-Arthniti-Clearance -> HTTP 200 ALLOW
+    //    - Legitimate search crawler (Googlebot) on public GET -> HTTP 200 ALLOW
+    const scannerMock = createMockReqRes(
+      'GET',
+      {},
+      {
+        'x-forwarded-for': '198.51.100.21',
+        'user-agent': 'sqlmap/1.7.2#stable (https://sqlmap.org)',
+      }
+    );
+    await marketIndicesHandler(scannerMock.req, scannerMock.res);
+    assert.equal(scannerMock.getStatusCode(), 403);
+    assert.equal(scannerMock.getJson()?.ok, false);
+
+    const scraperChallengeMock = createMockReqRes(
+      'GET',
+      {},
+      {
+        'x-forwarded-for': '198.51.100.15',
+        'user-agent': 'python-requests/2.31.0',
+      }
+    );
+    await economistBitesHandler(scraperChallengeMock.req, scraperChallengeMock.res);
+    assert.equal(scraperChallengeMock.getStatusCode(), 403);
+    assert.equal(scraperChallengeMock.getJson()?.requiresTurnstile, true);
+    assert.equal(scraperChallengeMock.getJson()?.code, 'TURNSTILE_CHALLENGE_REQUIRED');
+
+    // Same IP with valid clearanceToken bypasses progressive challenge
+    const clearedMock = createMockReqRes(
+      'GET',
+      {},
+      {
+        'x-forwarded-for': '198.51.100.15',
+        'user-agent': 'python-requests/2.31.0',
+        'x-arthniti-clearance': clearanceToken,
+      }
+    );
+    await economistBitesHandler(clearedMock.req, clearedMock.res);
+    assert.equal(clearedMock.getStatusCode(), 200);
+    assert.equal(clearedMock.getJson()?.ok, true);
+
+    // Legitimate Googlebot crawler on standard GET read is allowed
+    const googlebotMock = createMockReqRes(
+      'GET',
+      {},
+      {
+        'x-forwarded-for': '66.249.66.1',
+        'user-agent': 'Mozilla/5.0 (compatible; Googlebot/2.1; +http://www.google.com/bot.html)',
+      }
+    );
+    await economistBitesHandler(googlebotMock.req, googlebotMock.res);
+    assert.equal(googlebotMock.getStatusCode(), 200);
+
+    // 4. Malformed Request & Injection Protection:
+    //    - Unexpected query parameter -> HTTP 400
+    //    - XSS/path-traversal query payload -> HTTP 400
+    const badParamMock = createMockReqRes(
+      'GET',
+      { unexpectedParam: '1' },
+      { 'x-forwarded-for': '198.51.100.30' }
+    );
+    await marketIndicesHandler(badParamMock.req, badParamMock.res);
+    assert.equal(badParamMock.getStatusCode(), 400);
+
+    const xssQueryMock = createMockReqRes(
+      'GET',
+      { search: '<script>alert(1)</script>' },
+      { 'x-forwarded-for': '198.51.100.31' }
+    );
+    await economistBitesHandler(xssQueryMock.req, xssQueryMock.res);
+    assert.equal(xssQueryMock.getStatusCode(), 400);
+
+    const traversalMock = createMockReqRes(
+      'GET',
+      { topic: '../../etc/passwd' },
+      { 'x-forwarded-for': '198.51.100.32' }
+    );
+    await economistBitesHandler(traversalMock.req, traversalMock.res);
+    assert.equal(traversalMock.getStatusCode(), 400);
+
+    // 5. Per-Endpoint Rate Limiting Enforcement (HTTP 429 + Retry-After + X-RateLimit-* headers):
+    //    Test /api/health (limit = 10 req/min/IP)
+    for (let i = 1; i <= 10; i++) {
+      const hRes = createMockReqRes('GET', {}, { 'x-forwarded-for': '198.51.100.88' });
+      await healthHandler(hRes.req, hRes.res);
+      assert.equal(hRes.getStatusCode(), 200, `Request #${i} to /api/health should succeed`);
+      assert.equal(hRes.getHeaders()['x-ratelimit-limit'], '10');
+    }
+    const eleventhHealth = createMockReqRes('GET', {}, { 'x-forwarded-for': '198.51.100.88' });
+    await healthHandler(eleventhHealth.req, eleventhHealth.res);
+    assert.equal(
+      eleventhHealth.getStatusCode(),
+      429,
+      '11th request to /api/health within 1 minute must be rate-limited with HTTP 429'
+    );
+    assert.equal(eleventhHealth.getHeaders()['x-ratelimit-remaining'], '0');
+    assert.ok(Number(eleventhHealth.getHeaders()['retry-after']) >= 1);
+
+    // Authorized health monitor with valid Bearer token bypasses rate limit
+    const authHealth = createMockReqRes(
+      'GET',
+      {},
+      {
+        'x-forwarded-for': '198.51.100.88',
+        authorization: 'Bearer test-health-monitor-token-2026',
+      }
+    );
+    await healthHandler(authHealth.req, authHealth.res);
+    assert.equal(authHealth.getStatusCode(), 200);
+
+    // 6. Verify Distributed KV Rate Limiter mode when UPSTASH_REDIS_REST_URL is configured
+    process.env.UPSTASH_REDIS_REST_URL = 'https://mock-upstash-redis.upstash.io';
+    process.env.UPSTASH_REDIS_REST_TOKEN = 'mock-upstash-token';
+    globalThis.fetch = async (input: string | URL | Request) => {
+      if (String(input).includes('mock-upstash-redis.upstash.io/pipeline')) {
+        return new Response(JSON.stringify([{ result: 61 }, { result: 1 }]), {
+          status: 200,
+          headers: { 'content-type': 'application/json' },
+        });
+      }
+      return new Response('{}', { status: 200 });
+    };
+    const kvRateLimited = createMockReqRes('GET', {}, { 'x-forwarded-for': '198.51.100.95' });
+    await marketIndicesHandler(kvRateLimited.req, kvRateLimited.res);
+    assert.equal(
+      kvRateLimited.getStatusCode(),
+      429,
+      'Distributed KV store returning count=61 (> 60/min) must enforce HTTP 429 on /api/market-indices'
+    );
+    assert.equal(kvRateLimited.getHeaders()['x-ratelimit-limit'], '60');
+    assert.equal(kvRateLimited.getHeaders()['x-ratelimit-remaining'], '0');
+
+    delete process.env.UPSTASH_REDIS_REST_URL;
+    delete process.env.UPSTASH_REDIS_REST_TOKEN;
+
+    // 7. Verify Protected Security Monitoring Endpoint (/api/security-monitor)
+    const unauthMonitor = createMockReqRes('GET', {}, { 'x-forwarded-for': '198.51.100.50' });
+    await securityMonitorHandler(unauthMonitor.req, unauthMonitor.res);
+    assert.equal(unauthMonitor.getStatusCode(), 401);
+
+    const authMonitor = createMockReqRes(
+      'GET',
+      {},
+      {
+        'x-forwarded-for': '198.51.100.50',
+        authorization: 'Bearer test-sec-monitor-token-2026',
+      }
+    );
+    await securityMonitorHandler(authMonitor.req, authMonitor.res);
+    assert.equal(authMonitor.getStatusCode(), 200);
+    const monitorPayload = authMonitor.getJson();
+    assert.equal(monitorPayload.ok, true);
+    assert.equal(monitorPayload.posture.policiesPerMinute.marketIndices, 60);
+    assert.equal(monitorPayload.posture.policiesPerMinute.economicNews, 30);
+    assert.equal(monitorPayload.posture.policiesPerMinute.economistBitesPostAndAi, 10);
+    assert.equal(monitorPayload.posture.policiesPerMinute.health, 10);
+    assert.ok(monitorPayload.counters.CAPTCHA_VERIFICATION_SUCCESS >= 1);
+    assert.ok(monitorPayload.counters.CAPTCHA_VERIFICATION_FAILED >= 2);
+    assert.ok(monitorPayload.counters.CAPTCHA_REPLAY_BLOCKED >= 1);
+    assert.ok(monitorPayload.counters.BOT_SIGNATURE_BLOCKED >= 1);
+    assert.ok(monitorPayload.counters.PROGRESSIVE_CHALLENGE_ISSUED >= 1);
+    assert.ok(monitorPayload.counters.RATE_LIMIT_EXCEEDED >= 2);
+
+    // Ensure no raw unmasked IP or secret key appears anywhere in the security monitor output
+    const serializedMonitor = JSON.stringify(monitorPayload);
+    assert.ok(!serializedMonitor.includes('198.51.100.15'), 'Security logs must never expose full client IPs');
+    assert.ok(!serializedMonitor.includes('test-turnstile-secret-key-2026'), 'Security logs must never expose TURNSTILE_SECRET_KEY');
+    assert.ok(!serializedMonitor.includes('test-sec-monitor-token-2026'), 'Security logs must never expose SECURITY_MONITOR_TOKEN');
+  } finally {
+    globalThis.fetch = originalFetch;
+    if (origTurnstileSecret === undefined) delete process.env.TURNSTILE_SECRET_KEY;
+    else process.env.TURNSTILE_SECRET_KEY = origTurnstileSecret;
+    if (origSecMonitorToken === undefined) delete process.env.SECURITY_MONITOR_TOKEN;
+    else process.env.SECURITY_MONITOR_TOKEN = origSecMonitorToken;
+    if (origHealthToken === undefined) delete process.env.HEALTH_MONITOR_TOKEN;
+    else process.env.HEALTH_MONITOR_TOKEN = origHealthToken;
+    if (origUpstashUrl === undefined) delete process.env.UPSTASH_REDIS_REST_URL;
+    else process.env.UPSTASH_REDIS_REST_URL = origUpstashUrl;
+    if (origUpstashToken === undefined) delete process.env.UPSTASH_REDIS_REST_TOKEN;
+    else process.env.UPSTASH_REDIS_REST_TOKEN = origUpstashToken;
+    resetSecurityShieldForTest();
+  }
+});
+
 
 

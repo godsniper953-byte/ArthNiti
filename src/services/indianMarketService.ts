@@ -4,6 +4,10 @@ import type {
   IntradayPricePoint,
   MarketSessionState,
 } from '../../api/market-indices';
+import {
+  getSecurityRequestHeaders,
+  requestTurnstileChallenge,
+} from './securityClient';
 
 export type {
   IndianMarketIndexQuote,
@@ -188,15 +192,19 @@ export async function fetchIndianMarketIndices(options?: {
         const query = options?.forceRefresh ? '?refresh=true' : '';
         const response = await fetch(`/api/market-indices${query}`, {
           method: 'GET',
-          headers: {
-            Accept: 'application/json',
-          },
+          headers: getSecurityRequestHeaders(),
           signal: controller.signal,
         });
         clearTimeout(timeoutId);
 
         const contentType = response.headers.get('content-type') || '';
         if (!response.ok || !contentType.includes('application/json')) {
+          if (response.status === 403) {
+            const errJson = await response.json().catch(() => ({}));
+            if (errJson?.requiresTurnstile || errJson?.code === 'TURNSTILE_CHALLENGE_REQUIRED') {
+              requestTurnstileChallenge(errJson?.error);
+            }
+          }
           const statusErr = new Error(
             `Server market route /api/market-indices returned HTTP ${response.status}`
           );

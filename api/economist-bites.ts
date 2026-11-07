@@ -22,6 +22,14 @@
 import { GoogleGenAI, Type } from '@google/genai';
 import { applyApiSecurityAndCorsHeaders } from './market-indices.ts';
 import { normalizeNewsPublicationTimestamp } from './economic-news.ts';
+import {
+  enforceEndpointRateLimit,
+  extractTrustedClientIp,
+  inspectRequestForBotAndAttacks,
+  logSecurityEvent,
+  verifyClearanceToken,
+  verifyTurnstileToken,
+} from './security-shield.ts';
 
 export function formatBiteIstTimestamp(epochMsOrDate: number | Date): string {
   try {
@@ -2591,7 +2599,7 @@ function applyBitesQueryFilters(
 }
 
 export default async function handler(req: any, res: any) {
-  applyApiSecurityAndCorsHeaders(req, res);
+  applyApiSecurityAndCorsHeaders(req, res, 'GET, POST, OPTIONS');
 
   if (req.method === 'OPTIONS') {
     return res.status(200).end();
@@ -2599,9 +2607,87 @@ export default async function handler(req: any, res: any) {
 
   if (req.method !== 'GET' && req.method !== 'POST') {
     res.setHeader('Allow', 'GET, POST, OPTIONS');
+    logSecurityEvent({
+      eventType: 'INVALID_HTTP_METHOD',
+      severity: 'WARN',
+      req,
+      endpoint: '/api/economist-bites',
+      reason: `Rejected invalid HTTP method ${req.method}`,
+      statusCode: 405,
+    });
     return res.status(405).json({
       ok: false,
       error: `Method ${req.method} Not Allowed. Use GET or POST.`,
+    });
+  }
+
+  // Enforce per-IP rate limit: 10 req/min for POST (sensitive/AI ingestion), 30 req/min for GET
+  const rl = await enforceEndpointRateLimit(
+    req,
+    res,
+    req.method === 'POST' ? 'economist-bites-post' : 'economist-bites'
+  );
+  if (!rl.allowed) {
+    return res.status(429).json({
+      ok: false,
+      error: `Rate limit exceeded for /api/economist-bites (${req.method}). Please wait before retrying.`,
+      retryAfterSeconds: rl.retryAfterSeconds,
+    });
+  }
+
+  // Protect POST manual/cron ingestion trigger via Bearer secret before running anti-bot heuristics
+  if (req.method === 'POST') {
+    const configuredSecret = (process.env.ECONOMIST_BITES_INGEST_SECRET || '').trim();
+    const authHeader = String(req.headers?.authorization || '').trim();
+    if (configuredSecret && authHeader !== `Bearer ${configuredSecret}`) {
+      logSecurityEvent({
+        eventType: 'UNAUTHORIZED_ACCESS_ATTEMPT',
+        severity: 'HIGH',
+        req,
+        endpoint: '/api/economist-bites',
+        reason: 'Rejected POST /api/economist-bites with invalid Bearer token',
+        statusCode: 401,
+      });
+      return res.status(401).json({
+        ok: false,
+        error: 'Unauthorised ingestion trigger request. Valid Bearer token required.',
+      });
+    }
+  }
+
+  const forceRefresh =
+    req.query?.refresh === '1' ||
+    req.query?.refresh === 'true' ||
+    req.method === 'POST';
+
+  // Multi-layer anti-bot and query/body injection inspection
+  const botCheck = inspectRequestForBotAndAttacks(req, {
+    endpoint: '/api/economist-bites',
+    isForceRefresh: forceRefresh && req.method !== 'POST',
+    isSensitiveMutation: req.method === 'POST',
+    allowedQueryKeys: [
+      'refresh',
+      'geography',
+      'topic',
+      'economist',
+      'search',
+      'simulateError',
+    ],
+  });
+
+  if (botCheck.action === 'BLOCK') {
+    return res.status(botCheck.statusCode || 400).json({
+      ok: false,
+      error: botCheck.reason,
+    });
+  }
+
+  if (botCheck.action === 'CHALLENGE') {
+    return res.status(403).json({
+      ok: false,
+      code: 'TURNSTILE_CHALLENGE_REQUIRED',
+      requiresTurnstile: true,
+      error: botCheck.reason,
     });
   }
 
@@ -2612,23 +2698,40 @@ export default async function handler(req: any, res: any) {
     });
   }
 
-  // Protect POST manual/cron ingestion trigger if ECONOMIST_BITES_INGEST_SECRET is configured
-  if (req.method === 'POST') {
-    const configuredSecret = (process.env.ECONOMIST_BITES_INGEST_SECRET || '').trim();
-    const authHeader = String(req.headers?.authorization || '').trim();
-    if (configuredSecret && authHeader !== `Bearer ${configuredSecret}`) {
-      return res.status(401).json({
-        ok: false,
-        error: 'Unauthorised ingestion trigger request. Valid Bearer token required.',
-      });
+  // If POST without ECONOMIST_BITES_INGEST_SECRET, require Cloudflare Turnstile when TURNSTILE_SECRET_KEY is configured
+  if (req.method === 'POST' && !(process.env.ECONOMIST_BITES_INGEST_SECRET || '').trim()) {
+    if ((process.env.TURNSTILE_SECRET_KEY || '').trim()) {
+      const clientIp = extractTrustedClientIp(req);
+      const clearanceHeader = String(req.headers?.['x-arthniti-clearance'] || '').trim();
+      const turnstileToken = String(
+        req.headers?.['x-turnstile-token'] || req.body?.turnstileToken || ''
+      ).trim();
+
+      const hasValidClearance =
+        clearanceHeader && verifyClearanceToken(clearanceHeader, clientIp);
+
+      if (!hasValidClearance) {
+        if (!turnstileToken) {
+          return res.status(403).json({
+            ok: false,
+            code: 'TURNSTILE_CHALLENGE_REQUIRED',
+            requiresTurnstile: true,
+            error: 'Human verification (Cloudflare Turnstile) is required for POST ingestion.',
+          });
+        }
+        const verifyOut = await verifyTurnstileToken({ token: turnstileToken, req });
+        if (!verifyOut.ok) {
+          return res.status(verifyOut.statusCode).json({
+            ok: false,
+            errorCode: verifyOut.errorCode,
+            error: verifyOut.errorMessage,
+          });
+        }
+      }
     }
   }
 
   const nowMs = Date.now();
-  const forceRefresh =
-    req.query?.refresh === '1' ||
-    req.query?.refresh === 'true' ||
-    req.method === 'POST';
 
   // Serve from server-side cache if fresh and not force-refreshed (or if within 15s cooldown)
   if (
@@ -2661,7 +2764,7 @@ export default async function handler(req: any, res: any) {
 
     res.setHeader('Cache-Control', 'public, s-maxage=120, stale-while-revalidate=300');
     return res.status(200).json(applyBitesQueryFilters(freshPayload, req.query));
-  } catch (err: any) {
+  } catch {
     if (cachedBitesPayload) {
       const stalePayload: EconomistBitesResponse = {
         ...cachedBitesPayload,
@@ -2672,7 +2775,7 @@ export default async function handler(req: any, res: any) {
     }
     return res.status(500).json({
       ok: false,
-      error: err?.message || 'Failed to ingest and verify Economists’ Latest Bites.',
+      error: 'Failed to ingest and verify Economists’ Latest Bites.',
     });
   }
 }

@@ -176,10 +176,20 @@ export const NSE_BSE_HOLIDAYS_2026 = new Set<string>([
   '2026-12-25', // Christmas
 ]);
 
-export const ARTHNITI_CSP_HEADER =
-  "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com data:; img-src 'self' data: blob: https:; connect-src 'self' https://arthniti-six.vercel.app; worker-src 'self' blob:; frame-ancestors 'self' https://*.google.com https://*.aistudio.google.com https://*.run.app https://*.vercel.app; object-src 'none'; base-uri 'self'; form-action 'self'";
+import {
+  ARTHNITI_SECURE_CSP_HEADER,
+  enforceEndpointRateLimit,
+  inspectRequestForBotAndAttacks,
+  logSecurityEvent,
+} from './security-shield.ts';
 
-export function applyApiSecurityAndCorsHeaders(req: any, res: any): void {
+export const ARTHNITI_CSP_HEADER = ARTHNITI_SECURE_CSP_HEADER;
+
+export function applyApiSecurityAndCorsHeaders(
+  req: any,
+  res: any,
+  allowedMethods = 'GET, OPTIONS'
+): void {
   const rawOrigin = String(req?.headers?.origin || '').trim();
   let allowedOrigin = 'https://arthniti-six.vercel.app';
   if (rawOrigin) {
@@ -202,8 +212,15 @@ export function applyApiSecurityAndCorsHeaders(req: any, res: any): void {
 
   res.setHeader('Access-Control-Allow-Origin', allowedOrigin);
   res.setHeader('Vary', 'Origin');
-  res.setHeader('Access-Control-Allow-Methods', 'GET, OPTIONS');
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+  res.setHeader('Access-Control-Allow-Methods', allowedMethods);
+  res.setHeader(
+    'Access-Control-Allow-Headers',
+    'Content-Type, Authorization, X-Turnstile-Token, X-Arthniti-Clearance'
+  );
+  res.setHeader(
+    'Access-Control-Expose-Headers',
+    'X-RateLimit-Limit, X-RateLimit-Remaining, X-RateLimit-Reset, Retry-After'
+  );
   res.setHeader('X-Content-Type-Options', 'nosniff');
   res.setHeader('X-Frame-Options', 'SAMEORIGIN');
   res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
@@ -742,7 +759,7 @@ export async function fetchIndianMarketIndicesPayload(options?: {
 
 // Default export for Vercel Serverless Functions (/api/market-indices)
 export default async function handler(req: any, res: any) {
-  applyApiSecurityAndCorsHeaders(req, res);
+  applyApiSecurityAndCorsHeaders(req, res, 'GET, OPTIONS');
 
   if (req.method === 'OPTIONS') {
     res.status(200).end();
@@ -750,6 +767,15 @@ export default async function handler(req: any, res: any) {
   }
 
   if (req.method && req.method !== 'GET') {
+    res.setHeader('Allow', 'GET, OPTIONS');
+    logSecurityEvent({
+      eventType: 'INVALID_HTTP_METHOD',
+      severity: 'WARN',
+      req,
+      endpoint: '/api/market-indices',
+      reason: `Rejected invalid HTTP method ${req.method}`,
+      statusCode: 405,
+    });
     res.status(405).json({
       ok: false,
       error: `Method ${req.method} Not Allowed. Use GET.`,
@@ -757,17 +783,57 @@ export default async function handler(req: any, res: any) {
     return;
   }
 
+  // Enforce per-IP rate limit (60 requests/minute/IP default)
+  const rl = await enforceEndpointRateLimit(req, res, 'market-indices');
+  if (!rl.allowed) {
+    res.status(429).json({
+      ok: false,
+      error: 'Rate limit exceeded for /api/market-indices. Please wait before retrying.',
+      retryAfterSeconds: rl.retryAfterSeconds,
+      indices: [],
+    });
+    return;
+  }
+
+  const forceRefresh = req.query?.refresh === 'true' || req.query?.force === '1';
+
+  // Multi-layer anti-bot and query injection inspection
+  const botCheck = inspectRequestForBotAndAttacks(req, {
+    endpoint: '/api/market-indices',
+    isForceRefresh: forceRefresh,
+    allowedQueryKeys: ['refresh', 'force'],
+  });
+
+  if (botCheck.action === 'BLOCK') {
+    res.status(botCheck.statusCode || 400).json({
+      ok: false,
+      error: botCheck.reason,
+      indices: [],
+    });
+    return;
+  }
+
+  if (botCheck.action === 'CHALLENGE') {
+    res.status(403).json({
+      ok: false,
+      code: 'TURNSTILE_CHALLENGE_REQUIRED',
+      requiresTurnstile: true,
+      error: botCheck.reason,
+      indices: [],
+    });
+    return;
+  }
+
   try {
-    const forceRefresh = req.query?.refresh === 'true' || req.query?.force === '1';
     const payload = await fetchIndianMarketIndicesPayload({ forceRefresh });
 
     // Set Vercel Edge / CDN Cache-Control headers (15s fresh, 30s stale-while-revalidate)
     res.setHeader('Cache-Control', 's-maxage=15, stale-while-revalidate=30');
     res.status(200).json(payload);
-  } catch (err: any) {
+  } catch {
     res.status(500).json({
       ok: false,
-      error: err?.message || 'Failed to retrieve Indian stock market indices.',
+      error: 'Failed to retrieve Indian stock market indices.',
       fetchedAtMs: Date.now(),
       fetchedAtIst: formatTimestampIst(Date.now(), true),
       indices: [],

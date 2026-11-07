@@ -66,6 +66,9 @@ import { TopBar } from './components/navigation/TopBar';
 import { LiveMarketTickerStrip } from './components/visualizations/LiveMarketTickerStrip';
 import { OverviewPage } from './pages/OverviewPage';
 import { ErrorBoundary } from './components/common/ErrorBoundary';
+import { HumanVerificationGate } from './components/common/HumanVerificationGate';
+import { TurnstileChallengeModal } from './components/common/TurnstileChallengeModal';
+import { validateHumanSessionWithServer } from './services/securityClient';
 import { syncPageSeoMetadata } from './utils/seoMetadata';
 
 const GdpGrowthPage = React.lazy(() =>
@@ -128,6 +131,27 @@ export default function App() {
     }
   });
   const shouldReduceMotion = useReducedMotion();
+
+  // First-Visit Server-Validated Human Verification Gate State
+  const [humanVerificationState, setHumanVerificationState] = useState<
+    'checking' | 'unverified' | 'verified'
+  >('checking');
+  const [sessionCheckError, setSessionCheckError] = useState<string | null>(null);
+
+  const checkServerHumanSession = useCallback(async () => {
+    const status = await validateHumanSessionWithServer();
+    if (status.verified) {
+      setSessionCheckError(null);
+      setHumanVerificationState('verified');
+    } else {
+      setSessionCheckError(status.serviceUnavailable ? status.error || null : null);
+      setHumanVerificationState('unverified');
+    }
+  }, []);
+
+  useEffect(() => {
+    checkServerHumanSession();
+  }, [checkServerHumanSession]);
 
   useEffect(() => {
     try {
@@ -496,6 +520,7 @@ export default function App() {
   }, []);
 
   useEffect(() => {
+    if (humanVerificationState !== 'verified') return;
     handleFetchOfficialCpi(false);
     handleFetchOfficialGdp(false);
     handleFetchOfficialRepo(false);
@@ -507,6 +532,7 @@ export default function App() {
     handleFetchEconomicNews({ forceRefresh: false, simulateError: false });
     handleFetchEconomistBites({ forceRefresh: false, simulateError: false });
   }, [
+    humanVerificationState,
     handleFetchOfficialCpi,
     handleFetchOfficialGdp,
     handleFetchOfficialRepo,
@@ -521,7 +547,7 @@ export default function App() {
 
   // Safe automatic polling for Economists' Latest Bites (configurable via VITE_ECONOMIST_BITES_POLL_INTERVAL_MS, default 300,000ms = 5m)
   useEffect(() => {
-    if (!bitesAutoRefresh || bitesError) return;
+    if (humanVerificationState !== 'verified' || !bitesAutoRefresh || bitesError) return;
     const bitesPollMs = Math.max(
       60000,
       Number(import.meta.env.VITE_ECONOMIST_BITES_POLL_INTERVAL_MS) || 300000
@@ -547,11 +573,17 @@ export default function App() {
       window.clearInterval(timerId);
       document.removeEventListener('visibilitychange', handleBitesVisibilityChange);
     };
-  }, [bitesAutoRefresh, bitesError, bitesData?.fetchedAtMs, handleFetchEconomistBites]);
+  }, [
+    humanVerificationState,
+    bitesAutoRefresh,
+    bitesError,
+    bitesData?.fetchedAtMs,
+    handleFetchEconomistBites,
+  ]);
 
   // Safe automatic polling for Live Economic News (configurable via VITE_ECONOMIC_NEWS_POLL_INTERVAL_MS, default 300,000ms = 5m)
   useEffect(() => {
-    if (!newsAutoRefresh || newsError) return;
+    if (humanVerificationState !== 'verified' || !newsAutoRefresh || newsError) return;
     const newsPollMs = Math.max(
       60000,
       Number(import.meta.env.VITE_ECONOMIC_NEWS_POLL_INTERVAL_MS) || 300000
@@ -577,11 +609,17 @@ export default function App() {
       window.clearInterval(timerId);
       document.removeEventListener('visibilitychange', handleNewsVisibilityChange);
     };
-  }, [newsAutoRefresh, newsError, newsData?.fetchedAtMs, handleFetchEconomicNews]);
+  }, [
+    humanVerificationState,
+    newsAutoRefresh,
+    newsError,
+    newsData?.fetchedAtMs,
+    handleFetchEconomicNews,
+  ]);
 
   // Safe automatic polling for Live Indian Market Indices (configurable via VITE_MARKET_OPEN_POLL_INTERVAL_MS / VITE_MARKET_CLOSED_POLL_INTERVAL_MS)
   useEffect(() => {
-    if (!marketAutoRefresh || marketError) return;
+    if (humanVerificationState !== 'verified' || !marketAutoRefresh || marketError) return;
 
     const sessionState = marketData?.marketStatus || 'CLOSED';
     const openPollMs = Math.max(
@@ -620,6 +658,7 @@ export default function App() {
       document.removeEventListener('visibilitychange', handleVisibilityChange);
     };
   }, [
+    humanVerificationState,
     marketAutoRefresh,
     marketError,
     marketData?.marketStatus,
@@ -1357,6 +1396,22 @@ export default function App() {
     }
   };
 
+  // Do not expose the main dashboard until server-side Cloudflare Turnstile verification succeeds
+  if (humanVerificationState !== 'verified') {
+    return (
+      <HumanVerificationGate
+        theme={theme}
+        onToggleTheme={() => setTheme((prev) => (prev === 'dark' ? 'light' : 'dark'))}
+        onVerified={() => {
+          setSessionCheckError(null);
+          setHumanVerificationState('verified');
+        }}
+        initialServiceError={sessionCheckError}
+        onRetrySessionCheck={checkServerHumanSession}
+      />
+    );
+  }
+
   return (
     <div
       className={`min-h-screen flex transition-colors ${
@@ -1611,6 +1666,7 @@ export default function App() {
           </div>
         </footer>
       </div>
+      <TurnstileChallengeModal theme={theme} />
     </div>
   );
 }

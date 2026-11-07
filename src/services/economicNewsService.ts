@@ -25,6 +25,10 @@ import {
   createOutOfOrderResponseGuard,
   isRetryableHttpStatus,
 } from './indianMarketService';
+import {
+  getSecurityRequestHeaders,
+  requestTurnstileChallenge,
+} from './securityClient';
 
 export type {
   AffectedArthNitiIndicator,
@@ -126,9 +130,7 @@ export async function fetchEconomicNews(options?: {
 
       try {
         const res = await fetch(url, {
-          headers: {
-            Accept: 'application/json',
-          },
+          headers: getSecurityRequestHeaders(),
           signal: controller.signal,
         });
         clearTimeout(timeoutId);
@@ -136,6 +138,12 @@ export async function fetchEconomicNews(options?: {
         const contentType = res.headers.get('content-type') || '';
         if (!res.ok || !contentType.includes('application/json')) {
           const errBody = await res.json().catch(() => ({}));
+          if (
+            res.status === 403 &&
+            (errBody?.requiresTurnstile || errBody?.code === 'TURNSTILE_CHALLENGE_REQUIRED')
+          ) {
+            requestTurnstileChallenge(errBody?.error);
+          }
           const statusErr = new Error(
             errBody?.error ||
               `Server returned HTTP ${res.status} when fetching live economic news.`

@@ -1797,18 +1797,61 @@ test('14. Complete Security & Anti-Bot Suite: Cloudflare Turnstile Siteverify, R
     assert.equal(malformedTokenMock.getJson()?.errorCode, 'INVALID_TOKEN_FORMAT');
 
     // Mock Cloudflare Siteverify endpoint
+    let siteverifyCallCount = 0;
+    let transientRetryCount = 0;
+    let capturedIdempotencyKeys: string[] = [];
+
     globalThis.fetch = async (input: string | URL | Request, init?: RequestInit) => {
       const urlStr = String(input);
       if (urlStr.includes('challenges.cloudflare.com/turnstile/v0/siteverify')) {
+        siteverifyCallCount += 1;
         const bodyParams = new URLSearchParams(String(init?.body || ''));
         const submittedToken = bodyParams.get('response') || '';
+        const idemKey = bodyParams.get('idempotency_key') || '';
+        capturedIdempotencyKeys.push(idemKey);
 
         if (submittedToken === 'valid_turnstile_token_1234567890') {
           return new Response(
             JSON.stringify({
               success: true,
+              // Intentionally use an older timestamp to verify server-clock offset immunity
+              challenge_ts: '2025-05-15T10:00:00.000Z',
+              hostname: 'arthniti-six.vercel.app',
+            }),
+            { status: 200, headers: { 'content-type': 'application/json' } }
+          );
+        }
+        if (submittedToken === 'concurrent_dedup_token_1234567890') {
+          await new Promise((r) => setTimeout(r, 25));
+          return new Response(
+            JSON.stringify({
+              success: true,
               challenge_ts: new Date().toISOString(),
               hostname: 'arthniti-six.vercel.app',
+            }),
+            { status: 200, headers: { 'content-type': 'application/json' } }
+          );
+        }
+        if (submittedToken === 'transient_network_retry_token_1234567890') {
+          transientRetryCount += 1;
+          if (transientRetryCount === 1) {
+            throw new Error('Simulated transient socket hang up');
+          }
+          return new Response(
+            JSON.stringify({
+              success: true,
+              challenge_ts: new Date().toISOString(),
+              hostname: 'arthniti-six.vercel.app',
+            }),
+            { status: 200, headers: { 'content-type': 'application/json' } }
+          );
+        }
+        if (submittedToken === 'bad_hostname_token_1234567890') {
+          return new Response(
+            JSON.stringify({
+              success: true,
+              challenge_ts: new Date().toISOString(),
+              hostname: 'unauthorized-scraper-site.example.org',
             }),
             { status: 200, headers: { 'content-type': 'application/json' } }
           );
@@ -1855,7 +1898,18 @@ test('14. Complete Security & Anti-Bot Suite: Cloudflare Turnstile Siteverify, R
     assert.equal(expiredVerifyMock.getStatusCode(), 403);
     assert.equal(expiredVerifyMock.getJson()?.errorCode, 'TOKEN_EXPIRED');
 
-    // Successful verification
+    // Unauthorized hostname rejection
+    const badHostMock = createMockReqRes(
+      'POST',
+      {},
+      { 'x-forwarded-for': '198.51.100.13' },
+      { token: 'bad_hostname_token_1234567890' }
+    );
+    await turnstileVerifyHandler(badHostMock.req, badHostMock.res);
+    assert.equal(badHostMock.getStatusCode(), 403);
+    assert.equal(badHostMock.getJson()?.errorCode, 'HOSTNAME_MISMATCH');
+
+    // Successful verification (including clock-skew immunity on challenge_ts)
     const successVerifyMock = createMockReqRes(
       'POST',
       {},
@@ -1881,6 +1935,62 @@ test('14. Complete Security & Anti-Bot Suite: Cloudflare Turnstile Siteverify, R
       'Clearance token must be bound to the client IP that solved the challenge'
     );
 
+    // Concurrent duplicate submission of the same token must call Cloudflare Siteverify ONLY ONCE
+    const countBeforeConcurrent = siteverifyCallCount;
+    const concA = createMockReqRes(
+      'POST',
+      {},
+      { 'x-forwarded-for': '198.51.100.16' },
+      { token: 'concurrent_dedup_token_1234567890' }
+    );
+    const concB = createMockReqRes(
+      'POST',
+      {},
+      { 'x-forwarded-for': '198.51.100.16' },
+      { token: 'concurrent_dedup_token_1234567890' }
+    );
+    await Promise.all([
+      turnstileVerifyHandler(concA.req, concA.res),
+      turnstileVerifyHandler(concB.req, concB.res),
+    ]);
+    assert.equal(concA.getStatusCode(), 200);
+    assert.equal(concB.getStatusCode(), 200);
+    assert.equal(
+      siteverifyCallCount - countBeforeConcurrent,
+      1,
+      'Concurrent identical token submissions must share a single Siteverify request'
+    );
+
+    // Safe retry with identical deterministic idempotency_key on transient Siteverify network error
+    capturedIdempotencyKeys = [];
+    const retryMock = createMockReqRes(
+      'POST',
+      {},
+      { 'x-forwarded-for': '198.51.100.17' },
+      { token: 'transient_network_retry_token_1234567890' }
+    );
+    await turnstileVerifyHandler(retryMock.req, retryMock.res);
+    assert.equal(retryMock.getStatusCode(), 200);
+    assert.equal(capturedIdempotencyKeys.length, 2);
+    assert.equal(
+      capturedIdempotencyKeys[0],
+      capturedIdempotencyKeys[1],
+      'Safe Siteverify retry must use the exact same deterministic idempotency_key'
+    );
+
+    // Missing secret key configuration handling (TURNSTILE_SECRET_KEY = 'DISABLED')
+    process.env.TURNSTILE_SECRET_KEY = 'DISABLED';
+    const missingSecretMock = createMockReqRes(
+      'POST',
+      {},
+      { 'x-forwarded-for': '198.51.100.18' },
+      { token: 'fresh_unused_token_9876543210' }
+    );
+    await turnstileVerifyHandler(missingSecretMock.req, missingSecretMock.res);
+    assert.equal(missingSecretMock.getStatusCode(), 503);
+    assert.equal(missingSecretMock.getJson()?.errorCode, 'SECRET_NOT_CONFIGURED');
+    process.env.TURNSTILE_SECRET_KEY = 'test-turnstile-secret-key-2026';
+
     // Verify GET /api/turnstile-verify server-side session validation:
     // - Unverified visitor -> verified: false
     // - Visitor with valid X-Arthniti-Clearance header -> verified: true
@@ -1894,6 +2004,7 @@ test('14. Complete Security & Anti-Bot Suite: Cloudflare Turnstile Siteverify, R
     await turnstileVerifyHandler(unverifiedSessionCheck.req, unverifiedSessionCheck.res);
     assert.equal(unverifiedSessionCheck.getStatusCode(), 200);
     assert.equal(unverifiedSessionCheck.getJson()?.verified, false);
+    assert.ok(typeof unverifiedSessionCheck.getJson()?.siteKey === 'string');
 
     const headerSessionCheck = createMockReqRes(
       'GET',

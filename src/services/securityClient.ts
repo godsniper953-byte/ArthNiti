@@ -5,10 +5,12 @@
  *   - First-visit human verification gate ("Verify You're Human") validates the
  *     Cloudflare Turnstile token via POST /api/turnstile-verify before granting
  *     access to the main ArthNiti dashboard.
- *   - Subsequent page navigations and reloads within the configured session window
- *     validate the HMAC-signed token / HttpOnly session cookie with GET /api/turnstile-verify.
- *   - Fails closed: if verification services are unavailable, displays a clear error
- *     message and retry option rather than silently granting access.
+ *   - Subsequent page navigations, browser refreshes, and new browser tabs within
+ *     the configured session window validate the HMAC-signed token & HttpOnly
+ *     session cookie on the server via GET /api/turnstile-verify.
+ *   - Never trusts a client-side boolean flag as proof of verification; every session
+ *     check is cryptographically verified by the backend.
+ *   - Prevents duplicate frontend submissions of the same Turnstile token.
  */
 
 const CLEARANCE_STORAGE_KEY = 'arthniti_security_clearance_v1';
@@ -27,6 +29,15 @@ export interface TurnstileChallengeState {
   onVerifiedCallback?: () => void;
 }
 
+export interface TurnstileVerifyServerResponse {
+  ok: boolean;
+  error?: string;
+  errorCode?: string;
+  serviceUnavailable?: boolean;
+  expiresAtMs?: number;
+  siteKey?: string;
+}
+
 type ChallengeListener = (state: TurnstileChallengeState) => void;
 
 const listeners = new Set<ChallengeListener>();
@@ -35,71 +46,103 @@ let currentState: TurnstileChallengeState = {
   reason: '',
 };
 
+// Synchronized sitekey from GET /api/turnstile-verify when set in server runtime env
+let runtimeServerSiteKey = '';
+
+// Client-side deduplication so the same Turnstile token is never submitted twice
+const inFlightTokenVerifications = new Map<
+  string,
+  Promise<TurnstileVerifyServerResponse>
+>();
+const consumedClientTokens = new Set<string>();
+
 export function getConfiguredTurnstileSiteKey(): string {
   const env = (import.meta as any).env || {};
-  const configured = String(
+  const buildConfigured = String(
     env.NEXT_PUBLIC_TURNSTILE_SITE_KEY || env.VITE_TURNSTILE_SITE_KEY || ''
   ).trim();
-  return configured || CLOUDFLARE_DEFAULT_WIDGET_SITEKEY;
+  if (buildConfigured) {
+    return buildConfigured;
+  }
+  if (runtimeServerSiteKey) {
+    return runtimeServerSiteKey;
+  }
+  return CLOUDFLARE_DEFAULT_WIDGET_SITEKEY;
+}
+
+function readClearanceFromStorage(storage: Storage | undefined): StoredClearance | null {
+  try {
+    if (!storage) return null;
+    const raw = storage.getItem(CLEARANCE_STORAGE_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as StoredClearance;
+    if (
+      parsed &&
+      typeof parsed.clearanceToken === 'string' &&
+      parsed.clearanceToken.split('.').length === 3 &&
+      typeof parsed.expiresAtMs === 'number' &&
+      Date.now() < parsed.expiresAtMs
+    ) {
+      return parsed;
+    }
+    storage.removeItem(CLEARANCE_STORAGE_KEY);
+    return null;
+  } catch {
+    return null;
+  }
 }
 
 export function getStoredClearanceToken(): string | null {
-  try {
-    if (typeof window === 'undefined' || !window.sessionStorage) return null;
-    const raw = window.sessionStorage.getItem(CLEARANCE_STORAGE_KEY);
-    if (!raw) return null;
-    const parsed = JSON.parse(raw) as StoredClearance;
-    if (
-      parsed &&
-      typeof parsed.clearanceToken === 'string' &&
-      typeof parsed.expiresAtMs === 'number' &&
-      Date.now() < parsed.expiresAtMs
-    ) {
-      return parsed.clearanceToken;
+  if (typeof window === 'undefined') return null;
+  const fromSession = readClearanceFromStorage(window.sessionStorage);
+  if (fromSession) return fromSession.clearanceToken;
+
+  // Read signed token from localStorage for new tabs (always validated on the server via GET /api/turnstile-verify)
+  const fromLocal = readClearanceFromStorage(window.localStorage);
+  if (fromLocal) {
+    try {
+      window.sessionStorage?.setItem(CLEARANCE_STORAGE_KEY, JSON.stringify(fromLocal));
+    } catch {
+      // Ignore storage errors
     }
-    window.sessionStorage.removeItem(CLEARANCE_STORAGE_KEY);
-    return null;
-  } catch {
-    return null;
+    return fromLocal.clearanceToken;
   }
+  return null;
 }
 
 export function getStoredClearanceExpiryMs(): number | null {
-  try {
-    if (typeof window === 'undefined' || !window.sessionStorage) return null;
-    const raw = window.sessionStorage.getItem(CLEARANCE_STORAGE_KEY);
-    if (!raw) return null;
-    const parsed = JSON.parse(raw) as StoredClearance;
-    if (
-      parsed &&
-      typeof parsed.clearanceToken === 'string' &&
-      typeof parsed.expiresAtMs === 'number' &&
-      Date.now() < parsed.expiresAtMs
-    ) {
-      return parsed.expiresAtMs;
-    }
-    return null;
-  } catch {
-    return null;
-  }
+  if (typeof window === 'undefined') return null;
+  const fromSession = readClearanceFromStorage(window.sessionStorage);
+  if (fromSession) return fromSession.expiresAtMs;
+  const fromLocal = readClearanceFromStorage(window.localStorage);
+  return fromLocal ? fromLocal.expiresAtMs : null;
 }
 
 export function saveClearanceToken(clearanceToken: string, expiresAtMs: number): void {
+  if (typeof window === 'undefined') return;
+  const record: StoredClearance = { clearanceToken, expiresAtMs };
+  const serialized = JSON.stringify(record);
   try {
-    if (typeof window !== 'undefined' && window.sessionStorage) {
-      const record: StoredClearance = { clearanceToken, expiresAtMs };
-      window.sessionStorage.setItem(CLEARANCE_STORAGE_KEY, JSON.stringify(record));
-    }
+    window.sessionStorage?.setItem(CLEARANCE_STORAGE_KEY, serialized);
+  } catch {
+    // Ignore storage errors
+  }
+  try {
+    window.localStorage?.setItem(CLEARANCE_STORAGE_KEY, serialized);
   } catch {
     // Ignore storage errors
   }
 }
 
 export function clearStoredClearanceToken(): void {
+  if (typeof window === 'undefined') return;
   try {
-    if (typeof window !== 'undefined' && window.sessionStorage) {
-      window.sessionStorage.removeItem(CLEARANCE_STORAGE_KEY);
-    }
+    window.sessionStorage?.removeItem(CLEARANCE_STORAGE_KEY);
+  } catch {
+    // Ignore storage errors
+  }
+  try {
+    window.localStorage?.removeItem(CLEARANCE_STORAGE_KEY);
   } catch {
     // Ignore storage errors
   }
@@ -156,11 +199,13 @@ export function subscribeTurnstileChallenge(
 
 /**
  * Checks with the backend (/api/turnstile-verify GET) whether the current visitor
- * holds a valid, unexpired server-signed human verification session.
+ * holds a valid, unexpired server-signed human verification session (via HttpOnly cookie or signed header).
  */
 export async function validateHumanSessionWithServer(): Promise<{
   verified: boolean;
   expiresAtMs?: number;
+  sessionTtlSeconds?: number;
+  siteKey?: string;
   serviceUnavailable?: boolean;
   error?: string;
 }> {
@@ -169,6 +214,7 @@ export async function validateHumanSessionWithServer(): Promise<{
       method: 'GET',
       headers: getSecurityRequestHeaders(),
       credentials: 'same-origin',
+      cache: 'no-store',
     });
 
     if (res.status >= 500) {
@@ -176,17 +222,23 @@ export async function validateHumanSessionWithServer(): Promise<{
         verified: false,
         serviceUnavailable: true,
         error:
-          'Human verification service is temporarily unavailable. Please retry in a moment.',
+          'Human verification service is temporarily unavailable. Please click Retry in a moment.',
       };
     }
 
     const data = await res.json().catch(() => ({}));
+    if (typeof data?.siteKey === 'string' && data.siteKey.trim()) {
+      runtimeServerSiteKey = data.siteKey.trim();
+    }
+
     if (res.ok && data?.ok && data?.verified === true && data?.clearanceToken) {
-      const expiresAtMs = Number(data.expiresAtMs) || Date.now() + 15 * 60 * 1000;
+      const expiresAtMs = Number(data.expiresAtMs) || Date.now() + 60 * 60 * 1000;
       saveClearanceToken(data.clearanceToken, expiresAtMs);
       return {
         verified: true,
         expiresAtMs,
+        sessionTtlSeconds: Number(data.sessionTtlSeconds) || 3600,
+        siteKey: runtimeServerSiteKey || getConfiguredTurnstileSiteKey(),
         serviceUnavailable: false,
       };
     }
@@ -194,6 +246,8 @@ export async function validateHumanSessionWithServer(): Promise<{
     clearStoredClearanceToken();
     return {
       verified: false,
+      sessionTtlSeconds: Number(data?.sessionTtlSeconds) || 3600,
+      siteKey: runtimeServerSiteKey || getConfiguredTurnstileSiteKey(),
       serviceUnavailable: false,
     };
   } catch {
@@ -201,69 +255,131 @@ export async function validateHumanSessionWithServer(): Promise<{
       verified: false,
       serviceUnavailable: true,
       error:
-        'Unable to reach the ArthNiti verification server. Please check your connection and retry.',
+        'Unable to reach the ArthNiti verification server. Please check your network connection and click Retry.',
     };
   }
 }
 
 /**
  * Validates a Cloudflare Turnstile token on the backend via Cloudflare Siteverify.
- * Only grants clearance when the backend confirms Siteverify succeeded.
+ * Deduplicates concurrent submissions of the same token and only grants clearance
+ * when the backend confirms Siteverify succeeded.
  */
-export async function verifyTurnstileTokenWithServer(token: string): Promise<{
-  ok: boolean;
-  error?: string;
-  errorCode?: string;
-  serviceUnavailable?: boolean;
-  expiresAtMs?: number;
-}> {
-  try {
-    const res = await fetch('/api/turnstile-verify', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Accept: 'application/json',
-      },
-      credentials: 'same-origin',
-      body: JSON.stringify({ token }),
-    });
-
-    const data = await res.json().catch(() => ({}));
-    const isServiceUnavailable =
-      res.status === 502 ||
-      res.status === 503 ||
-      data?.errorCode === 'UPSTREAM_ERROR' ||
-      data?.errorCode === 'SECRET_NOT_CONFIGURED';
-
-    if (!res.ok || !data?.ok || !data?.clearanceToken) {
-      return {
-        ok: false,
-        errorCode: data?.errorCode,
-        serviceUnavailable: isServiceUnavailable,
-        error: isServiceUnavailable
-          ? data?.error ||
-            'Cloudflare Turnstile verification service is temporarily unavailable. Please retry shortly.'
-          : data?.error ||
-            'Human verification failed. Please complete the "I\'m not a robot" challenge again.',
-      };
-    }
-
-    const expiresAtMs = Number(data.expiresAtMs) || Date.now() + 15 * 60 * 1000;
-    saveClearanceToken(data.clearanceToken, expiresAtMs);
-
-    const callback = currentState.onVerifiedCallback;
-    closeTurnstileChallenge();
-    if (callback) {
-      callback();
-    }
-
-    return { ok: true, expiresAtMs };
-  } catch {
+export async function verifyTurnstileTokenWithServer(
+  rawToken: string
+): Promise<TurnstileVerifyServerResponse> {
+  const token = String(rawToken || '').trim();
+  if (!token) {
     return {
       ok: false,
-      serviceUnavailable: true,
-      error:
-        'Verification service is temporarily unreachable. Please check your network connection and try again.',
+      errorCode: 'MISSING_TOKEN',
+      error: 'Verification token is missing. Please complete the challenge.',
     };
+  }
+
+  // If this exact token is already being verified right now, share the in-flight request
+  const existingPromise = inFlightTokenVerifications.get(token);
+  if (existingPromise) {
+    return existingPromise;
+  }
+
+  // Prevent re-submitting a token that was already verified or consumed by this browser session
+  if (consumedClientTokens.has(token)) {
+    return {
+      ok: false,
+      errorCode: 'TOKEN_ALREADY_USED',
+      error:
+        'This verification token was already submitted. Generating a fresh challenge — please verify again.',
+    };
+  }
+
+  const requestPromise = (async (): Promise<TurnstileVerifyServerResponse> => {
+    try {
+      const res = await fetch('/api/turnstile-verify', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Accept: 'application/json',
+        },
+        credentials: 'same-origin',
+        cache: 'no-store',
+        body: JSON.stringify({ token }),
+      });
+
+      // Mark token as consumed once submitted to the backend
+      consumedClientTokens.add(token);
+
+      const data = await res.json().catch(() => ({}));
+      if (typeof data?.siteKey === 'string' && data.siteKey.trim()) {
+        runtimeServerSiteKey = data.siteKey.trim();
+      }
+
+      const errorCode: string | undefined = data?.errorCode;
+      const isServiceUnavailable =
+        res.status === 502 ||
+        res.status === 503 ||
+        errorCode === 'UPSTREAM_ERROR' ||
+        errorCode === 'SECRET_NOT_CONFIGURED';
+
+      if (!res.ok || !data?.ok || !data?.clearanceToken) {
+        let friendlyError = data?.error;
+        if (!friendlyError) {
+          if (errorCode === 'TOKEN_EXPIRED') {
+            friendlyError =
+              'Your verification token expired. A fresh challenge has been generated — please check the box again.';
+          } else if (errorCode === 'TOKEN_ALREADY_USED') {
+            friendlyError =
+              'This token was already used. A fresh challenge has been generated — please verify again.';
+          } else if (errorCode === 'SECRET_NOT_CONFIGURED') {
+            friendlyError =
+              'Server configuration error: Cloudflare Turnstile secret key (TURNSTILE_SECRET_KEY) is not configured.';
+          } else if (isServiceUnavailable) {
+            friendlyError =
+              'Cloudflare Turnstile verification service is temporarily unavailable. Please click Retry.';
+          } else {
+            friendlyError =
+              'Verification failed. Please complete the fresh challenge and try again.';
+          }
+        }
+
+        return {
+          ok: false,
+          errorCode,
+          serviceUnavailable: isServiceUnavailable,
+          error: friendlyError,
+          siteKey: runtimeServerSiteKey || undefined,
+        };
+      }
+
+      const expiresAtMs = Number(data.expiresAtMs) || Date.now() + 60 * 60 * 1000;
+      saveClearanceToken(data.clearanceToken, expiresAtMs);
+
+      const callback = currentState.onVerifiedCallback;
+      closeTurnstileChallenge();
+      if (callback) {
+        callback();
+      }
+
+      return {
+        ok: true,
+        expiresAtMs,
+        siteKey: runtimeServerSiteKey || undefined,
+      };
+    } catch {
+      return {
+        ok: false,
+        errorCode: 'UPSTREAM_ERROR',
+        serviceUnavailable: true,
+        error:
+          'Network failure while contacting the verification server. Please check your connection and click Retry.',
+      };
+    }
+  })();
+
+  inFlightTokenVerifications.set(token, requestPromise);
+  try {
+    return await requestPromise;
+  } finally {
+    inFlightTokenVerifications.delete(token);
   }
 }

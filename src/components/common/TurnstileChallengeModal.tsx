@@ -16,9 +16,11 @@ declare global {
         options: {
           sitekey: string;
           theme?: 'dark' | 'light' | 'auto';
+          'refresh-expired'?: 'auto' | 'manual' | 'never';
+          retry?: 'auto' | 'never';
           callback?: (token: string) => void;
           'expired-callback'?: () => void;
-          'error-callback'?: () => void;
+          'error-callback'?: (errorCode?: string) => void;
         }
       ) => string;
       reset: (widgetId?: string) => void;
@@ -49,6 +51,7 @@ export const TurnstileChallengeModal: React.FC<TurnstileChallengeModalProps> = (
 
   const widgetContainerRef = useRef<HTMLDivElement | null>(null);
   const widgetIdRef = useRef<string | null>(null);
+  const lastSubmittedTokenRef = useRef<string | null>(null);
 
   const siteKey = getConfiguredTurnstileSiteKey();
 
@@ -59,6 +62,7 @@ export const TurnstileChallengeModal: React.FC<TurnstileChallengeModalProps> = (
         setErrorMsg(null);
         setVerifiedSuccess(false);
         setVerifying(false);
+        lastSubmittedTokenRef.current = null;
       }
     });
   }, []);
@@ -109,7 +113,13 @@ export const TurnstileChallengeModal: React.FC<TurnstileChallengeModalProps> = (
       const id = window.turnstile.render(widgetContainerRef.current, {
         sitekey: siteKey,
         theme: theme === 'dark' ? 'dark' : 'light',
+        'refresh-expired': 'auto',
+        retry: 'auto',
         callback: async (token: string) => {
+          if (!token || lastSubmittedTokenRef.current === token) {
+            return;
+          }
+          lastSubmittedTokenRef.current = token;
           setVerifying(true);
           setErrorMsg(null);
           const result = await verifyTurnstileTokenWithServer(token);
@@ -117,20 +127,34 @@ export const TurnstileChallengeModal: React.FC<TurnstileChallengeModalProps> = (
           if (result.ok) {
             setVerifiedSuccess(true);
           } else {
+            lastSubmittedTokenRef.current = null;
             setErrorMsg(
               result.error || 'Verification failed. Please try again.'
             );
             if (widgetIdRef.current && window.turnstile) {
-              window.turnstile.reset(widgetIdRef.current);
+              try {
+                window.turnstile.reset(widgetIdRef.current);
+              } catch {
+                // Ignore reset error
+              }
             }
           }
         },
         'expired-callback': () => {
+          lastSubmittedTokenRef.current = null;
           setErrorMsg(
-            'Verification token expired. Please complete the challenge again.'
+            'Verification token expired. Generating a new challenge…'
           );
+          if (widgetIdRef.current && window.turnstile) {
+            try {
+              window.turnstile.reset(widgetIdRef.current);
+            } catch {
+              // Ignore reset error
+            }
+          }
         },
         'error-callback': () => {
+          lastSubmittedTokenRef.current = null;
           setErrorMsg(
             'Cloudflare Turnstile encountered a challenge error. Please retry.'
           );

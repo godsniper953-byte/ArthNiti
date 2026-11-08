@@ -69,6 +69,7 @@ export interface TurnstileVerificationResult {
     | 'TOKEN_ALREADY_USED'
     | 'TOKEN_EXPIRED'
     | 'VERIFICATION_FAILED'
+    | 'HOSTNAME_MISMATCH'
     | 'SECRET_NOT_CONFIGURED'
     | 'UPSTREAM_ERROR';
   errorMessage?: string;
@@ -104,10 +105,17 @@ const rapidBurstStore = new Map<string, number[]>();
 // Consumed Turnstile token replay cache (tokenSha256 -> expiresAtMs)
 const consumedTurnstileTokens = new Map<string, number>();
 
+// In-flight Turnstile verification promises (tokenSha256 -> Promise<TurnstileVerificationResult>)
+// Prevents duplicate concurrent frontend/network submissions from hitting Cloudflare Siteverify twice
+const inFlightTurnstileVerifications = new Map<
+  string,
+  Promise<TurnstileVerificationResult>
+>();
+
 // Failed CAPTCHA attempts per IP (for security monitoring & progressive lockout)
 const failedCaptchaStore = new Map<string, number[]>();
 
-const DEFAULT_CLEARANCE_TTL_MS = 15 * 60 * 1000; // Default 15 minutes for verified human session
+const DEFAULT_CLEARANCE_TTL_MS = 60 * 60 * 1000; // Default 60 minutes (1 hour) for verified human session
 const CONSUMED_TOKEN_TTL_MS = 15 * 60 * 1000;
 export const HUMAN_SESSION_COOKIE_NAME = 'arthniti_human_session';
 
@@ -117,6 +125,23 @@ export function getClearanceTtlMs(): number {
     return Math.floor(rawSeconds * 1000);
   }
   return DEFAULT_CLEARANCE_TTL_MS;
+}
+
+/**
+ * Resolves the public Cloudflare Turnstile Site Key configured on the server.
+ * Ensures frontend and backend stay synchronized even when env vars are set at runtime in Vercel.
+ */
+export function getServerTurnstilePublicSiteKey(): string {
+  const configuredSiteKey = (
+    process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY ||
+    process.env.VITE_TURNSTILE_SITE_KEY ||
+    process.env.TURNSTILE_SITE_KEY ||
+    ''
+  ).trim();
+  if (configuredSiteKey) {
+    return configuredSiteKey;
+  }
+  return '1x00000000000000000000AA';
 }
 
 function getHmacSecret(): string {
@@ -888,8 +913,103 @@ export function inspectRequestForBotAndAttacks(
 }
 
 /**
+ * Generates a deterministic RFC 4122 UUID v4-formatted idempotency key from a token SHA-256 hash.
+ * Ensures safe network retries for the same token pass the exact same idempotency_key to Cloudflare Siteverify.
+ */
+function deriveTurnstileIdempotencyKey(tokenHashHex: string): string {
+  const h = tokenHashHex.padEnd(32, '0').slice(0, 32);
+  return `${h.slice(0, 8)}-${h.slice(8, 12)}-4${h.slice(13, 16)}-a${h.slice(17, 20)}-${h.slice(20, 32)}`;
+}
+
+/**
+ * Validates the hostname returned by Cloudflare Siteverify against the expected production domain
+ * and authorized deployment/preview hostnames.
+ */
+function isAllowedTurnstileHostname(
+  hostname: string | undefined,
+  req: any,
+  isUsingTestSecret: boolean
+): boolean {
+  if (!hostname || typeof hostname !== 'string') {
+    return true;
+  }
+  const cleanHost = hostname.trim().toLowerCase().replace(/:\d+$/, '');
+  if (!cleanHost) return true;
+
+  // Cloudflare's official dummy test key (1x0000...AA) always returns hostname: "example.com"
+  if (isUsingTestSecret && cleanHost === 'example.com') {
+    return true;
+  }
+
+  const allowedExact = new Set<string>([
+    'arthniti-six.vercel.app',
+    'localhost',
+    '127.0.0.1',
+  ]);
+
+  const configuredOrigin = (process.env.ALLOWED_ORIGIN || '').trim();
+  if (configuredOrigin) {
+    try {
+      allowedExact.add(new URL(configuredOrigin).hostname.toLowerCase());
+    } catch {
+      allowedExact.add(configuredOrigin.toLowerCase().replace(/^https?:\/\//, '').replace(/\/.*$/, ''));
+    }
+  }
+
+  const extraHosts = (process.env.TURNSTILE_ALLOWED_HOSTNAMES || '').trim();
+  if (extraHosts) {
+    for (const h of extraHosts.split(',')) {
+      const trimmed = h.trim().toLowerCase();
+      if (trimmed) allowedExact.add(trimmed);
+    }
+  }
+
+  const reqHostHeader = String(
+    req?.headers?.['x-forwarded-host'] || req?.headers?.host || ''
+  )
+    .split(',')[0]
+    .trim()
+    .toLowerCase()
+    .replace(/:\d+$/, '');
+  if (reqHostHeader) {
+    allowedExact.add(reqHostHeader);
+  }
+
+  if (allowedExact.has(cleanHost)) {
+    return true;
+  }
+
+  // Allow Vercel preview deployments and Cloud Run / AI Studio preview URLs
+  if (
+    cleanHost.endsWith('.vercel.app') ||
+    cleanHost.endsWith('.run.app') ||
+    cleanHost.endsWith('.aistudio.google.com')
+  ) {
+    return true;
+  }
+
+  return false;
+}
+
+function isPublicRoutableIp(ip: string): boolean {
+  if (!ip || ip === '127.0.0.1' || ip === '::1' || ip === 'localhost') return false;
+  if (
+    ip.startsWith('10.') ||
+    ip.startsWith('192.168.') ||
+    /^172\.(1[6-9]|2\d|3[0-1])\./.test(ip) ||
+    ip.startsWith('169.254.') ||
+    ip.startsWith('fc00:') ||
+    ip.startsWith('fe80:')
+  ) {
+    return false;
+  }
+  return true;
+}
+
+/**
  * Verifies a Cloudflare Turnstile token server-side via https://challenges.cloudflare.com/turnstile/v0/siteverify.
- * Prevents token replay, expired tokens, and malformed tokens.
+ * Prevents token replay, expired tokens, hostname spoofing, and malformed tokens.
+ * Deduplicates concurrent in-flight requests and performs safe retries using a deterministic idempotency_key.
  */
 export async function verifyTurnstileToken(params: {
   token: string | undefined | null;
@@ -930,7 +1050,7 @@ export async function verifyTurnstileToken(params: {
       ok: false,
       statusCode: 400,
       errorCode: 'INVALID_TOKEN_FORMAT',
-      errorMessage: 'Invalid Cloudflare Turnstile token format.',
+      errorMessage: 'Invalid Cloudflare Turnstile token format. Please retry.',
     };
   }
 
@@ -954,158 +1074,235 @@ export async function verifyTurnstileToken(params: {
       statusCode: 403,
       errorCode: 'TOKEN_ALREADY_USED',
       errorMessage:
-        'This Cloudflare Turnstile verification token has already been used. Please complete a fresh challenge.',
+        'This verification token has already been used. A fresh challenge has been generated — please verify again.',
     };
   }
 
-  const configuredSecret = (process.env.TURNSTILE_SECRET_KEY || '').trim();
-  const strictRequired =
-    process.env.TURNSTILE_STRICT_SECRET_REQUIRED === 'true' ||
-    configuredSecret === 'DISABLED';
-  const secretKey =
-    configuredSecret && configuredSecret !== 'DISABLED'
+  // If an identical verification request for this token is already in flight, await the existing promise
+  const existingInFlight = inFlightTurnstileVerifications.get(tokenHash);
+  if (existingInFlight) {
+    return existingInFlight;
+  }
+
+  const verificationPromise = (async (): Promise<TurnstileVerificationResult> => {
+    const configuredSecret = (process.env.TURNSTILE_SECRET_KEY || '').trim();
+    const configuredSiteKey = (
+      process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY ||
+      process.env.VITE_TURNSTILE_SITE_KEY ||
+      process.env.TURNSTILE_SITE_KEY ||
+      ''
+    ).trim();
+
+    const isRealCustomSiteKey =
+      Boolean(configuredSiteKey) &&
+      configuredSiteKey !== '1x00000000000000000000AA' &&
+      configuredSiteKey !== '2x00000000000000000000AB' &&
+      configuredSiteKey !== '3x00000000000000000000FF';
+
+    const strictRequired =
+      process.env.TURNSTILE_STRICT_SECRET_REQUIRED === 'true' ||
+      configuredSecret === 'DISABLED' ||
+      (isRealCustomSiteKey && !configuredSecret);
+
+    // Note: Tokens starting with "XXXX." are generated by Cloudflare's official test widget sitekey (1x00000000000000000000AA).
+    // If no custom frontend sitekey was configured at build time, pair with Cloudflare's official test secret key unless a custom sitekey is also set.
+    const isTestWidgetToken = rawToken.startsWith('XXXX.');
+    const useTestSecretFallback =
+      !strictRequired &&
+      (!configuredSecret || (isTestWidgetToken && !isRealCustomSiteKey));
+
+    const secretKey = useTestSecretFallback
+      ? '1x0000000000000000000000000000000AA'
+      : configuredSecret && configuredSecret !== 'DISABLED'
       ? configuredSecret
-      : strictRequired
-      ? ''
-      : '1x0000000000000000000000000000000AA';
+      : '';
 
-  if (!secretKey) {
-    logSecurityEvent({
-      eventType: 'CAPTCHA_VERIFICATION_FAILED',
-      severity: 'WARN',
-      req: params.req,
-      endpoint: '/api/turnstile-verify',
-      reason: 'TURNSTILE_SECRET_KEY environment variable is not configured on the server',
-      statusCode: 503,
-    });
-    return {
-      ok: false,
-      statusCode: 503,
-      errorCode: 'SECRET_NOT_CONFIGURED',
-      errorMessage:
-        'Server-side TURNSTILE_SECRET_KEY is not configured. Configure TURNSTILE_SECRET_KEY in environment variables.',
-    };
-  }
+    if (!secretKey) {
+      logSecurityEvent({
+        eventType: 'CAPTCHA_VERIFICATION_FAILED',
+        severity: 'WARN',
+        req: params.req,
+        endpoint: '/api/turnstile-verify',
+        reason: 'TURNSTILE_SECRET_KEY environment variable is not configured on the server',
+        statusCode: 503,
+      });
+      return {
+        ok: false,
+        statusCode: 503,
+        errorCode: 'SECRET_NOT_CONFIGURED',
+        errorMessage:
+          'Server configuration error: TURNSTILE_SECRET_KEY is not configured in environment variables.',
+      };
+    }
 
-  try {
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 6000);
+    const idempotencyKey = deriveTurnstileIdempotencyKey(tokenHash);
+    const isUsingTestSecret = secretKey === '1x0000000000000000000000000000000AA';
 
     const formBody = new URLSearchParams();
     formBody.set('secret', secretKey);
     formBody.set('response', rawToken);
-    formBody.set('remoteip', clientIp);
-    formBody.set('idempotency_key', crypto.randomUUID());
+    if (isPublicRoutableIp(clientIp)) {
+      formBody.set('remoteip', clientIp);
+    }
+    formBody.set('idempotency_key', idempotencyKey);
 
-    const verifyRes = await fetch(
-      'https://challenges.cloudflare.com/turnstile/v0/siteverify',
-      {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/x-www-form-urlencoded',
-        },
-        body: formBody.toString(),
-        signal: controller.signal,
+    let verifyRes: Response | null = null;
+    // Perform up to 2 attempts using the exact same deterministic idempotency_key on transient network error
+    for (let attempt = 1; attempt <= 2; attempt++) {
+      try {
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 6000);
+        const res = await fetch(
+          'https://challenges.cloudflare.com/turnstile/v0/siteverify',
+          {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/x-www-form-urlencoded',
+            },
+            body: formBody.toString(),
+            signal: controller.signal,
+          }
+        );
+        clearTimeout(timeoutId);
+        verifyRes = res;
+        if (res.ok || res.status < 500) {
+          break;
+        }
+      } catch {
+        if (attempt === 2) {
+          return {
+            ok: false,
+            statusCode: 502,
+            errorCode: 'UPSTREAM_ERROR',
+            errorMessage:
+              'Network error communicating with Cloudflare Turnstile verification service. Please click Retry.',
+          };
+        }
+        await new Promise((r) => setTimeout(r, 200));
       }
-    );
-    clearTimeout(timeoutId);
+    }
 
-    if (!verifyRes.ok) {
+    if (!verifyRes || !verifyRes.ok) {
       return {
         ok: false,
         statusCode: 502,
         errorCode: 'UPSTREAM_ERROR',
-        errorMessage: 'Unable to reach Cloudflare Turnstile Siteverify service.',
+        errorMessage:
+          'Cloudflare Turnstile Siteverify service is temporarily unavailable. Please click Retry.',
       };
     }
 
-    const outcome = (await verifyRes.json()) as {
-      success?: boolean;
-      challenge_ts?: string;
-      hostname?: string;
-      'error-codes'?: string[];
-    };
-
-    const errorCodes = Array.isArray(outcome?.['error-codes'])
-      ? outcome['error-codes']
-      : [];
-
-    if (!outcome?.success) {
-      // Record failed attempt for this IP
-      const fails = (failedCaptchaStore.get(clientIp) || []).filter(
-        (t) => nowMs - t < 600_000
-      );
-      fails.push(nowMs);
-      failedCaptchaStore.set(clientIp, fails);
-
-      const isExpired = errorCodes.includes('timeout-or-duplicate');
-      logSecurityEvent({
-        eventType: 'CAPTCHA_VERIFICATION_FAILED',
-        severity: fails.length >= 3 ? 'HIGH' : 'WARN',
-        req: params.req,
-        endpoint: '/api/turnstile-verify',
-        reason: `Turnstile Siteverify rejected token (codes=${errorCodes.join(',') || 'invalid-input-response'}, recentFails=${fails.length})`,
-        statusCode: 403,
-      });
-
-      return {
-        ok: false,
-        statusCode: 403,
-        errorCode: isExpired ? 'TOKEN_EXPIRED' : 'VERIFICATION_FAILED',
-        errorMessage: isExpired
-          ? 'Verification token has expired. Please solve the Turnstile challenge again.'
-          : 'Cloudflare Turnstile human verification failed.',
+    try {
+      const outcome = (await verifyRes.json()) as {
+        success?: boolean;
+        challenge_ts?: string;
+        hostname?: string;
+        'error-codes'?: string[];
       };
-    }
 
-    // Check challenge_ts age if provided (reject tokens older than 5 minutes)
-    if (outcome.challenge_ts) {
-      const challengeEpochMs = Date.parse(outcome.challenge_ts);
-      if (Number.isFinite(challengeEpochMs) && nowMs - challengeEpochMs > 5 * 60 * 1000) {
+      const errorCodes = Array.isArray(outcome?.['error-codes'])
+        ? outcome['error-codes']
+        : [];
+
+      if (!outcome?.success) {
+        const fails = (failedCaptchaStore.get(clientIp) || []).filter(
+          (t) => nowMs - t < 600_000
+        );
+        fails.push(nowMs);
+        failedCaptchaStore.set(clientIp, fails);
+
+        if (errorCodes.includes('invalid-input-secret') || errorCodes.includes('missing-input-secret')) {
+          logSecurityEvent({
+            eventType: 'CAPTCHA_VERIFICATION_FAILED',
+            severity: 'HIGH',
+            req: params.req,
+            endpoint: '/api/turnstile-verify',
+            reason: `Turnstile secret key configuration error (codes=${errorCodes.join(',')})`,
+            statusCode: 503,
+          });
+          return {
+            ok: false,
+            statusCode: 503,
+            errorCode: 'SECRET_NOT_CONFIGURED',
+            errorMessage:
+              'Server configuration error: Invalid Cloudflare Turnstile secret key configured on the server.',
+          };
+        }
+
+        const isExpiredOrDuplicate = errorCodes.includes('timeout-or-duplicate');
         logSecurityEvent({
           eventType: 'CAPTCHA_VERIFICATION_FAILED',
-          severity: 'WARN',
+          severity: fails.length >= 3 ? 'HIGH' : 'WARN',
           req: params.req,
           endpoint: '/api/turnstile-verify',
-          reason: 'Rejected stale Turnstile token (> 5 minutes old)',
+          reason: `Turnstile Siteverify rejected token (codes=${errorCodes.join(',') || 'invalid-input-response'}, recentFails=${fails.length})`,
+          statusCode: 403,
+        });
+
+        return {
+          ok: false,
+          statusCode: 403,
+          errorCode: isExpiredOrDuplicate ? 'TOKEN_EXPIRED' : 'VERIFICATION_FAILED',
+          errorMessage: isExpiredOrDuplicate
+            ? 'Verification token expired or was already submitted. A fresh challenge has been generated — please verify again.'
+            : 'Human verification could not be confirmed. Please complete the challenge and try again.',
+        };
+      }
+
+      // Validate hostname returned by Cloudflare Siteverify against expected domain allowlist
+      if (!isAllowedTurnstileHostname(outcome.hostname, params.req, isUsingTestSecret)) {
+        logSecurityEvent({
+          eventType: 'CAPTCHA_VERIFICATION_FAILED',
+          severity: 'HIGH',
+          req: params.req,
+          endpoint: '/api/turnstile-verify',
+          reason: `Turnstile hostname mismatch: rejected token solved on unauthorized domain "${outcome.hostname}"`,
           statusCode: 403,
         });
         return {
           ok: false,
           statusCode: 403,
-          errorCode: 'TOKEN_EXPIRED',
-          errorMessage: 'Verification token has expired. Please refresh the challenge.',
+          errorCode: 'HOSTNAME_MISMATCH',
+          errorMessage:
+            'Verification token domain mismatch. Please complete the challenge directly on the official ArthNiti website.',
         };
       }
+
+      // Mark token as consumed so it can never be replayed
+      consumedTurnstileTokens.set(tokenHash, nowMs + CONSUMED_TOKEN_TTL_MS);
+
+      const { clearanceToken, expiresAtMs } = issueClearanceToken(clientIp, nowMs);
+
+      logSecurityEvent({
+        eventType: 'CAPTCHA_VERIFICATION_SUCCESS',
+        severity: 'INFO',
+        req: params.req,
+        endpoint: '/api/turnstile-verify',
+        reason: 'Cloudflare Turnstile verification succeeded; issued clearance token',
+        statusCode: 200,
+      });
+
+      return {
+        ok: true,
+        statusCode: 200,
+        clearanceToken,
+        expiresAtMs,
+      };
+    } catch {
+      return {
+        ok: false,
+        statusCode: 502,
+        errorCode: 'UPSTREAM_ERROR',
+        errorMessage: 'Error parsing response from Cloudflare Turnstile verification service.',
+      };
     }
+  })();
 
-    // Mark token as consumed so it can never be replayed
-    consumedTurnstileTokens.set(tokenHash, nowMs + CONSUMED_TOKEN_TTL_MS);
-
-    const { clearanceToken, expiresAtMs } = issueClearanceToken(clientIp, nowMs);
-
-    logSecurityEvent({
-      eventType: 'CAPTCHA_VERIFICATION_SUCCESS',
-      severity: 'INFO',
-      req: params.req,
-      endpoint: '/api/turnstile-verify',
-      reason: 'Cloudflare Turnstile verification succeeded; issued clearance token',
-      statusCode: 200,
-    });
-
-    return {
-      ok: true,
-      statusCode: 200,
-      clearanceToken,
-      expiresAtMs,
-    };
-  } catch {
-    return {
-      ok: false,
-      statusCode: 502,
-      errorCode: 'UPSTREAM_ERROR',
-      errorMessage: 'Error communicating with Cloudflare Turnstile verification service.',
-    };
+  inFlightTurnstileVerifications.set(tokenHash, verificationPromise);
+  try {
+    return await verificationPromise;
+  } finally {
+    inFlightTurnstileVerifications.delete(tokenHash);
   }
 }
 
@@ -1121,6 +1318,7 @@ export function getSecurityMonitoringSummary() {
     (
       process.env.VITE_TURNSTILE_SITE_KEY ||
       process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY ||
+      process.env.TURNSTILE_SITE_KEY ||
       ''
     ).trim()
   );
@@ -1154,6 +1352,7 @@ export function resetSecurityShieldForTest(): void {
   slidingWindowStore.clear();
   rapidBurstStore.clear();
   consumedTurnstileTokens.clear();
+  inFlightTurnstileVerifications.clear();
   failedCaptchaStore.clear();
   securityEventLog.length = 0;
   for (const key of Object.keys(securityEventCounters) as SecurityEventType[]) {

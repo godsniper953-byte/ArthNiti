@@ -14,12 +14,36 @@ import {
   extractClearanceTokenFromRequest,
   extractTrustedClientIp,
   getClearanceTtlMs,
+  getServerTurnstilePublicSiteKey,
   HUMAN_SESSION_COOKIE_NAME,
   inspectRequestForBotAndAttacks,
+  issueClearanceToken,
   logSecurityEvent,
   verifyClearanceTokenDetails,
   verifyTurnstileToken,
 } from './security-shield.ts';
+
+function setHumanSessionCookie(
+  req: any,
+  res: any,
+  clearanceToken: string,
+  sessionTtlSeconds: number
+): void {
+  const isHttps =
+    process.env.NODE_ENV === 'production' ||
+    String(req?.headers?.['x-forwarded-proto'] || '').toLowerCase() === 'https';
+  const cookieDirectives = [
+    `${HUMAN_SESSION_COOKIE_NAME}=${encodeURIComponent(clearanceToken)}`,
+    'Path=/',
+    'HttpOnly',
+    'SameSite=Lax',
+    `Max-Age=${sessionTtlSeconds}`,
+  ];
+  if (isHttps) {
+    cookieDirectives.push('Secure');
+  }
+  res.setHeader('Set-Cookie', cookieDirectives.join('; '));
+}
 
 export default async function handler(req: any, res: any) {
   applyApiSecurityAndCorsHeaders(req, res, 'GET, POST, OPTIONS');
@@ -67,21 +91,40 @@ export default async function handler(req: any, res: any) {
     });
   }
 
-  const sessionTtlSeconds = Math.floor(getClearanceTtlMs() / 1000);
+  const ttlMs = getClearanceTtlMs();
+  const sessionTtlSeconds = Math.floor(ttlMs / 1000);
+  const siteKey = getServerTurnstilePublicSiteKey();
 
   // GET: Validate existing server-signed clearance token / HttpOnly session cookie
   if (req.method === 'GET') {
+    const nowMs = Date.now();
     const clientIp = extractTrustedClientIp(req);
     const candidateToken = extractClearanceTokenFromRequest(req);
-    const check = verifyClearanceTokenDetails(candidateToken, clientIp);
+    const check = verifyClearanceTokenDetails(candidateToken, clientIp, nowMs);
 
     if (check.valid && candidateToken && check.expiresAtMs) {
+      let activeToken = candidateToken;
+      let activeExpiresAtMs = check.expiresAtMs;
+      let renewed = false;
+
+      // Renew session automatically if less than 50% of TTL remains
+      if (check.expiresAtMs - nowMs < ttlMs * 0.5) {
+        const refreshed = issueClearanceToken(clientIp, nowMs);
+        activeToken = refreshed.clearanceToken;
+        activeExpiresAtMs = refreshed.expiresAtMs;
+        renewed = true;
+      }
+
+      setHumanSessionCookie(req, res, activeToken, sessionTtlSeconds);
+
       return res.status(200).json({
         ok: true,
         verified: true,
-        clearanceToken: candidateToken,
-        expiresAtMs: check.expiresAtMs,
+        renewed,
+        clearanceToken: activeToken,
+        expiresAtMs: activeExpiresAtMs,
         sessionTtlSeconds,
+        siteKey,
       });
     }
 
@@ -89,6 +132,7 @@ export default async function handler(req: any, res: any) {
       ok: true,
       verified: false,
       sessionTtlSeconds,
+      siteKey,
     });
   }
 
@@ -111,24 +155,11 @@ export default async function handler(req: any, res: any) {
       verified: false,
       errorCode: result.errorCode,
       error: result.errorMessage,
+      siteKey,
     });
   }
 
-  // Set HttpOnly session cookie alongside returning the signed clearance token
-  const isHttps =
-    process.env.NODE_ENV === 'production' ||
-    String(req?.headers?.['x-forwarded-proto'] || '').toLowerCase() === 'https';
-  const cookieDirectives = [
-    `${HUMAN_SESSION_COOKIE_NAME}=${encodeURIComponent(result.clearanceToken || '')}`,
-    'Path=/',
-    'HttpOnly',
-    'SameSite=Lax',
-    `Max-Age=${sessionTtlSeconds}`,
-  ];
-  if (isHttps) {
-    cookieDirectives.push('Secure');
-  }
-  res.setHeader('Set-Cookie', cookieDirectives.join('; '));
+  setHumanSessionCookie(req, res, result.clearanceToken || '', sessionTtlSeconds);
 
   return res.status(200).json({
     ok: true,
@@ -136,5 +167,6 @@ export default async function handler(req: any, res: any) {
     clearanceToken: result.clearanceToken,
     expiresAtMs: result.expiresAtMs,
     sessionTtlSeconds,
+    siteKey,
   });
 }

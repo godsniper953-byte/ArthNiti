@@ -68,7 +68,10 @@ import { OverviewPage } from './pages/OverviewPage';
 import { ErrorBoundary } from './components/common/ErrorBoundary';
 import { HumanVerificationGate } from './components/common/HumanVerificationGate';
 import { TurnstileChallengeModal } from './components/common/TurnstileChallengeModal';
-import { validateHumanSessionWithServer } from './services/securityClient';
+import {
+  getStoredClearanceExpiryMs,
+  validateHumanSessionWithServer,
+} from './services/securityClient';
 import { syncPageSeoMetadata } from './utils/seoMetadata';
 
 const GdpGrowthPage = React.lazy(() =>
@@ -137,9 +140,13 @@ export default function App() {
     'checking' | 'unverified' | 'verified'
   >('checking');
   const [sessionCheckError, setSessionCheckError] = useState<string | null>(null);
+  const [serverTurnstileSiteKey, setServerTurnstileSiteKey] = useState<string>('');
 
   const checkServerHumanSession = useCallback(async () => {
     const status = await validateHumanSessionWithServer();
+    if (status.siteKey) {
+      setServerTurnstileSiteKey(status.siteKey);
+    }
     if (status.verified) {
       setSessionCheckError(null);
       setHumanVerificationState('verified');
@@ -152,6 +159,28 @@ export default function App() {
   useEffect(() => {
     checkServerHumanSession();
   }, [checkServerHumanSession]);
+
+  // Periodically renew or re-verify the server session without interrupting active navigation
+  useEffect(() => {
+    if (humanVerificationState !== 'verified') return;
+
+    const handleSessionVisibilityCheck = () => {
+      if (document.visibilityState === 'visible') {
+        const expMs = getStoredClearanceExpiryMs();
+        // Only contact server if session is within 20 minutes of expiry or has expired
+        if (!expMs || expMs - Date.now() < 20 * 60 * 1000) {
+          checkServerHumanSession();
+        }
+      }
+    };
+
+    const intervalId = window.setInterval(handleSessionVisibilityCheck, 10 * 60 * 1000);
+    document.addEventListener('visibilitychange', handleSessionVisibilityCheck);
+    return () => {
+      window.clearInterval(intervalId);
+      document.removeEventListener('visibilitychange', handleSessionVisibilityCheck);
+    };
+  }, [humanVerificationState, checkServerHumanSession]);
 
   useEffect(() => {
     try {
@@ -1402,6 +1431,8 @@ export default function App() {
       <HumanVerificationGate
         theme={theme}
         onToggleTheme={() => setTheme((prev) => (prev === 'dark' ? 'light' : 'dark'))}
+        isCheckingSession={humanVerificationState === 'checking'}
+        siteKeyOverride={serverTurnstileSiteKey || undefined}
         onVerified={() => {
           setSessionCheckError(null);
           setHumanVerificationState('verified');

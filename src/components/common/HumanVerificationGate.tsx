@@ -24,6 +24,8 @@ interface HumanVerificationGateProps {
   theme: 'dark' | 'light';
   onToggleTheme: () => void;
   onVerified: () => void;
+  isCheckingSession?: boolean;
+  siteKeyOverride?: string;
   initialServiceError?: string | null;
   onRetrySessionCheck?: () => void;
 }
@@ -32,6 +34,8 @@ export const HumanVerificationGate: React.FC<HumanVerificationGateProps> = ({
   theme,
   onToggleTheme,
   onVerified,
+  isCheckingSession = false,
+  siteKeyOverride,
   initialServiceError = null,
   onRetrySessionCheck,
 }) => {
@@ -40,6 +44,7 @@ export const HumanVerificationGate: React.FC<HumanVerificationGateProps> = ({
   const [verifying, setVerifying] = useState<boolean>(false);
   const [verifiedSuccess, setVerifiedSuccess] = useState<boolean>(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(initialServiceError);
+  const [errorCode, setErrorCode] = useState<string | null>(null);
   const [serviceUnavailable, setServiceUnavailable] = useState<boolean>(
     Boolean(initialServiceError)
   );
@@ -47,8 +52,14 @@ export const HumanVerificationGate: React.FC<HumanVerificationGateProps> = ({
 
   const widgetContainerRef = useRef<HTMLDivElement | null>(null);
   const widgetIdRef = useRef<string | null>(null);
+  const lastSubmittedTokenRef = useRef<string | null>(null);
+  const verifyingInFlightRef = useRef<boolean>(false);
 
-  const siteKey = getConfiguredTurnstileSiteKey();
+  // Keep latest callbacks in refs so parent re-renders never destroy an active Turnstile widget
+  const onVerifiedRef = useRef(onVerified);
+  onVerifiedRef.current = onVerified;
+
+  const siteKey = (siteKeyOverride || getConfiguredTurnstileSiteKey()).trim();
   const isDark = theme === 'dark';
 
   useEffect(() => {
@@ -58,10 +69,13 @@ export const HumanVerificationGate: React.FC<HumanVerificationGateProps> = ({
     }
   }, [initialServiceError]);
 
-  // Load official Cloudflare Turnstile API script
+  // Load official Cloudflare Turnstile API script once session check is complete
   useEffect(() => {
+    if (isCheckingSession) return;
+
     if (!siteKey) {
       setServiceUnavailable(true);
+      setErrorCode('SECRET_NOT_CONFIGURED');
       setErrorMsg(
         'Cloudflare Turnstile verification is not configured. Access cannot be granted until verification is available.'
       );
@@ -82,8 +96,9 @@ export const HumanVerificationGate: React.FC<HumanVerificationGateProps> = ({
       if (!window.turnstile) {
         setScriptLoadFailed(true);
         setServiceUnavailable(true);
+        setErrorCode('UPSTREAM_ERROR');
         setErrorMsg(
-          'Cloudflare Turnstile verification service is temporarily unavailable or blocked by a network filter. Please retry.'
+          'Cloudflare Turnstile verification service is temporarily unavailable or blocked by a network filter. Please click Retry.'
         );
       }
     }, 10000);
@@ -98,6 +113,7 @@ export const HumanVerificationGate: React.FC<HumanVerificationGateProps> = ({
         window.clearTimeout(timeoutId);
         setScriptLoadFailed(true);
         setServiceUnavailable(true);
+        setErrorCode('UPSTREAM_ERROR');
         setErrorMsg(
           'Unable to load Cloudflare Turnstile verification widget. Please check your connection and retry.'
         );
@@ -125,6 +141,7 @@ export const HumanVerificationGate: React.FC<HumanVerificationGateProps> = ({
       window.clearTimeout(timeoutId);
       setScriptLoadFailed(true);
       setServiceUnavailable(true);
+      setErrorCode('UPSTREAM_ERROR');
       setErrorMsg(
         'Cloudflare Turnstile verification service is temporarily unavailable. Please retry in a moment.'
       );
@@ -134,11 +151,12 @@ export const HumanVerificationGate: React.FC<HumanVerificationGateProps> = ({
     return () => {
       window.clearTimeout(timeoutId);
     };
-  }, [siteKey, renderAttempt]);
+  }, [isCheckingSession, siteKey, renderAttempt]);
 
   // Render the Cloudflare Turnstile checkbox widget and verify token server-side
   useEffect(() => {
     if (
+      isCheckingSession ||
       !scriptLoaded ||
       !siteKey ||
       typeof window === 'undefined' ||
@@ -149,29 +167,51 @@ export const HumanVerificationGate: React.FC<HumanVerificationGateProps> = ({
     }
 
     widgetContainerRef.current.innerHTML = '';
+    lastSubmittedTokenRef.current = null;
+    verifyingInFlightRef.current = false;
+
     try {
       const id = window.turnstile.render(widgetContainerRef.current, {
         sitekey: siteKey,
         theme: isDark ? 'dark' : 'light',
+        'refresh-expired': 'auto',
+        retry: 'auto',
         callback: async (token: string) => {
+          const cleanToken = String(token || '').trim();
+          // Prevent duplicate frontend submissions of the same token
+          if (
+            !cleanToken ||
+            verifyingInFlightRef.current ||
+            lastSubmittedTokenRef.current === cleanToken
+          ) {
+            return;
+          }
+
+          lastSubmittedTokenRef.current = cleanToken;
+          verifyingInFlightRef.current = true;
           setVerifying(true);
           setErrorMsg(null);
+          setErrorCode(null);
           setServiceUnavailable(false);
 
-          const result = await verifyTurnstileTokenWithServer(token);
+          const result = await verifyTurnstileTokenWithServer(cleanToken);
+          verifyingInFlightRef.current = false;
           setVerifying(false);
 
           if (result.ok) {
             setVerifiedSuccess(true);
             window.setTimeout(() => {
-              onVerified();
-            }, 420);
+              onVerifiedRef.current();
+            }, 260);
           } else {
+            lastSubmittedTokenRef.current = null;
             setServiceUnavailable(Boolean(result.serviceUnavailable));
+            setErrorCode(result.errorCode || 'VERIFICATION_FAILED');
             setErrorMsg(
               result.error ||
-                'Server-side human verification failed. Please complete the challenge again.'
+                'Server-side human verification failed. A fresh challenge has been generated — please try again.'
             );
+            // Automatically reset widget to generate a fresh single-use token
             if (widgetIdRef.current && window.turnstile) {
               try {
                 window.turnstile.reset(widgetIdRef.current);
@@ -182,26 +222,40 @@ export const HumanVerificationGate: React.FC<HumanVerificationGateProps> = ({
           }
         },
         'expired-callback': () => {
+          lastSubmittedTokenRef.current = null;
+          verifyingInFlightRef.current = false;
           setVerifying(false);
           setVerifiedSuccess(false);
+          setErrorCode('TOKEN_EXPIRED');
           setErrorMsg(
-            'Your verification challenge expired. Please click Retry to complete a fresh verification.'
+            'Verification token expired. A new challenge has been generated — please check the box again.'
           );
+          if (widgetIdRef.current && window.turnstile) {
+            try {
+              window.turnstile.reset(widgetIdRef.current);
+            } catch {
+              // Ignore reset error
+            }
+          }
         },
         'error-callback': () => {
+          lastSubmittedTokenRef.current = null;
+          verifyingInFlightRef.current = false;
           setVerifying(false);
           setVerifiedSuccess(false);
           setServiceUnavailable(true);
+          setErrorCode('UPSTREAM_ERROR');
           setErrorMsg(
-            'Cloudflare Turnstile verification service encountered an error. Please retry.'
+            'Cloudflare Turnstile verification service encountered a temporary error. Please click Retry.'
           );
         },
       });
       widgetIdRef.current = id;
     } catch {
       setServiceUnavailable(true);
+      setErrorCode('UPSTREAM_ERROR');
       setErrorMsg(
-        'Unable to initialize the Cloudflare Turnstile widget. Please retry.'
+        'Unable to initialize the Cloudflare Turnstile widget. Please click Retry.'
       );
     }
 
@@ -215,13 +269,16 @@ export const HumanVerificationGate: React.FC<HumanVerificationGateProps> = ({
         widgetIdRef.current = null;
       }
     };
-  }, [scriptLoaded, siteKey, isDark, renderAttempt, onVerified]);
+  }, [isCheckingSession, scriptLoaded, siteKey, isDark, renderAttempt]);
 
   const handleRetryVerification = useCallback(() => {
     setErrorMsg(null);
+    setErrorCode(null);
     setServiceUnavailable(false);
     setVerifying(false);
     setVerifiedSuccess(false);
+    lastSubmittedTokenRef.current = null;
+    verifyingInFlightRef.current = false;
 
     if (onRetrySessionCheck) {
       onRetrySessionCheck();
@@ -374,18 +431,27 @@ export const HumanVerificationGate: React.FC<HumanVerificationGateProps> = ({
             </div>
 
             <div className="min-h-[76px] flex flex-col items-center justify-center py-1">
-              {!scriptLoaded && !scriptLoadFailed && (
+              {isCheckingSession ? (
                 <div className="flex items-center gap-2 text-xs text-slate-400 py-4">
                   <Loader2 className="w-4 h-4 animate-spin text-emerald-400" />
-                  <span>Loading Cloudflare Turnstile verification widget…</span>
+                  <span>Validating security session…</span>
                 </div>
-              )}
+              ) : (
+                <>
+                  {!scriptLoaded && !scriptLoadFailed && (
+                    <div className="flex items-center gap-2 text-xs text-slate-400 py-4">
+                      <Loader2 className="w-4 h-4 animate-spin text-emerald-400" />
+                      <span>Loading Cloudflare Turnstile verification widget…</span>
+                    </div>
+                  )}
 
-              <div
-                ref={widgetContainerRef}
-                data-testid="turnstile-widget-container"
-                className="flex justify-center w-full overflow-x-auto"
-              />
+                  <div
+                    ref={widgetContainerRef}
+                    data-testid="turnstile-widget-container"
+                    className="flex justify-center w-full overflow-x-auto"
+                  />
+                </>
+              )}
             </div>
           </div>
 
@@ -409,7 +475,7 @@ export const HumanVerificationGate: React.FC<HumanVerificationGateProps> = ({
               className="mt-4 p-3.5 rounded-xl border border-emerald-500/40 bg-emerald-500/15 text-xs text-emerald-400 flex items-center justify-center gap-2 font-medium"
             >
               <CheckCircle2 className="w-4 h-4 shrink-0" />
-              <span>Human verification confirmed. Launching ArthNiti dashboard…</span>
+              <span>Verification successful. Opening ArthNiti dashboard…</span>
             </div>
           )}
 
@@ -436,12 +502,18 @@ export const HumanVerificationGate: React.FC<HumanVerificationGateProps> = ({
                         ? serviceUnavailable
                           ? 'text-amber-300'
                           : 'text-rose-300'
-                        : '#0F172A'
+                        : 'text-[#0F172A]'
                     }`}
                   >
-                    {serviceUnavailable
+                    {errorCode === 'SECRET_NOT_CONFIGURED'
+                      ? 'Server Configuration Error'
+                      : errorCode === 'TOKEN_EXPIRED'
+                      ? 'Verification Challenge Expired'
+                      : errorCode === 'TOKEN_ALREADY_USED'
+                      ? 'Duplicate Verification Token'
+                      : serviceUnavailable
                       ? 'Verification Service Temporarily Unavailable'
-                      : 'Human Verification Required'}
+                      : 'Human Verification Failed'}
                   </div>
                   <p
                     className={
@@ -473,7 +545,7 @@ export const HumanVerificationGate: React.FC<HumanVerificationGateProps> = ({
             }`}
           >
             <span>Server-Validated Siteverify Protection</span>
-            <span className="font-mono-tabular">Session TTL: 15m</span>
+            <span className="font-mono-tabular">Session TTL: 60m</span>
           </div>
         </div>
       </main>
